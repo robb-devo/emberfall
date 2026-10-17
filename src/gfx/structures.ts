@@ -6,6 +6,7 @@
 import Phaser from 'phaser';
 import { hash, noise, clamp, rgb, mix, mul, RGB } from './noise';
 import { HD, TT } from './ground';
+export const TALL_W = 40;
 
 const HOUSE = new Set(['r', 'R', 'u', 'U', '#', 'w', 'D', 'V', 'Y', 'N', 'Q', 'G', '-']);
 const OH = 8, RISE = 22; // texels: roof overhang per side, roof rise above footprint
@@ -222,3 +223,19 @@ export function buildStructures(scene: Phaser.Scene, id: string, grid: string[],
   return { houses, trees };
 }
 export { OH, RISE, TREE_W, TREE_H };
+
+/** Tall-grass overlay tufts (drawn in front of feet so heroes wade through the grass). */
+export function ensureTallGrass(scene: Phaser.Scene) {
+  if (scene.textures.exists('hdtall')) return;
+  const W = 40, H = 32, V = 4; const t = scene.textures.createCanvas('hdtall', W * V * 2, H)!; const ctx = t.getContext();
+  for (let k = 0; k < 2; k++) for (let v = 0; v < V; v++) {
+    const b = buf(W, H); const pal = (k ? [0x5a3a10, 0x8a6a22, 0xb8902e, 0xe0b048, 0xf8d878] : [0x1a4a22, 0x2a6a2c, 0x3f8a36, 0x62ad48, 0xa8d870]).map(rgb);
+    let s = 7 + v * 13 + k * 101; const r = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+    for (let i = 0; i < 44; i++) {
+      const x0 = 2 + r() * (W - 4), hgt = 8 + r() * 20 * (1 - Math.abs(x0 - W / 2) / W), lean = (r() - 0.5) * 6, depth = r();
+      for (let y = 0; y < hgt; y++) { const f = y / hgt; const x = x0 + lean * f * f; const ci = Math.min(4, Math.floor(f * 3.2 + depth * 1.6)); put(b, x, H - 1 - y, pal[ci]); if (f < 0.4) put(b, x + 1, H - 1 - y, pal[Math.max(0, ci - 1)]); }
+    }
+    ctx.putImageData(new ImageData(b.d as any, W, H), (k * V + v) * W, 0); t.add((k ? 'a' : 'g') + v, 0, (k * V + v) * W, 0, W, H);
+  }
+  t.refresh();
+}

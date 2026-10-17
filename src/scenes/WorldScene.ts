@@ -13,8 +13,9 @@ import { ScriptRunner } from '../systems/script';
 import type { UIScene } from './UIScene';
 import { diorama } from '../fx/diorama';
 import { paintGround, HD, STRUCT } from '../gfx/ground';
-import { buildStructures, OH } from '../gfx/structures';
+import { buildStructures, OH, ensureTallGrass } from '../gfx/structures';
 import { DioramaFX } from '../fx/diorama';
+import { WaterFX } from '../fx/water';
 
 const TS = 16; const DX = [0, -1, 1, 0], DY = [1, 0, 0, -1]; // dir: 0 down 1 left 2 right 3 up
 const OCT: [number, number][] = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
@@ -29,12 +30,12 @@ export class WorldScene extends Phaser.Scene {
   symbols: Symbol[] = []; history: { x: number; y: number; dir: number }[] = []; busy = false; ui!: UIScene; script!: ScriptRunner;
   layer!: Phaser.Tilemaps.TilemapLayer; waterTiles: [number, number, number, number][] = []; dark?: Phaser.GameObjects.RenderTexture; lightImgs: { x: number; y: number; r: number; img?: Phaser.GameObjects.Image; flick: number }[] = [];
   eraser!: Phaser.GameObjects.Image; heroLight = 0; extraSolid = new Set<string>(); initData: any; offInput?: () => void; aura?: Phaser.GameObjects.Container; fxObjs: Record<string, Phaser.GameObjects.GameObject> = {};
-  fx?: any; hdOn = false; hdg?: ReturnType<typeof paintGround>; water?: Phaser.GameObjects.Image; hdStruct = false; trees: Phaser.GameObjects.Image[] = []; nightWindows: [number, number][] = [];
+  fx?: any; hdOn = false; hdg?: ReturnType<typeof paintGround>; water?: Phaser.GameObjects.Image; hdStruct = false; trees: Phaser.GameObjects.Image[] = []; nightWindows: [number, number][] = []; tall = new Map<string, Phaser.GameObjects.Image>();
   constructor() { super('World'); }
   init(d: any) { this.initData = d; }
   create() {
     const d = this.initData; this.def = MAPS[d.map]; this.grid = this.def.grid;
-    this.nightK = 1; this.trees = []; this.nightWindows = []; this.followers = []; this.npcs = []; this.chests = []; this.symbols = []; this.history = []; this.lightImgs = []; this.extraSolid.clear(); this.waterTiles = []; this.busy = false; this.fxObjs = {};
+    this.nightK = 1; this.trees = []; this.nightWindows = []; this.tall = new Map(); this.followers = []; this.npcs = []; this.chests = []; this.symbols = []; this.history = []; this.lightImgs = []; this.extraSolid.clear(); this.waterTiles = []; this.busy = false; this.fxObjs = {};
     Game.s.map = d.map; Game.s.x = d.x; Game.s.y = d.y; Game.s.dir = d.dir ?? 0;
     if (!this.scene.isActive('Overlay')) this.scene.launch('Overlay');
     if (!this.scene.isActive('UI')) this.scene.launch('UI'); this.ui = this.scene.get('UI') as UIScene; this.scene.bringToTop('UI');
@@ -95,7 +96,10 @@ export class WorldScene extends Phaser.Scene {
       const propChars = new Set(Object.keys(LEGEND).filter(k => PT[LEGEND[k].t] !== undefined));
       const g = paintGround(this, this.def.id, this.grid, propChars, this.def.outdoor); this.hdg = g;
       this.add.image(0, 0, g.key).setOrigin(0).setScale(1 / HD).setDepth(-2);
-      if (g.waterKey) this.water = this.add.image(0, 0, g.waterKey).setOrigin(0).setScale(1 / HD).setDepth(-1);
+      if (g.waterKey) {
+        this.water = this.add.image(0, 0, g.waterKey).setOrigin(0).setScale(1 / HD).setDepth(-1);
+        if (DioramaFX.quality > 0 && this.game.renderer instanceof Phaser.Renderer.WebGL.WebGLRenderer) { this.water.setPostPipeline(WaterFX); const wf = this.water.getPostPipeline(WaterFX) as any; const n = this.isNight() || !this.def.outdoor; if (wf) { wf.night = n ? 1 : 0; wf.sky = n ? 0x203060 : 0xd8ecff; } }
+      }
       this.hdStruct = true;
       const st = buildStructures(this, this.def.id, this.grid, this.isNight(), g.key, !!g.fresh);
       for (const hs of st.houses) {
@@ -107,6 +111,10 @@ export class WorldScene extends Phaser.Scene {
         const im = this.add.image(t.x * TS + 8, t.y * TS + 17, 'hdtrees', t.kind + t.v).setOrigin(0.5, 1).setScale(1 / HD).setDepth(10 + t.y * TS + 16).setFlipX(((t.x * 7 + t.y * 3) % 5) < 2);
         this.trees.push(im);
       }
+      ensureTallGrass(this);
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const c = this.grid[y][x]; if (c !== '"' && c !== '&') continue;
+        const im = this.add.image(x * TS + 8 + ((x * 5 + y * 3) % 3 - 1), y * TS + 16 + 1 + ((x * 11 + y * 7) % 5) - 2, 'hdtall', (c === '&' ? 'a' : 'g') + ((x * 7 + y * 13) % 4)).setOrigin(0.5, 1).setScale(1 / HD).setDepth(10 + y * TS + 16.5).setFlipX((x + y) % 2 === 0);
+        this.tall.set(x + ',' + y, im); }
       for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (g.blank[y][x] && (!STRUCT.has(this.grid[y][x]) || this.hdStruct)) ground[y][x] = -1;
       this.waterTiles = this.waterTiles.filter(([x, y]) => ground[y][x] >= 0);
     }
@@ -402,6 +410,7 @@ export class WorldScene extends Phaser.Scene {
     this.updateFollowers(false);
     await p; Game.s.steps++; Game.s.x = h.tx; Game.s.y = h.ty; Game.s.dir = h.dir;
     const ch = this.grid[h.ty]?.[h.tx];
+    { const tg = this.tall.get(h.tx + ',' + h.ty); if (tg) this.tweens.add({ targets: tg, scaleY: (1 / HD) * 0.72, scaleX: (1 / HD) * 1.08, yoyo: true, duration: 140, ease: 'Sine.out' }); }
     if (ch === '"') this.add.particles(h.spr.x, h.spr.y - 3, 'px', { lifespan: 400, speed: { min: 10, max: 30 }, angle: { min: 200, max: 340 }, gravityY: 60, tint: [0x7fd068, 0x4f9a46], quantity: 4, emitting: false }).setDepth(9000).explode(4);
     if (ch === ':' && Game.s.steps % 2) this.add.particles(h.spr.x, h.spr.y - 1, 'px', { lifespan: 300, speed: { min: 4, max: 10 }, angle: { min: 180, max: 360 }, tint: 0xd8c090, alpha: { start: 0.6, end: 0 }, emitting: false }).setDepth(9).explode(2);
     if (Game.s.party.some(m => m.poisoned) && Game.s.steps % 4 === 0) { for (const m of Game.s.party) if (m.poisoned && m.hp > 1) m.hp -= 1; this.cameras.main.flash(80, 120, 0, 160); Audio.sfx('poison'); }

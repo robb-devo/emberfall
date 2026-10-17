@@ -108,9 +108,10 @@ export function paintGround(scene: Phaser.Scene, id: string, grid: string[], pro
           c = aut ? (k < 0.33 ? mix(C.a0, C.a1, k * 3) : k < 0.7 ? mix(C.a1, C.a2, (k - 0.33) / 0.37) : mix(C.a2, C.a3, (k - 0.7) / 0.3))
             : (k < 0.33 ? mix(C.g0, C.g1, k * 3) : k < 0.7 ? mix(C.g1, C.g2, (k - 0.33) / 0.37) : mix(C.g2, C.g3, (k - 0.7) / 0.3));
           if (aut) { const o = noise(X * 0.03 + 7, Y * 0.03); if (o > 0.62) c = mix(c, hash(X >> 2, Y >> 2, 9) < 0.5 ? C.aR : C.aO, (o - 0.62) * 1.6); }
-          const tall = ch === '"' || ch === '&';
+          const chw = CH(Math.floor((X + wx * 0.7) / TT), Math.floor((Y + wy * 0.7) / TT));
+          const tall = chw === '"' || chw === '&';
           // tufts: small 3-blade sprigs on a jittered grid
-          const cs = tall ? 4 : 6, cx = Math.floor(X / cs), cy = Math.floor(Y / cs), hh = hash(cx, cy, 1);
+          const cs = tall ? 3 : 6, cx = Math.floor(X / cs), cy = Math.floor(Y / cs), hh = hash(cx, cy, 1);
           if (hh < (tall ? 0.95 : 0.3)) {
             const ox = cx * cs + Math.floor(hash(cx, cy, 2) * (cs - 2)) + 1, oy = cy * cs + cs - 1, dx = X - ox, dy = oy - Y, bh = tall ? 5 + Math.floor(hash(cx, cy, 6) * 3) : 3;
             if ((dx === 0 && dy >= 0 && dy < bh) || (Math.abs(dx) === 1 && dy >= 0 && dy < bh - 2 && ((dy + (dx > 0 ? 1 : 0)) % 2 === 0 || dy < 1))) {
@@ -118,15 +119,16 @@ export function paintGround(scene: Phaser.Scene, id: string, grid: string[], pro
               c = top ? mix(c, aut ? C.a3 : C.gHi, tall ? 0.6 : 0.42) : dy === 0 ? mul(c, 0.78) : mix(c, aut ? C.a3 : C.g3, 0.35);
             } else if (dy === -1 && Math.abs(dx) <= 1) c = mul(c, 0.85);
           }
-          if (tall) c = mul(c, 0.86 + 0.14 * noise(X * 0.3, Y * 0.3));
+          if (tall) c = mix(mul(c, 0.62), C.g0, 0.3);
           if (hash(X, Y, 7) < 0.02) c = mul(c, 0.8);
           // flowers
-          if (ch === '*' || ch === '@') {
+          if (chw === '*' || chw === '@') {
             const fx = Math.floor(X / 5), fy = Math.floor(Y / 5);
             if (hash(fx, fy, 11) < 0.32) { const ox = fx * 5 + 1 + Math.floor(hash(fx, fy, 12) * 2), oy = fy * 5 + 1 + Math.floor(hash(fx, fy, 13) * 2); const dx = X - ox, dy = Y - oy;
-              const pal = ch === '@' ? AFLOW : FLOW; const fc = pal[Math.floor(hash(fx, fy, 14) * pal.length)];
+              const pal = chw === '@' ? AFLOW : FLOW; const fc = pal[Math.floor(hash(fx, fy, 14) * pal.length)];
               if ((Math.abs(dx) + Math.abs(dy) === 1)) c = fc; else if (dx === 0 && dy === 0) c = rgb(0xffe890); else if (dx === 0 && dy === 2) c = C.gDk; }
           }
+          if (tn === Ter.WATER || ts === Ter.WATER || tw === Ter.WATER || te === Ter.WATER) c = mix(mul(c, 0.7), C.mud, 0.35);
           // grass lip where it meets dirt/sand/stone: lighter rim, then darker underside
           if (edge && (tn !== t && tn !== Ter.GRASS && tn !== Ter.AGRASS)) c = mix(c, aut ? C.a3 : C.g3, 0.5);
           break;
@@ -225,7 +227,8 @@ export function paintGround(scene: Phaser.Scene, id: string, grid: string[], pro
         let wc = mix(shal, deep, smooth(4, 60, sd + (noise(X * 0.05, Y * 0.05) - 0.5) * 20));
         wc = mix(wc, mul(wc, 1.18), noise(X * 0.08, Y * 0.02) * 0.6);
         let a = 235;
-        if (near) { wc = mix(wc, rgb(0xeaf6ff), 0.85); a = 255; }
+        const nf = (look(X, Y - 2, wx, wy) !== Ter.WATER || look(X, Y + 2, wx, wy) !== Ter.WATER || look(X - 2, Y, wx, wy) !== Ter.WATER || look(X + 2, Y, wx, wy) !== Ter.WATER);
+        if (nf) { wc = mix(wc, rgb(0xd8eef8), 0.45); a = 255; } else if (near) { wc = mix(wc, rgb(0x9fd0f0), 0.2); }
         else if (sd < 12) { const band = Math.sin(sd * 0.9 - noise(X * 0.1, Y * 0.1) * 6); if (band > 0.6) wc = mix(wc, rgb(0xd8f0ff), (band - 0.6) * 1.2); }
         wat[i] = wc[0]; wat[i + 1] = wc[1]; wat[i + 2] = wc[2]; wat[i + 3] = a;
       }

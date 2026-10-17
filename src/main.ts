@@ -12,6 +12,7 @@ import { setMapValidator } from './systems/state';
 import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { DioramaFX } from './fx/diorama';
+import { WaterFX } from './fx/water';
 import { W, H } from './ui/widgets';
 import { Game, stats, skillsOf } from './systems/state';
 import { SKILLS } from './data/skills';
@@ -22,7 +23,7 @@ const game = new Phaser.Game({
   type: Phaser.AUTO, parent: 'game', width: W, height: H, backgroundColor: '#0b0a14',
   pixelArt: true, roundPixels: true, antialias: false,
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-  fps: { target: 60 }, pipeline: { DioramaFX } as any, input: { activePointers: 3 },
+  fps: { target: 60 }, pipeline: { DioramaFX, WaterFX } as any, input: { activePointers: 3 },
   scene: [BootScene, TitleScene, CreateScene, WorldScene, UIScene, BattleScene, EndScene, OverlayScene],
 });
 // Debug/test hook (used by headless playthrough tests)
