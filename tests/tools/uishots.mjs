@@ -15,6 +15,6 @@ if (want('menu')) { await h.E(() => window.__EMBER.world.ui.openMenu()); await h
 if (want('battle')) {
   await h.E(() => { window.__EMBER.world.startBattle(['glimmer', 'thornhare'], { bg: 'bg_fields' }); });
   for (let i = 0; i < 30 && !(await h.E(() => window.__EMBER.active().includes('Battle'))); i++) await h.wait(200);
-  await h.wait(2800); await h.shot(`progress/${prefix}-battle.png`);
+  await h.wait(6000); await h.shot(`progress/${prefix}-battle.png`);
 }
 console.log('errors', h.errs.slice(0, 8)); await h.b.close();

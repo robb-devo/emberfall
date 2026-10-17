@@ -222,7 +222,16 @@ export function bar(s: Phaser.Scene, x: number, y: number, w: number, h: number,
   const g = s.add.graphics({ x, y }); drawBar(g, w, h, frac, color); return g;
 }
 export function drawBar(g: Phaser.GameObjects.Graphics, w: number, h: number, frac: number, color: number) {
-  g.clear(); g.fillStyle(0x05040c, 1); g.fillRoundedRect(0, 0, w, h, h / 2);
+  g.clear();
+  g.fillStyle(0x000000, 0.45); g.fillRect(-1, 1, w + 2, h + 1);
+  g.fillStyle(0x07060f, 1); g.fillRect(0, 0, w, h); g.fillStyle(0x1a1830, 1); g.fillRect(1, h - 2, w - 2, 1);
   const f = Math.max(0, Math.min(1, frac));
-  if (f > 0) { g.fillStyle(frac < 0.25 && color === COL.hp ? 0xff6b6b : color, 1); g.fillRoundedRect(2, 2, Math.max(h - 4, (w - 4) * f), h - 4, (h - 4) / 2); g.fillStyle(0xffffff, 0.3); g.fillRect(6, 3, Math.max(0, (w - 12) * f), 2); }
+  if (f > 0) {
+    const c = frac < 0.25 && color === COL.hp ? 0xff6b6b : color; const fw = Math.max(2, (w - 2) * f);
+    const col = Phaser.Display.Color.IntegerToColor(c); const dark = col.clone().darken(30).color, lite = col.clone().lighten(22).color;
+    g.fillGradientStyle(lite, lite, dark, dark, 1); g.fillRect(1, 1, fw, h - 2);
+    g.fillStyle(0xffffff, 0.38); g.fillRect(2, 2, Math.max(0, fw - 2), Math.max(1, Math.floor((h - 2) / 3)));
+    g.fillStyle(0xffffff, 0.8); g.fillRect(fw - 1, 1, 2, h - 2);
+  }
+  g.lineStyle(1, 0xc9a65a, 0.9); g.strokeRect(-0.5, -0.5, w + 1, h + 1);
 }

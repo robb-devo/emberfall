@@ -68,7 +68,7 @@ export class OverlayScene extends Phaser.Scene {
         const shards: Phaser.GameObjects.Image[] = [];
         for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
           const im = this.add.image(c * cw + cw / 2, r * ch + ch / 2, '__snap').setCrop(c * cw * sw, r * ch * sh, cw * sw, ch * sh);
-          im.setDisplayOrigin((c * cw + cw / 2) * sw, (r * ch + ch / 2) * sh).setScale(1 / sw, 1 / sh); root.add(im); shards.push(im);
+          im.setDisplayOrigin((c * cw + cw / 2) * sw, (r * ch + ch / 2) * sh).setScale(1.03 / sw, 1.03 / sh); root.add(im); shards.push(im);
         }
         const flash = this.add.rectangle(0, 0, W, H, 0xffffff, 0.85).setOrigin(0).setBlendMode(Phaser.BlendModes.ADD); root.add(flash);
         this.tweens.add({ targets: flash, alpha: 0, duration: 260 });

@@ -1,6 +1,7 @@
 import { DioramaFX, diorama } from '../fx/diorama';
+import { ensurePortrait } from '../gfx/portrait';
 import Phaser from 'phaser';
-import { txt, panel, W, H, COL, ListMenu, drawBar, card, MenuItem, SERIF } from '../ui/widgets';
+import { txt, panel, drawPanel, W, H, COL, ListMenu, drawBar, card, MenuItem, SERIF } from '../ui/widgets';
 import { Input } from '../ui/input';
 import { Audio } from '../systems/audio';
 import { Game, stats, Member, skillsOf, gainXp } from '../systems/state';
@@ -72,7 +73,7 @@ export class BattleScene extends Phaser.Scene {
     this.party.forEach((m, i) => {
       const x = pn === 1 ? 590 : 545 + (i % 2) * 70 - (pn > 3 ? 10 : 0) + i * 12, y = pn === 1 ? 640 : 500 + i * (pn > 3 ? 72 : 88);
       const spr = this.add.sprite(x, y, ensureDollHd(this, specOf(m)), 3).setOrigin(0.5, 1).setScale(3.9).setDepth(y / 100);
-      spr.setData('hx', x);
+      spr.setData('hx', x); spr.setData('hy', y);
       this.tweens.add({ targets: spr, scaleY: 3.9 * 1.02, yoyo: true, repeat: -1, duration: 900 + i * 120, ease: 'Sine.inOut' });
       this.add.image(x, y - 4, 'shadow').setScale(6, 3).setDepth(-0.4);
       if (m.hp <= 0) spr.setTint(0x553355).setAngle(90);
@@ -85,15 +86,35 @@ export class BattleScene extends Phaser.Scene {
     this.run();
   }
   skip = false; bgImg?: Phaser.GameObjects.Image;
+  /** OT2-style run-up: the party member sprints to the target (walk cycle + dust), the camera leans in, then returns. */
+  dash(spr: Phaser.GameObjects.Sprite, x: number, y: number, out: boolean): Promise<void> {
+    return new Promise(res => {
+      if (fast()) { spr.setPosition(x, y); res(); return; }
+      const dir = out ? 1 : 2; let f = 0; const seq = [1, 0, 2, 0];
+      const tm = this.time.addEvent({ delay: 70, loop: true, callback: () => { spr.setFrame(dir * 3 + seq[f++ % 4]); } });
+      spr.setFlipX(!out && false); if (!out) spr.setFrame(6);
+      const dust = this.add.particles(0, 0, 'dot', { follow: spr, lifespan: 380, speedX: { min: out ? 20 : -20, max: out ? 80 : -80 }, speedY: { min: -30, max: -6 }, scale: { start: 1.6, end: 0 }, alpha: { start: 0.55, end: 0 }, tint: 0xd8c8a8, frequency: 30 }).setDepth(spr.depth - 0.01);
+      const cam = this.cameras.main;
+      if (out) { cam.zoomTo(1.07, 260, Phaser.Math.Easing.Quadratic.Out, true); cam.pan(W / 2 + (x - W / 2) * 0.35, H / 2 + (y - 120 - H / 2) * 0.25, 260, Phaser.Math.Easing.Quadratic.Out, true); }
+      else { cam.zoomTo(1, 320, Phaser.Math.Easing.Sine.InOut, true); cam.pan(W / 2, H / 2, 320, Phaser.Math.Easing.Sine.InOut, true); }
+      spr.setDepth(out ? 60 : y / 100);
+      this.tweens.add({ targets: spr, x, y, duration: out ? 230 : 280, ease: out ? 'Quad.in' : 'Quad.out', onComplete: () => { tm.remove(); dust.stop(); this.time.delayedCall(400, () => dust.destroy()); spr.setFrame(3); if (!out) spr.setDepth(y / 100); res(); } });
+    });
+  }
   buildCards() {
     this.cards.forEach(c => c.destroy()); this.cards = [];
     const n = this.party.length; const X0 = 150; const cw = (W - X0 - 16 - (n - 1) * 8) / n;
     this.party.forEach((m, i) => {
       const s = stats(m); const c = this.add.container(X0 + i * (cw + 8), 12);
-      const g = this.add.graphics(); g.fillStyle(m.hp <= 0 ? 0x3a0a1a : 0x0b0c22, 0.88); g.fillRoundedRect(0, 0, cw, 100, 12); g.lineStyle(3, m.hp <= 0 ? 0xff6b6b : m.hp < s.hp / 4 ? 0xffb050 : COL.gold); g.strokeRoundedRect(1, 1, cw - 2, 98, 12);
-      c.add(g); c.add(txt(this, 12, 6, m.name, n > 3 ? 20 : 24, m.hp <= 0 ? COL.red : COL.text)); c.add(txt(this, cw - 10, 8, 'Lv' + m.level, 18, COL.goldS).setOrigin(1, 0));
-      c.add(txt(this, 12, 38, `HP ${m.hp}`, 20)); const hb = this.add.graphics({ x: 12, y: 62 }); drawBar(hb, cw - 24, 12, m.hp / s.hp, COL.hp); c.add(hb);
-      c.add(txt(this, cw - 12, 38, `MP ${m.mp}`, 20, '#a8d0ff').setOrigin(1, 0)); const mb = this.add.graphics({ x: 12, y: 80 }); drawBar(mb, cw - 24, 10, s.mp ? m.mp / s.mp : 0, COL.mp); c.add(mb);
+      const g = this.add.graphics(); drawPanel(g, cw, 100, 0.9);
+      if (m.hp <= 0 || m.hp < s.hp / 4) { g.lineStyle(2, m.hp <= 0 ? 0xff6b6b : 0xffb050, 0.9); g.strokeRect(6, 6, cw - 12, 88); }
+      c.add(g);
+      // mini portrait (painted bust, head crop) when there is room
+      let ox = 0; if (cw >= 200) { const pk = ensurePortrait(this, specOf(m)); const im = this.add.image(10, 8, pk).setOrigin(0).setCrop(52, 40, 136, 116).setScale(0.72); im.x = 10 - 52 * 0.72; im.y = 8 - 40 * 0.72; if (m.hp <= 0) im.setTint(0x704060); c.add(im); ox = 104; const fr = this.add.graphics(); fr.lineStyle(2, 0xe8cc84, 1); fr.strokeRect(10, 8, 98, 84); c.add(fr); }
+      const iw = cw - ox;
+      c.add(txt(this, ox + 12, 4, m.name, n > 3 ? 20 : 24, m.hp <= 0 ? COL.red : COL.text, { fontFamily: SERIF })); c.add(txt(this, cw - 10, 8, 'Lv' + m.level, 18, COL.goldS).setOrigin(1, 0));
+      c.add(txt(this, ox + 12, 36, `HP ${m.hp}`, 20)); const hb = this.add.graphics({ x: ox + 12, y: 62 }); drawBar(hb, iw - 24, 12, m.hp / s.hp, COL.hp); c.add(hb);
+      c.add(txt(this, cw - 12, 36, `MP ${m.mp}`, 20, '#a8d0ff').setOrigin(1, 0)); const mb = this.add.graphics({ x: ox + 12, y: 80 }); drawBar(mb, iw - 24, 10, s.mp ? m.mp / s.mp : 0, COL.mp); c.add(mb);
       if (m.poisoned) c.add(txt(this, cw / 2, 6, '☠', 20, '#c070ff').setOrigin(0.5, 0));
       this.cards.push(c);
     });
@@ -258,14 +279,16 @@ export class BattleScene extends Phaser.Scene {
       if (Math.random() < Phaser.Math.Clamp(0.45 + (pa - ea) * 0.03, 0.25, 0.9) || this.turn > 2) { Audio.sfx('miss'); await this.msg('You got away safely!'); this.end('flee'); return; }
       await this.msg('But the monsters block the way!'); return;
     }
-    // hop
-    this.tweens.add({ targets: spr, x: spr.getData('hx') - 90, yoyo: true, duration: 140, ease: 'Quad.out' });
     if (a.kind === 'attack') {
       let t = this.retarget(a.target!); if (!t) return;
-      await this.msg(`${m.name} attacks!`, 250);
+      this.msg(`${m.name} attacks!`, 250);
+      await this.dash(spr, t.x + 70 + t.spr.displayWidth * 0.25, t.y + 6, true);
       await this.physHit(m, s.atk * b.atk, t, 1, m.voc === 'thief' ? 1 / 14 : 1 / 28, 'slash');
+      await this.dash(spr, spr.getData('hx'), spr.getData('hy'), false);
       return;
     }
+    // hop
+    this.tweens.add({ targets: spr, x: spr.getData('hx') - 90, yoyo: true, duration: 140, ease: 'Quad.out' });
     if (a.kind === 'item') {
       const it = ITEMS[a.item!]; Game.addItem(it.id, -1);
       await this.msg(`${m.name} uses ${it.name}!`, 350);

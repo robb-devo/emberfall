@@ -1,0 +1,12 @@
+import { open } from '../lib.mjs';
+const h = await open(process.env.URL);
+await h.devStart('village', 14, 9, { chapter1Done: true, tut_battle: true }, 'warrior', {});
+await h.E(() => { window.__EMBER.fast = false; }); await h.wait(1200);
+await h.E(() => { window.__EMBER.world.startBattle(['thornhare'], { bg: 'bg_road' }); });
+for (let i = 0; i < 40 && !(await h.E(() => window.__EMBER.active().includes('Battle'))); i++) await h.wait(200);
+await h.wait(6000);
+await h.key('Enter', 1, 600); await h.key('Enter', 1, 50);
+await h.E(() => { const b = window.__EMBER.scene('Battle'); b.tweens.timeScale = 0.25; });
+await h.wait(700); await h.shot('progress/' + (process.argv[2] || 'r3-dash') + '.png');
+await h.wait(4000);
+console.log('errors', h.errs.slice(0, 5)); await h.b.close();
