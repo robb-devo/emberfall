@@ -18,11 +18,11 @@ import { Mature } from '../systems/mature';
 
 const SHOPS: Record<string, string[]> = {
   weapons: ['stick', 'dagger', 'shortsword', 'mace', 'wand', 'bronzeAxe', 'ironsword'],
-  armor: ['tunic', 'leather', 'robe', 'scale', 'pot', 'buckler', 'kite', 'bandana', 'pointyhat', 'helm', 'cape'],
+  armor: ['tunic', 'leather', 'robe', 'scale', 'pot', 'buckler', 'kite', 'bandana', 'pointyhat', 'helm', 'cape', 'heartBoxers'],
   items: ['herb', 'antidote', 'ether', 'firebomb', 'feather'],
   peddler: ['herb', 'hiHerb', 'antidote', 'ether', 'feather', 'shortbow', 'lute', 'hood', 'featherCap'],
   tideWeapons: ['steelsword', 'spear', 'warhammer', 'longbow', 'seaStaff', 'lute', 'shortbow'],
-  tideArmor: ['chain', 'sailorCoat', 'silkRobe', 'towerShield', 'shellBuckler', 'knightHelm', 'hood', 'featherCap', 'pearlRing'],
+  tideArmor: ['chain', 'sailorCoat', 'silkRobe', 'towerShield', 'shellBuckler', 'knightHelm', 'hood', 'featherCap', 'pearlRing', 'slimeBriefs'],
   tideItems: ['herb', 'hiHerb', 'antidote', 'ether', 'feather', 'firebomb'],
 };
 

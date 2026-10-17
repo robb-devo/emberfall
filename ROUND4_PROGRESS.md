@@ -29,12 +29,14 @@ Screenshots for the user: progress/r4-*.png
 
 - [x] Item detail panel: UIScene.itemDetail(id, actions, extra) used by Items menu (Use/Equip/Back) and shop Buy (Buy/Back); flavour in src/data/itemlore.ts; tool tests/tools/detail.mjs. Shot r4-03-item-detail.png
 - [x] Joke underwear items heartBoxers/slimeBriefs (tag 'undies', any vocation; vis.type 'undies' – paper doll support TODO; not yet in a shop)
+- [x] Underwear + Adult (src/systems/mature.ts; doll2.ts frame(): bare = !armor && sp.voc (party only, NPCs keep clothes); Look.fig + creator 'Figure' row;
+      Settings 'Adult' with 18+ confirm; dollKey includes fig + n/u; BattleScene.gore()). heartBoxers in Hollowmere armour shop, slimeBriefs in Tideshop.
+      Shots: r4-04-underwear.png, r4-adult-male.png, r4-adult-female.png (tool tests/tools/adult.mjs). Portraits (dialogue busts) still show outfit clothes.
 
 ## Next
 - [x] 3D v2: addBlocks (walls/interiors; cliffs stay painted – walkable high ground), addSurroundings (ground plane + tree rings). Shot progress/r4-01-3d-village-fields.png
 - [x] x-ray silhouettes (__xray on party sprites, pass 4 GreaterDepth)
 - [ ] 3D polish (later, optional): grotto water too bright/cyan?, perf check (draw calls), tune ELEV/SV, hero x-ray behind houses, tune ELEV/SV, interiors, fx placement check per map, perf check
-- [ ] Underwear + Adult toggle
 - [ ] Dialogue rewrite
 - [ ] Tests, 0.4.0, APK, release
    STEERING 2 (parent, 15:53, replaces featureless body): Adult ON + nothing equipped = simple low-res pixel nude male/female bodies with basic anatomy at sprite scale (Cyberpunk creator style), non-sexual, no poses/animations, adults only (never child NPCs), no explicit content. Low priority (after main items).
