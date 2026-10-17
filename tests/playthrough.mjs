@@ -14,10 +14,11 @@ const topIsMenu = () => h.E(() => { const st = window.__EMBER.Input.stack; retur
 const untilMenu = async (n = 30) => { for (let i = 0; i < n; i++) { if (await topIsMenu()) return true; await h.key('Enter', 1, 300); } return false; };
 const symbolsLeft = () => h.E(() => window.__EMBER.world.symbols.filter(s => s.alive).length);
 async function go(x, y, adj = false) {
-  let r;
+  let r, k = 0;
   for (let i = 0; i < 12; i++) {
     r = await h.walkTo(x, y, adj);
     if (r === 'battle' || (await h.scenes()).includes('Battle')) { await h.fightSmart(); await h.advance(40); continue; }
+    if (r === 'nopath') { log('  nopath to', x, y, 'from', JSON.stringify(await h.hero())); await h.advance(20); await h.wait(1200); if (k++ < 3) continue; } // a wandering NPC can briefly plug a 1-tile gap
     break;
   }
   return r;

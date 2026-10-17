@@ -31,6 +31,7 @@ export async function open(url = 'http://localhost:5173/') {
       for (let guard = 0; guard < 400; guard++) {
         const st = await E(([x, y, adj]) => { const w = window.__EMBER.world; if (!w || w.busy || window.__EMBER.active().includes('Battle')) return { wait: true }; const path = w.findPath(x, y, adj); return { path, map: w.def.id, at: [w.hero.tx, w.hero.ty] }; }, [x, y, adjacent]);
         if (st.wait) { if (await E(() => window.__EMBER.active().includes('Battle'))) return 'battle'; await p.waitForTimeout(200); const m = await E(() => window.__EMBER.world?.def.id); if (m !== map0) { await p.waitForTimeout(600); return 'warped'; } await p.keyboard.press('Enter'); continue; }
+        if (st.map !== map0) { await p.waitForTimeout(600); return 'warped'; } // warp completed between polls (slow headless frames)
         if (!st.path) return 'nopath';
         if (!st.path.length) return 'arrived';
         if (process.env.DBG) console.log('step', guard, st.at, st.path.length);
