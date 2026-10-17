@@ -51,3 +51,6 @@ Hard limits: no sexual content/scenes, no sexual violence, nothing sexual with m
       Results so far: battle-smoke ALL PASS, save ALL PASS, r5quests "dark quests OK" (0 errors), boss BOOST 1/1 WON.
       playthrough failed at creation: R5 "Marks" row shifted "Begin Adventure" to row 13 -> test fixed (commit), rerun pending.
       APK built 20:13 (vc5 / 0.5.0) -> emberfall-v0.5.0.apk. Serial rerun of playthrough/playthrough2/fuzz + ADULT=1 battle-smoke/fuzz running (logs /tmp/r5t/*-r.log, *-adult.log).
+      20:25 playthrough "to elder nopath" = TEST RACE, not a game bug: the warp (village->elder, hearth->village) completed between walkTo polls, the next poll
+      computed a path on the NEW map (target out of bounds -> nopath / walked to same coords -> 'arrived'). Hero was in elder at (4,7). Fixed in tests/lib.mjs walkTo
+      (st.map !== map0 -> 'warped'); go() in playthrough logs + retries nopath 3x. Rerun: /tmp/r5t/play-r3.log
