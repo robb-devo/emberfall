@@ -3,6 +3,7 @@ export async function open(url = 'http://localhost:5173/') {
   const b = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
   const p = await b.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   if (process.env.LITE) await p.addInitScript(() => localStorage.setItem('ember_gfx', '0'));
+  if (process.env.ADULT) await p.addInitScript(() => localStorage.setItem('ember_adult', '1')); // run any suite with Settings → Adult ON
   const errs = []; p.on('pageerror', e => errs.push(e.message)); p.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
   await p.goto(url); await p.waitForTimeout(2000);
   const E = (fn, arg) => p.evaluate(fn, arg);
