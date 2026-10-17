@@ -27,11 +27,13 @@ Screenshots for the user: progress/r4-*.png
       houses = World3D.addHouse (tagged 'skip' in Phaser); tag3(obj, 'ground'|'stand'|'fx'|'skip', foot, lift) for hints; water tagged __water; ground shadow bake off in 3D (structures noShadow).
       Disable with localStorage ember_3d=0.
 
+- [x] Item detail panel: UIScene.itemDetail(id, actions, extra) used by Items menu (Use/Equip/Back) and shop Buy (Buy/Back); flavour in src/data/itemlore.ts; tool tests/tools/detail.mjs. Shot r4-03-item-detail.png
+- [x] Joke underwear items heartBoxers/slimeBriefs (tag 'undies', any vocation; vis.type 'undies' – paper doll support TODO; not yet in a shop)
+
 ## Next
 - [x] 3D v2: addBlocks (walls/interiors; cliffs stay painted – walkable high ground), addSurroundings (ground plane + tree rings). Shot progress/r4-01-3d-village-fields.png
 - [x] x-ray silhouettes (__xray on party sprites, pass 4 GreaterDepth)
 - [ ] 3D polish (later, optional): grotto water too bright/cyan?, perf check (draw calls), tune ELEV/SV, hero x-ray behind houses, tune ELEV/SV, interiors, fx placement check per map, perf check
-- [ ] Item details
 - [ ] Underwear + Adult toggle
 - [ ] Dialogue rewrite
 - [ ] Tests, 0.4.0, APK, release

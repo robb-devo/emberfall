@@ -61,6 +61,9 @@ const I: Record<string, Item> = {
   silkRobe: { id: 'silkRobe', name: 'Tide Silk Robe', kind: 'equip', slot: 'armor', tag: 'robe', price: 280, icon: 'robe', mods: { def: 9, mag: 6, mp: 4 }, vis: { type: 'robe', c1: 0x2fa8a8, c2: 0xf0e8d0 }, desc: 'Shimmers like shallow water.' },
   pearlRing: { id: 'pearlRing', name: 'Pearl Ring', kind: 'equip', slot: 'acc', tag: 'acc', price: 260, icon: 'ring', mods: { mp: 6, mag: 3 }, vis: { type: 'amulet', c1: 0xf0f0ff }, desc: 'A brine pearl in silver.' },
   gullCape: { id: 'gullCape', name: 'Gull-Wing Cape', kind: 'equip', slot: 'acc', tag: 'acc', price: 0, icon: 'cape', mods: { def: 5, agi: 4 }, vis: { type: 'cape', c1: 0xe8f0f8, c2: 0x8aa0b8 }, desc: 'White as sea-spray. A reward from Saltmere.' },
+  // ---- Round 4: underwear-tier joke armour (shows as underwear on the paper doll)
+  heartBoxers: { id: 'heartBoxers', name: 'Heart Boxers', kind: 'equip', slot: 'armor', tag: 'undies', price: 12, icon: 'armor', mods: { def: 1, agi: 2 }, vis: { type: 'undies', c1: 0xf4f0f0, c2: 0xe04060 }, desc: 'DEF +1, AGI +2. Morale not included.' },
+  slimeBriefs: { id: 'slimeBriefs', name: 'Slime Briefs', kind: 'equip', slot: 'armor', tag: 'undies', price: 30, icon: 'armor', mods: { def: 2, mp: 3 }, vis: { type: 'undies', c1: 0x5ab0ff, c2: 0xffffff }, desc: 'DEF +2, MP +3. Squishy and proud.' },
   // ---- Chapter II consumables & keys
   hiHerb: { id: 'hiHerb', name: 'Strong Herb', kind: 'consumable', price: 30, icon: 'leaf', desc: 'Restores about 75 HP.', use: { heal: 75, target: 'ally' } },
   pearl: { id: 'pearl', name: 'Brine Pearl', kind: 'consumable', price: 60, icon: 'drop', desc: 'A lustrous pearl. Restores 25 MP — or sell it.', use: { mp: 25, target: 'ally' } },

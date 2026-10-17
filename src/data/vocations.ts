@@ -40,3 +40,5 @@ export const STARTING_VOCS = ['warrior', 'mage', 'priest', 'thief'];
 // Experience required to REACH level L
 export const xpFor = (l: number) => (l <= 1 ? 0 : Math.floor(8 * Math.pow(l - 1, 2.1) + 6 * (l - 1)));
 export const MAX_LEVEL = 99;
+// Round 4: anyone can wear underwear-tier armour.
+for (const v of Object.values(VOCATIONS)) if (!v.canEquip.includes('undies')) v.canEquip.push('undies');

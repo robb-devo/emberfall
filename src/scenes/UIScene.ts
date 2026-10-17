@@ -13,6 +13,7 @@ import type { WorldScene } from './WorldScene';
 import { MAPS } from '../data/maps';
 import type { DollSpec } from '../systems/paperdoll';
 import { ensurePortrait } from '../gfx/portrait';
+import { LORE } from '../data/itemlore';
 
 const SHOPS: Record<string, string[]> = {
   weapons: ['stick', 'dagger', 'shortsword', 'mace', 'wand', 'bronzeAxe', 'ironsword'],
@@ -189,17 +190,82 @@ export class UIScene extends Phaser.Scene {
       root.destroy();
     });
   }
+  /**
+   * Round 4: item detail panel. Big icon, name + type, flavour text, what it does, and (for gear) a stat comparison
+   * against what each party member wears now, with a little paper doll trying it on. Returns the chosen action index.
+   */
+  itemDetail(id: string, actions: string[], extra = ''): Promise<number> {
+    return new Promise(res => {
+      const it = ITEMS[id]; const c = this.add.container(0, 0).setDepth(1400);
+      c.add(this.add.rectangle(0, 0, W, H, 0x05040c, 0.9).setOrigin(0).setInteractive());
+      const party = Game.s.party; const gear = it.kind === 'equip';
+      const ph = gear ? 300 + Math.ceil(party.length / 2) * 250 : 470; const y0 = Math.max(SAFE_T + 90, (H - ph - 200) / 2);
+      c.add(panel(this, 20, y0, W - 40, ph));
+      // icon on a glowing plate
+      const plate = this.add.graphics(); plate.fillStyle(0x0a0b1e, 0.9); plate.fillRoundedRect(44, y0 + 30, 150, 150, 18); plate.lineStyle(3, 0xe8cc84, 1); plate.strokeRoundedRect(44, y0 + 30, 150, 150, 18); c.add(plate);
+      const glow = this.add.image(119, y0 + 105, 'light').setTint(0xffd890).setAlpha(0.35).setScale(0.55).setBlendMode(Phaser.BlendModes.ADD); c.add(glow);
+      this.tweens.add({ targets: glow, alpha: 0.18, yoyo: true, repeat: -1, duration: 900 });
+      const ic = this.add.image(119, y0 + 105, 'ic_' + it.icon).setScale(7); c.add(ic);
+      c.add(txt(this, 220, y0 + 34, it.name, 36, COL.accent, { fontFamily: SERIF, wordWrap: { width: W - 270 } }));
+      const kind = gear ? `${SLOT_NAMES[it.slot!]}${it.tag ? '  ·  ' + it.tag.replace('heavyShield', 'heavy shield').replace('undies', 'underwear') : ''}` : it.kind === 'key' ? 'Key item' : it.use?.target === 'enemy' ? 'Battle item' : 'Consumable';
+      c.add(txt(this, 220, y0 + 92, kind, 24, COL.dim));
+      c.add(txt(this, 220, y0 + 128, it.price ? `Value ${it.price} G` + (extra ? '   ' + extra : '') : extra || 'Priceless', 24, COL.goldS));
+      c.add(txt(this, 48, y0 + 200, LORE[id] || it.desc, 26, COL.text, { wordWrap: { width: W - 100 }, lineSpacing: 6, fontStyle: 'italic' }));
+      // what it does
+      const SN: Record<string, string> = { atk: 'Attack', def: 'Defence', agi: 'Agility', mag: 'Magic', hp: 'Max HP', mp: 'Max MP' };
+      let eff = '';
+      if (it.use) { const u = it.use; eff = [u.heal && !u.revive ? `Restores ${u.heal} HP` : '', u.mp ? `Restores ${u.mp} MP` : '', u.cure ? 'Cures poison' : '', u.revive ? 'Revives a fallen ally with half HP' : '', u.damage ? `Deals about ${u.damage} fire damage to one enemy` : ''].filter(Boolean).join(' · ') + (u.target === 'allAllies' ? ' (whole party)' : ''); }
+      if (gear) eff = Object.entries(it.mods || {}).map(([k, v]) => `${SN[k]} ${v! > 0 ? '+' : ''}${v}`).join('   ');
+      if (it.kind === 'key') eff = 'Important. Can\'t be sold or thrown away.';
+      c.add(txt(this, 48, y0 + 290, eff, 27, '#a8f0ff', { wordWrap: { width: W - 100 } }));
+      // per-member comparison
+      if (gear) {
+        const cw = (W - 80) / 2;
+        party.forEach((m, i) => {
+          const x = 40 + (i % 2) * cw, y = y0 + 345 + Math.floor(i / 2) * 250; const ok = canEquip(m, id);
+          const box = this.add.graphics(); box.fillStyle(0x0a0b1e, 0.6); box.fillRoundedRect(x + 6, y, cw - 12, 238, 12); c.add(box);
+          const wearing = m.equip[it.slot!] === id;
+          const eq = ok ? { ...m.equip, [it.slot!]: id } : m.equip;
+          const d = this.add.sprite(x + 66, y + 190, ensureDoll(this, { look: m.look, equip: eq }), 0).setOrigin(0.5, 1).setScale(3.2).setAlpha(ok ? 1 : 0.35); c.add(d);
+          c.add(txt(this, x + 124, y + 12, m.name, 26, COL.accent));
+          if (!ok) { c.add(txt(this, x + 124, y + 52, `A ${VOCATIONS[m.voc].name}\ncan't use this.`, 22, COL.dim)); return; }
+          if (wearing) { c.add(txt(this, x + 124, y + 52, 'Wearing it now.', 22, COL.goldS)); }
+          const cur = stats(m) as any, nx = stats({ ...m, equip: eq }) as any; let row = 0;
+          for (const k of ['atk', 'def', 'agi', 'mag', 'hp', 'mp']) { const dlt = nx[k] - cur[k]; if (!dlt && !(it.mods as any)?.[k]) continue; if (row > 3) break;
+            c.add(txt(this, x + 124, y + 56 + (wearing ? 34 : 0) + row * 40, `${k.toUpperCase()} ${cur[k]}→${nx[k]}`, 22, COL.text));
+            c.add(txt(this, x + cw - 20, y + 56 + (wearing ? 34 : 0) + row * 40, dlt > 0 ? `▲${dlt}` : dlt < 0 ? `▼${-dlt}` : '=', 22, dlt > 0 ? '#7dff9a' : dlt < 0 ? '#ff7070' : COL.dim).setOrigin(1, 0)); row++; }
+          const cur0 = m.equip[it.slot!]; c.add(txt(this, x + 16, y + 202, cur0 && !wearing ? 'Now: ' + ITEMS[cur0].name : wearing ? '' : 'Now: (nothing)', 20, COL.dim, { wordWrap: { width: cw - 30 } }));
+        });
+      }
+      c.setAlpha(0); this.tweens.add({ targets: c, alpha: 1, duration: 140 });
+      const m = new ListMenu(this, 60, Math.min(H - SAFE_B - 70 - actions.length * 76, y0 + ph + 20), W - 120, actions.map(a => ({ label: a })), { itemH: 70 }).setDepth(1401);
+      const done = (k: number) => { m.close(); c.destroy(); res(k); };
+      m.onSelect = i => done(i); m.onCancel = () => done(actions.length - 1);
+    });
+  }
   async itemsMenu() {
     while (true) {
       const ids = Object.keys(Game.s.inv).filter(k => Game.s.inv[k] > 0);
       if (!ids.length) { await card(this, 'Items', 'Your bag is empty.'); return; }
       const desc = txt(this, 50, 1110, '', 26, COL.text, { wordWrap: { width: W - 100 } }).setDepth(1302); const dp = panel(this, 20, 1090, W - 40, 170).setDepth(1301);
       const m = new ListMenu(this, 20, 140, W - 40, ids.map(id => ({ label: ITEMS[id].name, sub: '×' + Game.s.inv[id], icon: 'ic_' + ITEMS[id].icon })), { title: 'Items', rows: 11, itemH: 74 }).setDepth(1300);
-      const upd = (k: number) => desc.setText(ITEMS[ids[k]].desc + (ITEMS[ids[k]].kind === 'equip' ? '  (Equip via Equipment)' : '')); upd(0); m.onChange = k => upd(k);
+      const upd = (k: number) => desc.setText(ITEMS[ids[k]].desc + '   ✦ details'); upd(0); m.onChange = k => upd(k);
       const k = await new Promise<number>(r => { m.onSelect = i => r(i); m.onCancel = () => r(-1); });
       m.close(); desc.destroy(); dp.destroy();
       if (k < 0) return;
-      const it = ITEMS[ids[k]]; if (it.kind !== 'consumable' || !it.use || it.use.target === 'enemy') { Audio.sfx('cancel'); continue; }
+      const it = ITEMS[ids[k]];
+      const usable = it.kind === 'consumable' && !!it.use && it.use.target !== 'enemy';
+      const acts = usable ? ['Use', 'Back'] : it.kind === 'equip' ? ['Equip', 'Back'] : ['Back'];
+      const a = await this.itemDetail(it.id, acts, `You have ${Game.s.inv[it.id]}`);
+      if (acts[a] === 'Equip') {
+        const who = Game.s.party.map((p, i) => ({ p, i })).filter(o => canEquip(o.p, it.id));
+        if (!who.length) { await card(this, it.name, 'Nobody in your party can use this.'); continue; }
+        const w = who.length === 1 ? 0 : await new Promise<number>(r => { const mm = new ListMenu(this, 60, 400, W - 120, [...who.map(o => ({ label: o.p.name, sub: VOCATIONS[o.p.voc].name })), { label: 'Back' }], { title: 'Equip on whom?' }).setDepth(1300); mm.onSelect = i => { mm.close(); r(i); }; mm.onCancel = () => { mm.close(); r(who.length); }; });
+        if (w >= who.length) continue;
+        const mem = who[w].p; const old = mem.equip[it.slot!]; if (old) Game.addItem(old); Game.addItem(it.id, -1); mem.equip[it.slot!] = it.id;
+        const st = stats(mem); mem.hp = Math.min(mem.hp, st.hp); mem.mp = Math.min(mem.mp, st.mp); Audio.sfx('buff'); this.world.refreshParty(); this.refreshHud(); Game.markDirty('equip'); continue;
+      }
+      if (acts[a] !== 'Use') continue;
       const t = await this.memberPicker('Use on whom?');
       if (t < 0) continue;
       const msg = useItemOn(it.id, Game.s.party[t]); Audio.sfx(msg.ok ? 'heal' : 'cancel'); this.refreshHud(); await card(this, it.name, msg.text);
@@ -351,11 +417,13 @@ export class UIScene extends Phaser.Scene {
       });
     };
     while (true) {
-      const m = new ListMenu(this, 20, 530, W - 40, goods.map(id => ({ label: ITEMS[id].name, sub: ITEMS[id].price + ' G', icon: 'ic_' + ITEMS[id].icon, disabled: ITEMS[id].price > Game.s.gold })), { title: 'What would you like?', rows: 9, itemH: 72 }).setDepth(1301);
+      const m = new ListMenu(this, 20, 530, W - 40, goods.map(id => ({ label: ITEMS[id].name, sub: ITEMS[id].price + ' G', icon: 'ic_' + ITEMS[id].icon, dim: ITEMS[id].price > Game.s.gold } as any)), { title: 'What would you like?', rows: 9, itemH: 72 }).setDepth(1301);
       m.onChange = k => preview(goods[k]); preview(goods[0]);
       const k = await new Promise<number>(r => { m.onSelect = i => r(i); m.onCancel = () => r(-1); }); m.close();
       if (k < 0) break;
       const id = goods[k]; const it = ITEMS[id];
+      view.setVisible(false); const a = await this.itemDetail(id, [Game.s.gold >= it.price ? `Buy for ${it.price} G` : `Need ${it.price} G`, 'Back'], `You have ${Game.s.inv[id] || 0}`); view.setVisible(true);
+      if (a !== 0) { preview(id); continue; }
       if (Game.s.gold < it.price) { Audio.sfx('cancel'); continue; }
       Game.s.gold -= it.price; Game.addItem(id); Audio.sfx('coin'); this.refreshHud();
       if (it.kind === 'equip') {
