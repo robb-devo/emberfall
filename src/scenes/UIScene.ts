@@ -49,9 +49,12 @@ export class UIScene extends Phaser.Scene {
       this.joyId = p.id; this.joyOrigin = { x: p.x, y: p.y }; this.joyBase.setPosition(p.x, p.y).setVisible(true); this.joyKnob.setPosition(p.x, p.y).setVisible(true);
     });
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
-      if (p.id !== this.joyId) return; let dx = p.x - this.joyOrigin.x, dy = p.y - this.joyOrigin.y; const d = Math.hypot(dx, dy), max = 70;
-      if (d > max) { dx = dx / d * max; dy = dy / d * max; } this.joyKnob.setPosition(this.joyOrigin.x + dx, this.joyOrigin.y + dy);
-      Input.joy.x = d > 16 ? dx / max : 0; Input.joy.y = d > 16 ? dy / max : 0;
+      if (p.id !== this.joyId) return; let dx = p.x - this.joyOrigin.x, dy = p.y - this.joyOrigin.y; let d = Math.hypot(dx, dy); const max = 70, dead = 10;
+      // floating base: dragging past the rim pulls the base along, so the stick never "runs out"
+      if (d > max) { const o = this.joyOrigin; o.x += dx / d * (d - max); o.y += dy / d * (d - max); dx = dx / d * max; dy = dy / d * max; d = max; this.joyBase.setPosition(o.x, o.y); }
+      this.joyKnob.setPosition(this.joyOrigin.x + dx, this.joyOrigin.y + dy);
+      // radial dead-zone, rescaled so output ramps smoothly from 0 at the dead-zone edge to 1 at the rim
+      const m = d <= dead ? 0 : Math.min(1, (d - dead) / (max - dead - 8)); Input.joy.x = d ? dx / d * m : 0; Input.joy.y = d ? dy / d * m : 0;
     });
     const up = (p: Phaser.Input.Pointer) => { if (p.id !== this.joyId) return; this.joyId = -1; Input.joy.x = 0; Input.joy.y = 0; this.joyBase.setVisible(false); this.joyKnob.setVisible(false); };
     this.input.on('pointerup', up); this.input.on('pointerupoutside', up);

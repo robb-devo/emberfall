@@ -28,6 +28,8 @@ import { buildStructures, OH, ensureTallGrass } from '../gfx/structures';
 import { DioramaFX } from '../fx/diorama';
 import { WaterFX } from '../fx/water';
 
+/** round 4 movement tuning: top speed (px/s), ease rates, feet collision half-box, follower spacing, camera lift */
+const SPEED = 100, ACCEL = 16, DECEL = 24, HBX = 5, HBY = 4, FOLLOW_GAP = 15, CAM_DY = 36;
 const TS = 16; const DX = [0, -1, 1, 0], DY = [1, 0, 0, -1]; // dir: 0 down 1 left 2 right 3 up
 const OCT: [number, number][] = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
 /** 4-way sprite facing for any step vector (diagonals face sideways, like DQ). */
@@ -60,7 +62,7 @@ export class WorldScene extends Phaser.Scene {
     const mw = this.grid[0].length * TS, mh = this.grid.length * TS;
     const vw = W / ZOOM, vh = H / ZOOM;
     cam.setBounds(mw < vw ? (mw - vw) / 2 : 0, mh < vh ? (mh - vh) / 2 : 0, Math.max(mw, vw), Math.max(mh, vh));
-    cam.startFollow(this.hero.spr, false, 0.1, 0.1, 0, 36); cam.centerOn(this.hero.spr.x, this.hero.spr.y - 36);
+    this.camX = this.hero.spr.x; this.camY = this.hero.spr.y - CAM_DY; this.look = { x: 0, y: 0 }; cam.centerOn(this.camX, this.camY);
     cam.setBackgroundColor(this.def.outdoor ? '#1b2a1a' : '#05040a');
     const preset = this.def.id === 'spire' ? 'sky' : this.def.outdoor ? (this.isNight() ? 'night' : 'outdoor') : (this.def.dark ?? 0) > 0.5 ? 'dungeon' : 'indoor';
     this.fx = diorama(cam, preset);
@@ -423,18 +425,129 @@ export class WorldScene extends Phaser.Scene {
     this.placeForeground();
     if (this.aura) this.aura.setPosition(this.hero.spr.x, this.hero.spr.y);
     this.updateSymbols(time);
-    this.handleMoveInput();
+    this.handleMoveInput(dt);
     this.stepActors(dt);
+    this.followTrail(dt);
+    this.updateCamera(dt);
     if (this.fx) { const cam = this.cameras.main; const sy = (this.hero.spr.y - 12 - cam.worldView.y) / cam.worldView.height; this.fx.p.focus += ((1 - sy) - this.fx.p.focus) * Math.min(1, dt / 250); }
   }
-  handleMoveInput() {
-    if (this.busy || Input.busy || this.hero.moving || this.ui.modal) return;
-    const d = Input.dir();
-    if (Math.hypot(d.x, d.y) < 0.3) { if (this.hero.step) { this.hero.step = 0; this.hero.phase = 0; this.setFrame(this.hero); } this.hero.over = 0; return; }
-    // 8-directional: snap the stick to the nearest of 8 octants
-    const oct = (Math.round(Math.atan2(d.y, d.x) / (Math.PI / 4)) + 8) % 8;
-    const [vx, vy] = OCT[oct];
-    this.tryStep(vx, vy);
+  // ---- round 4: buttery analog movement -------------------------------------------------
+  /** hero velocity (world px/s), camera state, follower breadcrumb trail */
+  vel = { x: 0, y: 0 }; camX = 0; camY = 0; look = { x: 0, y: 0 }; trail: { x: number; y: number }[] = []; lastTile = ''; bumpT = 0; idleT = 0;
+  /** Is tile (x,y) blocked for the free-moving hero? Warp tiles are walkable (entering them warps). */
+  heroSolid(x: number, y: number) {
+    const w = this.warpAt(x, y); if (w) return !!(w.cond && !evalCond(w.cond));
+    return this.solidAt(x, y);
+  }
+  /** Tiles overlapped by the hero's collision box centred at (cx,cy) (feet box, world px). */
+  boxTiles(cx: number, cy: number) {
+    const out: [number, number][] = [];
+    const x0 = Math.floor((cx - HBX) / TS), x1 = Math.floor((cx + HBX - 0.001) / TS), y0 = Math.floor((cy - HBY) / TS), y1 = Math.floor((cy + HBY - 0.001) / TS);
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) out.push([x, y]);
+    return out;
+  }
+  /** Would moving the box from (ox,oy) to (nx,ny) enter a solid tile it did not already overlap? (never traps you inside an NPC that walked into you) */
+  blocked(ox: number, oy: number, nx: number, ny: number) {
+    const was = new Set(this.boxTiles(ox, oy).map(t => t[0] + ',' + t[1]));
+    for (const [x, y] of this.boxTiles(nx, ny)) if (!was.has(x + ',' + y) && this.heroSolid(x, y)) return [x, y] as [number, number];
+    return null;
+  }
+  handleMoveInput(dt: number) {
+    const h = this.hero; const s = Math.min(dt, 50) / 1000;
+    const free = !(this.busy || Input.busy || h.mv || this.ui.modal);
+    let d = free ? Input.dir() : { x: 0, y: 0 };
+    let mag = Math.hypot(d.x, d.y);
+    if (mag > 1) { d = { x: d.x / mag, y: d.y / mag }; mag = 1; }
+    if (mag < 0.12) mag = 0;
+    const tx = mag ? d.x / Math.hypot(d.x, d.y) * SPEED * Math.min(1, 0.35 + mag * 0.75) : 0;
+    const ty = mag ? d.y / Math.hypot(d.x, d.y) * SPEED * Math.min(1, 0.35 + mag * 0.75) : 0;
+    // exponential ease: quick but soft start, crisp stop; turning is instant (velocity re-aims at once)
+    const k = 1 - Math.exp(-s * (mag ? ACCEL : DECEL));
+    this.vel.x += (tx - this.vel.x) * k; this.vel.y += (ty - this.vel.y) * k;
+    if (!mag && Math.hypot(this.vel.x, this.vel.y) < 4) this.vel.x = this.vel.y = 0;
+    if (mag) { // instant turning with a little hysteresis on diagonals (sprites face 4 ways, like DQ)
+      const ax = Math.abs(d.x), ay = Math.abs(d.y);
+      const horiz = ax > ay * 1.15 ? true : ay > ax * 1.15 ? false : (h.dir === 1 && d.x < 0) || (h.dir === 2 && d.x > 0) ? true : (h.dir === 0 && d.y > 0) || (h.dir === 3 && d.y < 0) ? false : ax >= ay;
+      h.dir = horiz ? (d.x < 0 ? 1 : 2) : (d.y < 0 ? 3 : 0); }
+    if (!free) { this.vel.x = this.vel.y = 0; if (!h.mv) h.moving = false; return; }
+    // integrate with axis-separated collision: sliding along walls comes for free; corners nudge you into doorways
+    const cx = h.spr.x, cy = h.spr.y + (h.bob || 0) - 8;
+    let nx = cx, ny = cy; const mx = this.vel.x * s, my = this.vel.y * s;
+    if (mx) { const b = this.blocked(nx, ny, nx + mx, ny); if (!b) nx += mx; else { nx = mx > 0 ? b[0] * TS - HBX : (b[0] + 1) * TS + HBX; if (Math.abs(nx - cx) > Math.abs(mx)) nx = cx; if (Math.abs(my) < Math.abs(mx) * 0.5) ny = this.nudge(nx, ny, Math.sign(mx), 0, Math.abs(mx)); } }
+    if (my) { const b = this.blocked(nx, ny, nx, ny + my); if (!b) ny += my; else { ny = my > 0 ? b[1] * TS - HBY : (b[1] + 1) * TS + HBY; if (Math.abs(ny - cy) > Math.abs(my)) ny = cy; if (Math.abs(mx) < Math.abs(my) * 0.5) nx = this.nudge(nx, ny, 0, Math.sign(my), Math.abs(my)); } }
+    const moved = Math.hypot(nx - cx, ny - cy);
+    if (mag && moved < 0.02 && !this.bumpT) { this.bumpT = 1; this.onBump(); }
+    if (moved > 0.05) this.bumpT = 0;
+    h.moving = moved > 0.05 || Math.hypot(this.vel.x, this.vel.y) > 6;
+    // walk cycle synced to distance travelled (one stride = 2 tiles, like before), bob scales with speed
+    const sp = moved / Math.max(s, 0.001);
+    if (moved > 0.01) { h.phase = ((h.phase || 0) + moved / TS) % 2; const q = Math.floor(h.phase * 2) % 4; h.spr.setFrame(h.dir * 3 + [1, 0, 2, 0][q]); h.bob = Math.abs(Math.sin(h.phase * Math.PI)) * 0.75 * Math.min(1, sp / SPEED); this.idleT = 0; }
+    else { this.idleT += dt; if (this.idleT > 70 && (h.phase || h.bob)) { h.phase = 0; h.bob = 0; } h.spr.setFrame(h.dir * 3 + (h.phase ? [1, 0, 2, 0][Math.floor(h.phase * 2) % 4] : 0)); }
+    h.spr.x = nx; h.spr.y = ny + 8 - (h.bob || 0); this.depthOf(h);
+    const ntx = Math.floor(nx / TS), nty = Math.floor(ny / TS);
+    if (ntx !== h.tx || nty !== h.ty) this.enterTile(ntx, nty);
+    this.checkSymbolNear();
+  }
+  /** Corner assist: blocked while moving along one axis, but an opening is close to the side -> slide sideways into it. */
+  nudge(x: number, y: number, ax: number, ay: number, amt: number) {
+    const tx = Math.floor(x / TS), ty = Math.floor(y / TS);
+    if (ax) { // moving horizontally: look at the row we are in and its neighbours
+      for (const oy of [0, -1, 1]) { const r = ty + oy, c = Math.floor((x + ax * (HBX + 1)) / TS); if (this.heroSolid(c, r) || this.heroSolid(tx, r)) continue; const tgt = r * TS + 8; if (Math.abs(tgt - y) > 10) continue; const st = Math.sign(tgt - y) * Math.min(Math.abs(tgt - y), amt * 0.9); if (!this.blocked(x, y, x, y + st)) return y + st; }
+    } else {
+      for (const ox of [0, -1, 1]) { const c = tx + ox, r = Math.floor((y + ay * (HBY + 1)) / TS); if (this.heroSolid(c, r) || this.heroSolid(c, ty)) continue; const tgt = c * TS + 8; if (Math.abs(tgt - x) > 10) continue; const st = Math.sign(tgt - x) * Math.min(Math.abs(tgt - x), amt * 0.9); if (!this.blocked(x, y, x + st, y)) return x + st; }
+      return x;
+    }
+    return y;
+  }
+  /** Walking into a locked warp runs its block script (once per bump). */
+  onBump() {
+    const h = this.hero; const f = { x: Math.floor((h.spr.x + DX[h.dir] * (HBX + 2)) / TS), y: Math.floor((h.spr.y + (h.bob || 0) - 8 + DY[h.dir] * (HBY + 2)) / TS) };
+    const w = this.warpAt(f.x, f.y); if (w && w.cond && !evalCond(w.cond) && w.blockScript) this.runScript(w.blockScript);
+  }
+  /** The hero's feet crossed into a new tile: everything the old per-step logic did. */
+  enterTile(nx: number, ny: number) {
+    const h = this.hero; const ox = h.tx, oy = h.ty; h.tx = nx; h.ty = ny;
+    this.history.unshift({ x: ox, y: oy, dir: h.dir }); this.history.length = 8;
+    Game.s.steps++; Game.s.x = nx; Game.s.y = ny; Game.s.dir = h.dir;
+    if (Game.s.steps % 2 === 0) Audio.sfx('step');
+    const ch = this.grid[ny]?.[nx];
+    { const tg = this.tall.get(nx + ',' + ny); if (tg) this.tweens.add({ targets: tg, scaleY: (1 / HD) * 0.72, scaleX: (1 / HD) * 1.08, yoyo: true, duration: 140, ease: 'Sine.out' }); }
+    if (ch === '"') this.add.particles(h.spr.x, h.spr.y - 3, 'px', { lifespan: 400, speed: { min: 10, max: 30 }, angle: { min: 200, max: 340 }, gravityY: 60, tint: [0x7fd068, 0x4f9a46], quantity: 4, emitting: false }).setDepth(9000).explode(4);
+    if (ch === ':' && Game.s.steps % 2) this.add.particles(h.spr.x, h.spr.y - 1, 'px', { lifespan: 300, speed: { min: 4, max: 10 }, angle: { min: 180, max: 360 }, tint: 0xd8c090, alpha: { start: 0.6, end: 0 }, emitting: false }).setDepth(9).explode(2);
+    if (Game.s.party.some(m => m.poisoned) && Game.s.steps % 4 === 0) { for (const m of Game.s.party) if (m.poisoned && m.hp > 1) m.hp -= 1; this.cameras.main.flash(80, 120, 0, 160); Audio.sfx('poison'); }
+    const wp = this.warpAt(nx, ny);
+    if (wp && (!wp.cond || evalCond(wp.cond))) { this.vel.x = this.vel.y = 0; h.moving = false; this.doWarp(wp.to, wp.tx, wp.ty, wp.dir ?? h.dir); return; }
+    this.checkTriggers();
+  }
+  /** Monsters touch you when the sprites actually meet (not only on shared tiles). */
+  checkSymbolNear() {
+    if (this.busy) return; const hx = this.hero.spr.x, hy = this.hero.spr.y;
+    for (const s of this.symbols) if (s.alive && Math.abs(s.spr.x - hx) < 10 && Math.abs(s.spr.y + 1 - hy) < 9) { this.fightSymbol(s, false); return; }
+  }
+  /** Party members trail the hero along a breadcrumb path (smooth conga line, no tile snapping). */
+  followTrail(dt: number) {
+    const h = this.hero; const hx = h.spr.x, hy = h.spr.y + (h.bob || 0);
+    const last = this.trail[0];
+    if (!last || Math.hypot(hx - last.x, hy - last.y) > 1) { this.trail.unshift({ x: hx, y: hy }); if (this.trail.length > 200) this.trail.length = 200; }
+    this.followers.forEach((f, i) => {
+      if (f.mv) return;
+      const want = FOLLOW_GAP * (i + 1); let acc = 0; let tx = this.trail[this.trail.length - 1]?.x ?? hx, ty = this.trail[this.trail.length - 1]?.y ?? hy;
+      for (let j = 1; j < this.trail.length; j++) { const a = this.trail[j - 1], b = this.trail[j]; const seg = Math.hypot(b.x - a.x, b.y - a.y); if (acc + seg >= want) { const u = (want - acc) / (seg || 1); tx = a.x + (b.x - a.x) * u; ty = a.y + (b.y - a.y) * u; break; } acc += seg; }
+      const fx = f.spr.x, fy = f.spr.y + (f.bob || 0); const k = 1 - Math.exp(-dt / 45);
+      const nx = fx + (tx - fx) * k, ny = fy + (ty - fy) * k; const mv = Math.hypot(nx - fx, ny - fy);
+      if (mv > 0.03) { const dx = nx - fx, dy = ny - fy; f.dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 1 : 2) : dy < 0 ? 3 : 0; f.phase = ((f.phase || 0) + mv / TS) % 2; f.bob = Math.abs(Math.sin(f.phase * Math.PI)) * 0.7 * Math.min(1, mv / (dt / 1000) / SPEED); f.moving = true; }
+      else { f.moving = false; f.bob = 0; f.phase = 0; }
+      if (f.doll) f.spr.setFrame(f.dir * 3 + (f.phase ? [1, 0, 2, 0][Math.floor(f.phase * 2) % 4] : 0));
+      f.spr.x = nx; f.spr.y = ny - (f.bob || 0); f.tx = Math.floor(nx / TS); f.ty = Math.floor((ny - 8) / TS); this.depthOf(f);
+    });
+  }
+  /** Smooth camera: critically-damped follow with a little look-ahead in the walking direction. */
+  updateCamera(dt: number) {
+    const cam = this.cameras.main; const h = this.hero; const k = 1 - Math.exp(-dt / 160), kl = 1 - Math.exp(-dt / 380);
+    this.look.x += (this.vel.x * 0.22 - this.look.x) * kl; this.look.y += (this.vel.y * 0.18 - this.look.y) * kl;
+    const tx = h.spr.x + this.look.x, ty = h.spr.y + (h.bob || 0) - CAM_DY + this.look.y;
+    this.camX += (tx - this.camX) * k; this.camY += (ty - this.camY) * k;
+    cam.centerOn(this.camX, this.camY);
   }
   /** Advance every walking actor by dt. Frames follow the stride (L, stand, R, stand per two tiles) with a soft bob. */
   stepActors(dt: number) {
@@ -491,13 +604,13 @@ export class WorldScene extends Phaser.Scene {
     const carry = a.over || 0; a.over = 0;
     return new Promise(res => { a.mv = { x0: a.spr.x, y0: a.spr.y + (a.bob || 0), x1: nx * TS + 8, y1: ny * TS + 16, t: carry / ms, ms, res }; });
   }
-  updateFollowers(instant: boolean) {
-    this.followers.forEach((f, i) => {
-      const p = this.history[i]; if (!p) return;
-      if (instant || (p.x === f.tx && p.y === f.ty)) { f.tx = p.x; f.ty = p.y; f.spr.setPosition(p.x * TS + 8, p.y * TS + 16); f.dir = this.hero.dir; this.setFrame(f); this.depthOf(f); return; }
-      const dx = p.x - f.tx, dy = p.y - f.ty;
-      this.walkTo(f, p.x, p.y, dx && dy ? 205 : 150);
-    });
+  updateFollowers(instant: boolean, keepTrail = false) {
+    if (!instant) return; // the breadcrumb trail moves followers every frame
+    const h = this.hero; const hx = h.spr.x, hy = h.spr.y + (h.bob || 0);
+    if (keepTrail && this.trail.length > 2) { this.followTrail(1e4); return; }
+    // seed the trail behind the hero (opposite the facing) so the party lines up naturally
+    this.trail = []; for (let i = 0; i < 120; i++) this.trail.push({ x: hx - DX[h.dir] * i * 0.5, y: hy - DY[h.dir] * i * 0.5 });
+    this.followers.forEach((f, i) => { const p = this.trail[Math.min(119, (i + 1) * FOLLOW_GAP * 2)]; let x = p.x, y = p.y; if (this.solidAt(Math.floor(x / TS), Math.floor((y - 8) / TS))) { x = hx; y = hy; } f.spr.setPosition(x, y); f.dir = h.dir; f.tx = Math.floor(x / TS); f.ty = Math.floor((y - 8) / TS); this.setFrame(f); this.depthOf(f); });
   }
   async doWarp(to: string, x: number, y: number, dir: number) {
     this.busy = true; Audio.sfx('door');
@@ -512,7 +625,7 @@ export class WorldScene extends Phaser.Scene {
       if (!n.def?.wander || n.moving || n.hidden || Math.random() < 0.4) continue;
       const dir = Math.floor(Math.random() * 4), nx = n.tx + DX[dir], ny = n.ty + DY[dir];
       if (Math.abs(nx - n.def.x) > 3 || Math.abs(ny - n.def.y) > 3) continue;
-      if (this.solidAt(nx, ny, n) || (nx === this.hero.tx && ny === this.hero.ty) || this.warpAt(nx, ny) || this.followers.some(f => f.tx === nx && f.ty === ny)) continue;
+      if (this.solidAt(nx, ny, n) || this.boxTiles(this.hero.spr.x, this.hero.spr.y + (this.hero.bob || 0) - 8).some(([x, y]) => x === nx && y === ny) || this.warpAt(nx, ny) || this.followers.some(f => f.tx === nx && f.ty === ny)) continue;
       this.walk(n, dir, 300);
     }
   }
@@ -534,8 +647,11 @@ export class WorldScene extends Phaser.Scene {
   }
   checkSymbolContact(byMonster: boolean) {
     if (this.busy) return;
-    const s = this.symbols.find(s => s.alive && s.tx === this.hero.tx && s.ty === this.hero.ty);
-    if (!s) return;
+    const s = this.symbols.find(s => s.alive && ((s.tx === this.hero.tx && s.ty === this.hero.ty) || (Math.abs(s.spr.x - this.hero.spr.x) < 10 && Math.abs(s.spr.y + 1 - this.hero.spr.y) < 9)));
+    if (s) this.fightSymbol(s, byMonster);
+  }
+  fightSymbol(s: Symbol, byMonster: boolean) {
+    this.vel.x = this.vel.y = 0; this.hero.moving = false;
     const table = ENCOUNTERS[this.def.encounters!.table].filter(e => e.group[0] === s.type);
     const g = table[Math.floor(Math.random() * table.length)] || { group: [s.type] };
     this.startBattle(g.group, { bg: this.def.bg, first: byMonster ? 'enemy' : 'party' }).then(r => { if (r === 'win' || r === 'flee') { s.alive = false; this.tweens.add({ targets: [s.spr, s.shadow], alpha: 0, duration: 300, onComplete: () => { s.spr.destroy(); s.shadow.destroy(); } }); } });
@@ -576,14 +692,19 @@ export class WorldScene extends Phaser.Scene {
   }
   // ------------------------------------------------------------------ interaction
   onAction(a: Action) {
-    if (this.busy || this.ui.modal || this.hero.moving) return;
+    if (this.busy || this.ui.modal || this.hero.mv) return;
     if (a === 'menu') { this.ui.openMenu(); return; }
     if (a !== 'ok') return;
     this.interact();
   }
-  facing() { return { x: this.hero.tx + DX[this.hero.dir], y: this.hero.ty + DY[this.hero.dir] }; }
+  facing() { const h = this.hero; return { x: h.tx + DX[h.dir], y: h.ty + DY[h.dir] }; }
+  /** Facing tile probed from the hero's real (sub-tile) position, so you talk to what you are visibly looking at. */
+  facingNear() { const h = this.hero; const cx = h.spr.x, cy = h.spr.y + (h.bob || 0) - 8; return { x: Math.floor((cx + DX[h.dir] * 12) / TS), y: Math.floor((cy + DY[h.dir] * 12) / TS) }; }
   async interact() {
-    const f = this.facing(); const h = this.hero;
+    const h = this.hero; this.vel.x = this.vel.y = 0;
+    let f = this.facingNear();
+    const hasThing = (p: { x: number; y: number }) => this.npcs.some(n => !n.hidden && n.tx === p.x && n.ty === p.y) || this.chests.some(c => c.x === p.x && c.y === p.y) || this.def.saves.some(s => s.x === p.x && s.y === p.y) || !!this.def.signs?.some(s => s.x === p.x && s.y === p.y) || 'kWKOX'.includes(this.grid[p.y]?.[p.x] || '.');
+    if (!hasThing(f)) f = this.facing();
     let npc = this.npcs.find(n => !n.hidden && n.tx === f.x && n.ty === f.y);
     const tile = this.grid[f.y]?.[f.x];
     if (!npc && tile === 'k') { const bx = f.x + DX[h.dir], by = f.y + DY[h.dir]; npc = this.npcs.find(n => n.tx === bx && n.ty === by); }
@@ -631,7 +752,7 @@ export class WorldScene extends Phaser.Scene {
     const p = Game.s.party; this.hero.spr.setTexture(ensureDoll(this, specOf(p[0]))); this.setFrame(this.hero);
     this.followers.forEach(f => { f.spr.destroy(); f.shadow.destroy(); }); this.followers = [];
     for (let i = 1; i < p.length; i++) { const hp = this.history[i - 1]; const f = this.makeActor('f' + i, ensureDoll(this, specOf(p[i])), hp.x, hp.y, this.hero.dir); this.followers.push(f); }
-    this.updateFollowers(true);
+    this.updateFollowers(true, true);
     if (this.def.id === 'hearth') { // rebuild roster idlers
       this.npcs.filter(n => n.def?.script === 'roster').forEach(n => { n.spr.destroy(); n.shadow.destroy(); });
       this.npcs = this.npcs.filter(n => n.def?.script !== 'roster');
