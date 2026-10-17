@@ -52,7 +52,7 @@ export class WorldScene extends Phaser.Scene {
     cam.setBackgroundColor(this.def.outdoor ? '#1b2a1a' : '#05040a');
     const preset = this.def.id === 'spire' ? 'sky' : this.def.outdoor ? (this.isNight() ? 'night' : 'outdoor') : (this.def.dark ?? 0) > 0.5 ? 'dungeon' : 'indoor';
     this.fx = diorama(cam, preset);
-    if (!d.noFade) cam.fadeIn(450);
+    if (d.wiped) { const ov: any = this.scene.get('Overlay'); this.time.delayedCall(60, () => ov?.reveal?.(380)); } else if (!d.noFade) cam.fadeIn(450);
     if (this.def.music && !d.script) Audio.play(this.def.music === 'village' && Game.flag('night') ? 'hearth' : this.def.music);
     this.offInput = Input.on(a => this.onAction(a));
     Input.backFallback = () => { if (this.scene.isActive() && this.canAutosave()) this.ui.openMenu(); };
@@ -445,8 +445,10 @@ export class WorldScene extends Phaser.Scene {
     });
   }
   async doWarp(to: string, x: number, y: number, dir: number) {
-    this.busy = true; Audio.sfx('door'); this.cameras.main.fadeOut(260, 0, 0, 0);
-    await this.wait(280); this.scene.restart({ map: to, x, y, dir });
+    this.busy = true; Audio.sfx('door');
+    const ov: any = this.scene.get('Overlay');
+    if (ov?.cover && ov.sys.isActive()) { await Promise.race([ov.cover(300), this.wait(450)]); this.scene.restart({ map: to, x, y, dir, wiped: true }); return; }
+    this.cameras.main.fadeOut(260, 0, 0, 0); await this.wait(280); this.scene.restart({ map: to, x, y, dir });
   }
   wait(ms: number) { return new Promise<void>(r => this.time.delayedCall(ms, r)); }
   wanderNpcs() {
@@ -487,9 +489,11 @@ export class WorldScene extends Phaser.Scene {
     this.busy = true; Audio.stopMusic(); Audio.sfx('encounter');
     if (!Game.flag('tut_battle')) { /* shown inside battle */ }
     // shatter-style transition
-    const cam = this.cameras.main; cam.flash(120, 255, 255, 255);
-    this.tweens.add({ targets: cam, zoom: 6, rotation: 0.25, duration: 520, ease: 'Cubic.in' }); cam.fadeOut(520, 0, 0, 0);
-    await this.wait(560);
+    const cam = this.cameras.main; const ov: any = this.scene.get('Overlay');
+    // quick push-in + flash on the world, then freeze-frame and shatter into the battle
+    this.tweens.add({ targets: cam, zoom: 4.6, duration: 260, ease: 'Cubic.in' }); cam.flash(140, 255, 240, 220);
+    await this.wait(270);
+    if (ov?.shatter && ov.sys.isActive()) await ov.shatter(); else { cam.fadeOut(300, 0, 0, 0); await this.wait(320); }
     return new Promise(res => {
       this.scene.pause(); this.ui.scene.setVisible(false);
       this.scene.launch('Battle', { group, bg: o.bg || this.def.bg || 'bg_fields', music: o.music, boss: o.boss, noFlee: o.noFlee, first: o.first, onEnd: async (r: string) => {
