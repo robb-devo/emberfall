@@ -48,3 +48,5 @@ Hard limits: no sexual content/scenes, no sexual violence, nothing sexual with m
       Shots: r5-08-gore-1..3, r5-10-crossroads-gibbet, r5-11-penance-road, r5-12-coffin-letters, r5-13-ashby-burned, r5-14-mercy-knight, r5-15-prisoner-choice, r5-16-starmilk, r5-17-harbour-gibbet.
 - [ ] Item 4 (started 19:27): committed test-tool edits; tsc OK; data-check OK; maps-check OK; _maps-adult OK; version bumped 0.5.0 / vc5.
       Browser suites running vs :4173 (logs /tmp/r5t/*.log): battle-smoke, save, r5quests, boss BOOST | playthrough, playthrough2, fuzz-menus.
+      Results so far: battle-smoke ALL PASS, save ALL PASS, r5quests "dark quests OK" (0 errors), boss BOOST 1/1 WON.
+      playthrough failed at creation: R5 "Marks" row shifted "Begin Adventure" to row 13 -> test fixed (commit), rerun pending.
