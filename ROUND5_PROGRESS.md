@@ -50,3 +50,4 @@ Hard limits: no sexual content/scenes, no sexual violence, nothing sexual with m
       Browser suites running vs :4173 (logs /tmp/r5t/*.log): battle-smoke, save, r5quests, boss BOOST | playthrough, playthrough2, fuzz-menus.
       Results so far: battle-smoke ALL PASS, save ALL PASS, r5quests "dark quests OK" (0 errors), boss BOOST 1/1 WON.
       playthrough failed at creation: R5 "Marks" row shifted "Begin Adventure" to row 13 -> test fixed (commit), rerun pending.
+      APK built 20:13 (vc5 / 0.5.0) -> emberfall-v0.5.0.apk. Serial rerun of playthrough/playthrough2/fuzz + ADULT=1 battle-smoke/fuzz running (logs /tmp/r5t/*-r.log, *-adult.log).
