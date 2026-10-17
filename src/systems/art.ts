@@ -207,7 +207,45 @@ export class Pix {
     const t = scene.textures.createCanvas(key, this.w, this.h)!; const ctx = t.getContext(); const img = ctx.createImageData(this.w, this.h);
     this.d.forEach((c, i) => { if (c < 0) return; img.data[i * 4] = c >> 16 & 255; img.data[i * 4 + 1] = c >> 8 & 255; img.data[i * 4 + 2] = c & 255; img.data[i * 4 + 3] = 255; });
     ctx.putImageData(img, 0, 0); t.refresh();
-    this.toHd(scene, key + '_hd');
+    this.toHd(scene, key + '_hd'); this.toHd4(scene, key + '_hd4');
+  }
+  /** Round 3: Scale4x (EPX twice) + volumetric re-shading from a distance field, ramp quantisation with
+   *  ordered dither, specular rim and a soft 2px coloured outline. Battle monsters use this at ~1.3x. */
+  toHd4(scene: Phaser.Scene, key: string) {
+    const ep = (src: number[], w: number, h: number) => { const W2 = w * 2, o = new Array(W2 * h * 2).fill(-1); const g = (x: number, y: number) => (x < 0 || y < 0 || x >= w || y >= h) ? -1 : src[y * w + x];
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const P = g(x, y), A = g(x, y - 1), B = g(x + 1, y), C = g(x - 1, y), D = g(x, y + 1); let e1 = P, e2 = P, e3 = P, e4 = P;
+        if (C === A && C !== D && A !== B) e1 = A; if (A === B && A !== C && B !== D) e2 = B; if (D === C && D !== B && C !== A) e3 = C; if (B === D && B !== A && D !== C) e4 = D;
+        o[(y * 2) * W2 + x * 2] = e1; o[(y * 2) * W2 + x * 2 + 1] = e2; o[(y * 2 + 1) * W2 + x * 2] = e3; o[(y * 2 + 1) * W2 + x * 2 + 1] = e4; } return o; };
+    const OUTC = 0x1b1428; const base = this.d.map(c => c === OUTC ? -2 : c); // keep outline separate
+    let a = ep(base, this.w, this.h); a = ep(a, this.w * 2, this.h * 2);
+    const W4 = this.w * 4 + 4, H4 = this.h * 4 + 4, w4 = this.w * 4, h4 = this.h * 4; const P = 2;
+    const col = new Int32Array(W4 * H4).fill(-1);
+    for (let y = 0; y < h4; y++) for (let x = 0; x < w4; x++) col[(y + P) * W4 + x + P] = a[y * w4 + x];
+    // distance to the silhouette (two-pass chamfer)
+    const D = new Float32Array(W4 * H4); for (let i = 0; i < D.length; i++) D[i] = col[i] === -1 ? 0 : 1e4;
+    for (let y = 1; y < H4 - 1; y++) for (let x = 1; x < W4 - 1; x++) { const i = y * W4 + x; if (!D[i]) continue; D[i] = Math.min(D[i], D[i - 1] + 1, D[i - W4] + 1, D[i - W4 - 1] + 1.41, D[i - W4 + 1] + 1.41); }
+    for (let y = H4 - 2; y > 0; y--) for (let x = W4 - 2; x > 0; x--) { const i = y * W4 + x; if (!D[i]) continue; D[i] = Math.min(D[i], D[i + 1] + 1, D[i + W4] + 1, D[i + W4 + 1] + 1.41, D[i + W4 - 1] + 1.41); }
+    const maxD = Math.max(6, ...Array.from(D).filter(v => v < 1e4));
+    const BY = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+    const t = scene.textures.createCanvas(key, W4, H4)!; const ctx = t.getContext(); const img = ctx.createImageData(W4, H4); const o = img.data;
+    const R = 7;
+    for (let y = 0; y < H4; y++) for (let x = 0; x < W4; x++) {
+      const i = y * W4 + x; let c = col[i];
+      if (c === -1) { // soft outline: 2px, darkest neighbour
+        let nb = -1; for (let r = 1; r <= 2 && nb < 0; r++) for (const [dx, dy] of [[0, r], [r, 0], [-r, 0], [0, -r]]) { const xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < W4 && yy < H4 && col[yy * W4 + xx] !== -1) { nb = col[yy * W4 + xx]; break; } }
+        if (nb === -1) continue; c = nb === -2 ? OUTC : shade(nb, 0.28); const k = i * 4; o[k] = (c >> 16) & 255; o[k + 1] = (c >> 8) & 255; o[k + 2] = c & 255; o[k + 3] = 255; continue;
+      }
+      if (c === -2) { const k = i * 4; o[k] = 0x1b; o[k + 1] = 0x14; o[k + 2] = 0x28; o[k + 3] = 255; continue; }
+      // normal from the distance-field gradient (pillow, but soft and wide), light from the upper left
+      const gx = (D[i + 1] - D[i - 1]), gy = (D[i + W4] - D[i - W4]); const dd = Math.min(D[i], R) / R;
+      const nl = Math.hypot(gx, gy) || 1; const nx = -gx / nl * (1 - dd), ny = -gy / nl * (1 - dd), nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
+      let l = -nx * 0.55 - ny * 0.7 + nz * 0.35 - 0.2 - (y / H4) * 0.25 + (D[i] / maxD) * 0.15;
+      if (dd < 0.35 && (nx < -0.2 || ny < -0.3)) l += 0.35;                 // rim light
+      const q = Math.round(l * 2 + (BY[(y & 3) * 4 + (x & 3)] / 16 - 0.47) * 0.8);
+      const f = q <= -2 ? 0.62 : q === -1 ? 0.8 : q === 0 ? 0.97 : q === 1 ? 1.1 : 1.24;
+      c = shade(c, f); const k = i * 4; o[k] = (c >> 16) & 255; o[k + 1] = (c >> 8) & 255; o[k + 2] = c & 255; o[k + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0); t.refresh();
   }
   /** EPX/Scale2x upscale + rim light + ambient occlusion: the large battle version of a monster. */
   toHd(scene: Phaser.Scene, key: string) {

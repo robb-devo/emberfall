@@ -9,6 +9,7 @@ import { SKILLS, Skill } from '../data/skills';
 import { ITEMS } from '../data/items';
 import { ensureDoll, ensureDollHd, specOf } from '../systems/paperdoll';
 import { TUTORIALS } from '../data/story';
+import { ensureBackdrop } from '../gfx/backdrop';
 
 interface Foe { def: EnemyDef; name: string; hp: number; mp: number; spr: Phaser.GameObjects.Sprite; x: number; y: number; alive: boolean; buffDef: number; buffAtk: number; poisoned: boolean; charged: boolean; stolen?: boolean; asleep?: number; chargeAct?: any }
 interface Act { who: 'p' | 'e'; idx: number; kind: 'attack' | 'skill' | 'item' | 'defend' | 'flee'; skill?: string; item?: string; target?: number; spd: number }
@@ -27,13 +28,14 @@ export class BattleScene extends Phaser.Scene {
     this.cameras.main.fadeIn(300); diorama(this.cameras.main, 'battle', ({ bg_boss: { warm: 0xff7040, bloom: 1.3 }, bg_hollow: { warm: 0xc0a0ff }, bg_road: { warm: 0xffb060, bloom: 1.15 }, bg_coast: { warm: 0xfff0d0 }, bg_grotto: { warm: 0x60e0e0, bloom: 1.25 }, bg_choir: { warm: 0xff5a8a, bloom: 1.3 } } as any)[this.d.bg] ?? {});
     this.add.rectangle(0, 0, W, H, 0x07060f).setOrigin(0);
     // cinematic backdrop: far layer blurred for depth of field, slow camera drift
-    const bg = this.add.image(W / 2, 0, d.bg || 'bg_fields').setOrigin(0.5, 0); const bs = 936 / bg.width; bg.setScale(bs);
+    const bbKey = ensureBackdrop(this, d.bg || 'bg_fields');
+    const bg = this.add.image(W / 2, 0, bbKey || d.bg || 'bg_fields').setOrigin(0.5, 0); const bs = bbKey ? 2 : 936 / bg.width; bg.setScale(bs); this.bgImg = bg;
     const webgl = this.game.renderer.type === Phaser.WEBGL;
-    if (webgl && DioramaFX.quality > 0) bg.preFX?.addBlur(1, 1.2, 1.2, 1);
+    if (webgl && DioramaFX.quality > 0 && !bbKey) bg.preFX?.addBlur(1, 1.2, 1.2, 1);
     this.tweens.add({ targets: bg, scale: bs * 1.02, x: W / 2 - 12, yoyo: true, repeat: -1, duration: 7000, ease: 'Sine.inOut' });
     const gc = ({ bg_fields: 0x3f7f3a, bg_hollow: 0x3a3048, bg_boss: 0x3a2430, bg_road: 0x8a6a30, bg_coast: 0xc8b07a, bg_grotto: 0x245050, bg_choir: 0x34243a } as any)[d.bg || 'bg_fields'] ?? 0x3f7f3a;
-    const ground = this.add.graphics(); ground.fillGradientStyle(gc, gc, 0x07060f, 0x07060f, 0, 0, 1, 1); ground.fillRect(0, 540, W, 60); ground.fillGradientStyle(gc, gc, 0x07060f, 0x07060f, 1, 1, 1, 1); ground.fillRect(0, 600, W, 220);
-    for (let i = 0; i < 60; i++) { ground.fillStyle(Phaser.Display.Color.ValueToColor(gc).darken(20).color, 0.8); ground.fillRect(Math.random() * W, 600 + Math.random() * 180, 8 + Math.random() * 12, 4); }
+    const ground = this.add.graphics(); if (!bbKey) ground.fillGradientStyle(gc, gc, 0x07060f, 0x07060f, 0, 0, 1, 1); if (!bbKey) { ground.fillRect(0, 540, W, 60); ground.fillGradientStyle(gc, gc, 0x07060f, 0x07060f, 1, 1, 1, 1); ground.fillRect(0, 600, W, 220); }
+    if (!bbKey) for (let i = 0; i < 60; i++) { ground.fillStyle(Phaser.Display.Color.ValueToColor(gc).darken(20).color, 0.8); ground.fillRect(Math.random() * W, 600 + Math.random() * 180, 8 + Math.random() * 12, 4); }
     // volumetric light shafts + floating motes + foreground blur silhouettes
     const outdoor = ['bg_fields', 'bg_road', 'bg_coast'].includes(d.bg || 'bg_fields');
     const shaftC = outdoor ? 0xfff0c0 : this.boss ? 0xff8040 : 0x9a80ff;
@@ -58,7 +60,7 @@ export class BattleScene extends Phaser.Scene {
       const minion = d.group.slice(0, i).filter((g: string) => !ENEMIES[g].boss).length;
       const [x, y] = def.boss ? [hasBoss && n > 1 ? 240 : 230, n > 1 ? 650 : 690] : hasBoss ? ([[80, 590], [400, 745], [70, 760]][minion % 3] as number[]) : L[i % L.length];
       if (def.boss || n === 1) this.add.image(x, y - 160, 'light').setTint(def.boss ? 0xff5020 : 0xffe0b0).setScale(def.boss ? 3.4 : 2).setAlpha(def.boss ? 0.35 : 0.18).setBlendMode(Phaser.BlendModes.ADD);
-      const spr = this.add.sprite(x, y, def.sprite + '_hd').setOrigin(0.5, 1).setScale((def.boss ? 2.7 : 2.6) * (def.scale ?? 1)).setDepth(y / 100);
+      const hd4 = this.textures.exists(def.sprite + '_hd4'); const spr = this.add.sprite(x, y + (hd4 ? 2 : 0), hd4 ? def.sprite + '_hd4' : def.sprite + '_hd').setOrigin(0.5, 1).setScale((def.boss ? 2.7 : 2.6) * (def.scale ?? 1) * (hd4 ? 0.5 : 1)).setDepth(y / 100);
       this.add.image(x, y - 4, 'shadow').setScale(def.boss ? 16 : 8, 4.5).setDepth(-0.5).setAlpha(0.8);
       this.tweens.add({ targets: spr, scaleY: spr.scaleY * 1.04, yoyo: true, repeat: -1, duration: 700 + i * 90, ease: 'Sine.inOut' });
       spr.setAlpha(0).setY(y + 30); this.tweens.add({ targets: spr, alpha: 1, y, duration: 400, delay: i * 120, ease: 'Back.out' });
@@ -69,9 +71,9 @@ export class BattleScene extends Phaser.Scene {
     const pn = this.party.length;
     this.party.forEach((m, i) => {
       const x = pn === 1 ? 590 : 545 + (i % 2) * 70 - (pn > 3 ? 10 : 0) + i * 12, y = pn === 1 ? 640 : 500 + i * (pn > 3 ? 72 : 88);
-      const spr = this.add.sprite(x, y, ensureDollHd(this, specOf(m)), 3).setOrigin(0.5, 1).setScale(3.5).setDepth(y / 100);
+      const spr = this.add.sprite(x, y, ensureDollHd(this, specOf(m)), 3).setOrigin(0.5, 1).setScale(3.9).setDepth(y / 100);
       spr.setData('hx', x);
-      this.tweens.add({ targets: spr, scaleY: 3.5 * 1.02, yoyo: true, repeat: -1, duration: 900 + i * 120, ease: 'Sine.inOut' });
+      this.tweens.add({ targets: spr, scaleY: 3.9 * 1.02, yoyo: true, repeat: -1, duration: 900 + i * 120, ease: 'Sine.inOut' });
       this.add.image(x, y - 4, 'shadow').setScale(6, 3).setDepth(-0.4);
       if (m.hp <= 0) spr.setTint(0x553355).setAngle(90);
       this.pSpr.push(spr);
@@ -82,7 +84,7 @@ export class BattleScene extends Phaser.Scene {
     this.add.zone(0, 0, W, 960).setOrigin(0).setInteractive().on('pointerdown', () => (this.skip = true));
     this.run();
   }
-  skip = false;
+  skip = false; bgImg?: Phaser.GameObjects.Image;
   buildCards() {
     this.cards.forEach(c => c.destroy()); this.cards = [];
     const n = this.party.length; const X0 = 150; const cw = (W - X0 - 16 - (n - 1) * 8) / n;

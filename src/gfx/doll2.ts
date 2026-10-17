@@ -90,7 +90,7 @@ function head(cv: Canvas, d: Dir, skin: number) {
 }
 function face(cv: Canvas, d: Dir, f: number, eye: number, skin: number, hair: number) {
   const dark = 0x1e1626, white = 0xfdfcff, irisD = shade(eye, 0.55), irisL = shade(eye, 1.35), brow = shade(hair, 0.55), blush = 0xf29a9a, mouth = 0xb0505a;
-  const eyesX = d === 'S' ? [10] : [11, 18];
+  const eyesX = d === 'S' ? [11] : [11, 18];
   for (const ex of eyesX) {
     const inner = d === 'S' ? -1 : ex < 16 ? 1 : -1;
     switch (f % 4) {
@@ -134,7 +134,7 @@ function hairMask(style: string, d: Dir): { front: HairFn; back?: HairFn } {
     return { front: ext[style] || base };
   }
   if (d === 'S') {
-    const cap: HairFn = (x, y) => inHead(x, y, 8, 8.2, 12) && (y < 11 || x > 14 - (y - 11) * 0.2) && !(x < 10 && y > 10) && y < 19;
+    const cap: HairFn = (x, y) => inHead(x, y, 8, 8.2, 12) && (y < 11 || x > 16 + (y - 11) * 0.1 || (y < 12 && x < 11)) && y < 19;
     const ext: Record<string, HairFn> = {
       Flowing: (x, y) => cap(x, y) || (x >= 15 && x < 24 && y >= 12 && y < 30 - (x - 15) * 0.3),
       Ponytail: (x, y) => cap(x, y) || (y >= 9 && y < 26 && Math.abs(x + 0.5 - (23 + (y - 9) * 0.25)) < 2.2 - (y - 9) * 0.05),
