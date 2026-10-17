@@ -113,7 +113,7 @@ export class WorldScene extends Phaser.Scene {
         if (DioramaFX.quality > 0 && this.game.renderer instanceof Phaser.Renderer.WebGL.WebGLRenderer) { this.water.setPostPipeline(WaterFX); const wf = this.water.getPostPipeline(WaterFX) as any; const n = this.isNight() || !this.def.outdoor; if (wf) { wf.night = n ? 1 : 0; wf.sky = n ? 0x203060 : 0xd8ecff; } }
       }
       this.hdStruct = true;
-      const st = buildStructures(this, this.def.id, this.grid, this.isNight(), g.key, !!g.fresh);
+      const st = buildStructures(this, this.def.id, this.grid, this.isNight(), g.key, !!g.fresh, !this.def.outdoor);
       for (const hs of st.houses) {
         this.add.image(hs.x0 * TS - OH / HD, (hs.y1 + 1) * TS, hs.key).setOrigin(0, 1).setScale(1 / HD).setDepth(10 + (hs.y1 + 1) * TS - 1);
         if (hs.chimney) this.add.particles(hs.x0 * TS - OH / HD + hs.chimney[0] / HD, (hs.y1 + 1) * TS - this.textures.get(hs.key).source[0].height / HD + 1, 'light', { lifespan: 3600, speedY: { min: -9, max: -5 }, speedX: { min: 2, max: 6 }, scale: { start: 0.03, end: 0.16 }, alpha: { start: 0.35, end: 0 }, tint: this.isNight() ? 0x8890b0 : 0xe8e4f0, frequency: 260 }).setDepth(7100);
@@ -276,6 +276,13 @@ export class WorldScene extends Phaser.Scene {
         lights.push({ x, y, c: 0xff8a3a, r: 2.6 });
       }
     }
+    // interiors: stained-glass / hearth glow + slanted light shafts falling through the windows
+    if (!this.def.outdoor) { const noL = !(this.def.lights || []).length; let k = 0;
+      for (let y = 0; y < this.grid.length - 1; y++) for (let x = 0; x < this.grid[0].length; x++) { const c = this.grid[y][x];
+        if (c === '-') { lights.push({ x, y: y + 1, c: [0xffc0a0, 0xa0c0ff, 0xffe0a0, 0xd0a0ff][k++ % 4], r: 2.4 });
+          const sh = this.add.image(x * TS + 8, y * TS + 6, 'light').setOrigin(0.5, 0).setTint(0xfff0d0).setBlendMode(Phaser.BlendModes.ADD).setScale(0.13, 1.5).setRotation(0.32).setAlpha(0.16).setDepth(8002);
+          this.tweens.add({ targets: sh, alpha: 0.07, yoyo: true, repeat: -1, duration: 3000 + k * 700, ease: 'Sine.inOut' }); }
+        if (c === 'H' && noL) lights.push({ x, y: y + 1, c: 0xff9a40, r: 3.2 }); } }
     // glowing coral lights itself (sea caves)
     { let k = 0; for (let y = 0; y < this.grid.length; y++) for (let x = 0; x < this.grid[0].length; x++) if (this.grid[y][x] === 'j' && (k++ % 2) === 0) lights.push({ x, y, c: k % 4 ? 0x50f0d0 : 0xff80c0, r: 2.2 }); }
     for (const [X, Y] of this.nightWindows) {

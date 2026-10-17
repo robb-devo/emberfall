@@ -8,7 +8,7 @@ import { hash, noise, fbm, clamp, smooth, rgb, mix, mul, cells, RGB } from './no
 
 export const HD = 2;            // texels per world pixel
 export const TT = 16 * HD;      // texels per tile
-export const enum Ter { NONE, GRASS, AGRASS, PATH, LEAF, SAND, COBBLE, PLAZA, DFLOOR, CAVE, WTOP, WFACE, CTOP, CFACE, CLIFF, WATER }
+export const enum Ter { NONE, GRASS, AGRASS, PATH, LEAF, SAND, COBBLE, PLAZA, DFLOOR, CAVE, WTOP, WFACE, CTOP, CFACE, CLIFF, WATER, WOOD, RUG, IWALL, COUNTER }
 const NATURAL = new Set<number>([Ter.GRASS, Ter.AGRASS, Ter.PATH, Ter.LEAF, Ter.SAND, Ter.WATER, Ter.CAVE]);
 export const TER: Record<string, number> = {
   '.': Ter.GRASS, ',': Ter.GRASS, '*': Ter.GRASS, '"': Ter.GRASS, 'C': Ter.GRASS,
@@ -17,6 +17,7 @@ export const TER: Record<string, number> = {
   'd': Ter.DFLOOR, 'e': Ter.DFLOOR, 'l': Ter.DFLOOR, 'a': Ter.DFLOOR, ';': Ter.CAVE,
   'm': Ter.WTOP, 'M': Ter.WFACE, 'I': Ter.CTOP, 'J': Ter.CFACE, 'c': Ter.CLIFF,
   '~': Ter.WATER, '4': Ter.WATER, '0': Ter.WATER,
+  '_': Ter.WOOD, 'g': Ter.RUG, '|': Ter.IWALL, 'k': Ter.COUNTER,
 };
 /** characters whose classic tile is fully replaced by the HD painter (ground + decal) */
 export const PAINTED_DECALS = new Set(['*', '"', 'C', '@', '&', 'l', 'a']);
@@ -65,9 +66,16 @@ export function paintGround(scene: Phaser.Scene, id: string, grid: string[], pro
   const ter: number[][] = []; const blank: boolean[][] = [];
   for (let y = 0; y < h; y++) { ter.push([]); blank.push([]); for (let x = 0; x < w; x++) {
     const ch = grid[y][x]; let t = TER[ch] || 0;
+    if (!outdoor && 'NQG-'.includes(ch)) t = Ter.IWALL;
+    if (!outdoor && ch === '!') t = Ter.PLAZA;
+    if (!outdoor && (ch === '?' || ch === '+')) t = Ter.COUNTER;
+    if (!outdoor && ch === 'D' && (grid[y - 1]?.[x] === '_' || grid[y - 1]?.[x] === 'g')) t = Ter.WOOD;
+    // props standing in the back-wall row (shelves, hearths, cupboards) sit on wall, not floor
+    const wl = (c?: string) => c === '|' || (!!c && propChars.has(c) && grid[y - 1]?.[x] === '|');
+    if (!t && propChars.has(ch) && grid[y - 1]?.[x] === '|' && wl(grid[y][x - 1]) && wl(grid[y][x + 1])) t = Ter.IWALL;
     if (!t && (STRUCT.has(ch) || propChars.has(ch))) t = deriveGround(grid, x, y, ch);
     ter[y].push(t);
-    blank[y].push(!!t && (!!TER[ch] || STRUCT.has(ch) || propChars.has(ch)));
+    blank[y].push(!!t && (!!TER[ch] || STRUCT.has(ch) || propChars.has(ch) || (!outdoor && 'NQG-!D?+'.includes(ch))));
   } }
   const key = 'hdg_' + id, waterKey = 'hdw_' + id;
   const res: GroundResult = { key, blank, ter, w, h };
@@ -76,6 +84,15 @@ export function paintGround(scene: Phaser.Scene, id: string, grid: string[], pro
   if (scene.textures.exists(key)) return res;
 
   const T = (x: number, y: number) => (x < 0 || y < 0 || x >= w || y >= h) ? Ter.NONE : ter[y][x];
+  // rug components -> bounding boxes in texels (for ornate borders)
+  const rugBox = new Map<number, [number, number, number, number]>();
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { if (ter[y][x] !== Ter.RUG || rugBox.has(y * w + x)) continue;
+    const q = [[x, y]], cells2: number[] = []; let x0 = x, x1 = x, y0 = y, y1 = y; rugBox.set(y * w + x, [0, 0, 0, 0]);
+    while (q.length) { const [cx, cy] = q.pop()!; cells2.push(cy * w + cx); x0 = Math.min(x0, cx); x1 = Math.max(x1, cx); y0 = Math.min(y0, cy); y1 = Math.max(y1, cy);
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = cx + dx, ny = cy + dy; if (nx < 0 || ny < 0 || nx >= w || ny >= h || ter[ny][nx] !== Ter.RUG || rugBox.has(ny * w + nx)) continue; rugBox.set(ny * w + nx, [0, 0, 0, 0]); q.push([nx, ny]); } }
+    const bx: [number, number, number, number] = [x0 * TT + 3, y0 * TT + 3, (x1 + 1) * TT - 3, (y1 + 1) * TT - 3]; for (const c of cells2) rugBox.set(c, bx); }
+  const wallish = (x: number, y: number) => { const q = T(x, y); return q === Ter.IWALL || q === Ter.NONE; };
+  const floorish = (q: number) => q === Ter.WOOD || q === Ter.RUG || q === Ter.COUNTER || q === Ter.PLAZA;
   const CH = (x: number, y: number) => grid[Math.max(0, Math.min(h - 1, y))][Math.max(0, Math.min(w - 1, x))];
   const out = new Uint8ClampedArray(W * H * 4);
   const wat = anyWater ? new Uint8ClampedArray(W * H * 4) : null;
@@ -208,6 +225,105 @@ export function paintGround(scene: Phaser.Scene, id: string, grid: string[], pro
           const tb = T(gx, gy + 1); // darker toward the floor
           if (!cl) c = mul(c, 0.95 - 0.35 * (ly / TT) * (isFace(tb) ? 0 : 1));
           if (!cl && ly < 2) c = mix(c, cvf ? C.ct2 : C.wt2, 0.9);
+          break;
+        }
+        case Ter.WOOD: case Ter.RUG: {
+          // warm plank floor: staggered boards, stretched grain, dark seams, nail heads, soft sheen
+          const row = Math.floor(Y / 8), vy = Y - row * 8, off = hash(row, 5, 91) * 90, plen = 46 + Math.floor(hash(row, 6, 92) * 40);
+          const col = Math.floor((X + off) / plen), vx = X + off - col * plen;
+          const tone = hash(col, row, 93);
+          c = mix(rgb(0x6a3f22), rgb(0x9a6236), 0.25 + tone * 0.55);
+          const grain = noise(X * 0.035 + col * 7.3, Y * 0.9 + row * 3.1); c = mul(c, 0.9 + grain * 0.2);
+          if (noise(X * 0.012 + col, Y * 0.3) > 0.78) c = mul(c, 0.82);            // knots / dark streaks
+          if (vy === 0) c = mul(c, 0.5); else if (vy === 1) c = mix(c, rgb(0xd8a070), 0.18); else if (vy === 7) c = mul(c, 0.8);
+          if (vx === 0) c = mul(c, 0.55); else if ((vx === 3 || vx === plen - 3) && (vy === 3 || vy === 5)) c = rgb(0x3a2a20);
+          c = mix(c, rgb(0xffd8a0), clamp(noise(X * 0.01, Y * 0.01) - 0.55) * 0.25);
+          if (t === Ter.RUG) {
+            const bx = rugBox.get(gy * w + gx)!; const d = Math.min(X - bx[0], Y - bx[1], bx[2] - 1 - X, bx[3] - 1 - Y);
+            if (d >= 0) {
+              const cxr = (bx[0] + bx[2]) / 2, cyr = (bx[1] + bx[3]) / 2, rx = X - cxr, ry = Y - cyr;
+              if (d < 2) c = mix(rgb(0xe8d0a0), rgb(0xb89060), hash(X, Y >> 1, 94));                     // fringe
+              else if (d < 4) c = rgb(0x3a1418);
+              else if (d < 10) { c = mix(rgb(0xc8963a), rgb(0xe8c060), noise(X * 0.3, Y * 0.3) * 0.4); const pp = ((X + Y) >> 2) & 3; if ((d === 6 || d === 7) && pp === 0) c = rgb(0x2a3060); }
+              else if (d < 12) c = rgb(0x5a1418);
+              else { c = mix(rgb(0x8a2228), rgb(0xa8323a), noise(X * 0.2, Y * 0.2) * 0.5);
+                const lat = (Math.abs(rx) + Math.abs(ry)) % 12; if (lat < 1.2) c = rgb(0x2a3060); else if (lat < 2.2) c = rgb(0xc8963a);
+                const md = Math.abs(rx) * 0.9 + Math.abs(ry); if (md < 9) c = md < 4 ? rgb(0xf0c860) : md < 6 ? rgb(0x2a3060) : rgb(0xd8a848); }
+              if (hash(X, Y, 95) < 0.12) c = mul(c, 0.9);
+              if (d >= 2) c = mul(c, 0.96 + 0.08 * clamp(1 - (Y - bx[1]) / 120));
+            }
+          }
+          // contact shadow under the back wall, side walls and counters
+          if (wallish(gx, gy - 1)) c = mul(c, 0.45 + 0.55 * smooth(0, 18, ly));
+          if (wallish(gx - 1, gy)) c = mul(c, 0.6 + 0.4 * smooth(0, 10, lx));
+          if (wallish(gx + 1, gy)) c = mul(c, 0.6 + 0.4 * smooth(0, 10, TT - lx));
+          if (T(gx, gy - 1) === Ter.COUNTER) c = mul(c, 0.6 + 0.4 * smooth(0, 10, ly));
+          if (!outdoor && ch === 'D') { // woven doormat + daylight spilling in
+            const mx = Math.abs(lx - TT / 2), my = Math.abs(ly - TT / 2);
+            if (mx < 13 && my < 9) { c = mix(rgb(0x8a6a3a), rgb(0xb89a5a), ((lx >> 1) + (ly >> 1)) & 1 ? 0.7 : 0.2); if (mx > 11 || my > 7) c = rgb(0x5a3a1a); }
+            c = mix(c, rgb(0xfff0c8), 0.18 * smooth(0, TT, ly));
+          }
+          break;
+        }
+        case Ter.IWALL: {
+          const below = T(gx, gy + 1), below2 = T(gx, gy + 2);
+          const faceLo = floorish(below), faceHi = !faceLo && below === Ter.IWALL && floorish(below2);
+          if (faceLo || faceHi) {
+            const fy = (faceHi ? 0 : TT) + ly, FH2 = TT * 2;               // 0 = top of the two-tile wall face
+            const lowCh = faceLo ? ch : CH(gx, gy + 1), stoneW = 'NQG-'.includes(ch) || 'NQG-'.includes(lowCh);
+            if (stoneW) {
+              const row = Math.floor(Y / 9), off = (row % 2) * 9, colb = Math.floor((X + off) / 18), vx = (X + off) % 18, vy = Y % 9;
+              c = mix(rgb(0x6a6458), rgb(0x9a9284), 0.3 + hash(colb, row, 97) * 0.5 + (noise(X * 0.2, Y * 0.2) - 0.5) * 0.2);
+              if (vy === 0 || vx === 0) c = rgb(0x3e3a34); else if (vy === 1) c = mix(c, rgb(0xd8d0c0), 0.3);
+              c = mul(c, 0.7 + 0.3 * fy / FH2);
+              if (fy > FH2 - 6) c = fy === FH2 - 6 ? rgb(0xb8b0a0) : rgb(0x3e3a34);
+              if (lowCh === '-') { const wx = lx - TT / 2 + 0.5, top = 12, bot = FH2 - 10, inW = Math.abs(wx) < 9 && fy < bot && (fy > top + 9 || Math.hypot(wx, fy - top - 9) < 9);
+                const frame = !inW && Math.abs(wx) < 12 && fy < bot + 3 && (fy > top + 9 || Math.hypot(wx, fy - top - 9) < 12);
+                if (frame) c = rgb(0xc8c0b0);
+                if (inW) { const seg = (Math.floor((wx + 9) / 4.5) + Math.floor(fy / 7)) % 5; c = [rgb(0xe04a5a), rgb(0x4a8ae0), rgb(0xf0c040), rgb(0x50c080), rgb(0xb070e0)][seg]; c = mix(c, rgb(0xfff4d0), 0.25 * clamp(1 - fy / FH2));
+                  if ((wx + 9) % 4.5 < 1 || fy % 7 === 0) c = rgb(0x2a2030); } }
+            } else
+            if (fy < 6) { c = mix(rgb(0x3a2416), rgb(0x5a3a22), noise(X * 0.4, Y * 0.2)); if (fy === 4) c = rgb(0x8a6040); if (fy === 5) c = rgb(0x24160e); }
+            else if (fy < 36) {
+              c = mix(rgb(0xb59c76), rgb(0xcbb48a), noise(X * 0.06, Y * 0.06) * 0.7); c = mul(c, 0.78 + 0.22 * (fy - 6) / 30);
+              if (hash(X >> 1, Y >> 1, 96) < 0.04) c = mul(c, 0.92);
+              const pc = X % 64; if (pc < 5) { c = mix(rgb(0x4a2c18), rgb(0x6a4228), noise(X * 0.5, Y * 0.08)); if (pc === 0) c = rgb(0x24160e); if (pc === 1) c = mix(c, rgb(0xa07850), 0.4); }
+            } else if (fy < 39) { c = fy === 36 ? rgb(0x9a7048) : fy === 38 ? rgb(0x24160e) : rgb(0x6a4428); }
+            else if (fy < FH2 - 5) {
+              const pw = 24, pc2 = X % pw, py = fy - 39, ph = FH2 - 5 - 39;
+              c = mix(rgb(0x4a2c18), rgb(0x5e3a20), noise(X * 0.05 + 3, Y * 0.8) * 0.8);
+              if (pc2 < 2 || py < 2 || py > ph - 3 || pc2 > pw - 3) c = mul(c, pc2 < 1 || py < 1 ? 1.35 : 0.7); // raised panel bevel
+            } else { c = fy === FH2 - 5 ? rgb(0x8a6040) : rgb(0x2a1a10); }
+            if (wallish(gx - 1, gy) && !floorish(T(gx - 1, gy))) c = mul(c, 0.62 + 0.38 * smooth(0, 12, lx)); // corner occlusion
+            if (wallish(gx + 1, gy) && !floorish(T(gx + 1, gy))) c = mul(c, 0.62 + 0.38 * smooth(0, 12, TT - lx));
+          } else {
+            // cut-away wall top: dark beam with a warm lit rim where it meets the room
+            c = mix(rgb(0x1c120e), rgb(0x2c1c14), noise(X * 0.08, Y * 0.5) * 0.8);
+            const fl = (dx: number, dy: number) => { const q = T(gx + dx, gy + dy); return floorish(q) || (q === Ter.IWALL && floorish(T(gx + dx, gy + dy + 1))); };
+            if (fl(0, 1) && ly > TT - 4) c = ly === TT - 1 ? rgb(0x24160e) : rgb(0x8a6040);
+            if (fl(1, 0) && lx > TT - 4) c = lx === TT - 1 ? rgb(0x24160e) : rgb(0x7a5436);
+            if (fl(-1, 0) && lx < 3) c = lx === 0 ? rgb(0x24160e) : rgb(0x7a5436);
+            if (fl(0, -1) && ly < 3) c = ly === 0 ? rgb(0x9a7048) : rgb(0x6a4428);
+          }
+          break;
+        }
+        case Ter.COUNTER: {
+          const front = !(T(gx, gy + 1) === Ter.COUNTER);
+          const topEnd = front ? 20 : TT;
+          if (ly < topEnd) {
+            c = mix(rgb(0x8a5a32), rgb(0xb07a44), noise(X * 0.03, Y * 0.6 + gx * 9) * 0.7);
+            if ((Y >> 3) % 2 === 0 && (Y & 7) === 0) c = mul(c, 0.7);
+            c = mix(c, rgb(0xffe0b0), clamp(noise(X * 0.02, Y * 0.02) - 0.5) * 0.4);
+            if (T(gx - 1, gy) !== Ter.COUNTER && lx < 3) c = mix(c, rgb(0xe8b880), 0.4);
+            if (T(gx + 1, gy) !== Ter.COUNTER && lx > TT - 3) c = mul(c, 0.6);
+            if (T(gx, gy - 1) !== Ter.COUNTER && ly < 2) c = mix(c, rgb(0xe8b880), 0.5);
+            if (front && ly >= topEnd - 2) c = ly === topEnd - 1 ? rgb(0x2a1a10) : rgb(0xd8a068);
+            if (ch === '+') { c = mix(rgb(0xe8e0d0), rgb(0xfff8ec), noise(X * 0.1, Y * 0.3) * 0.6); if (ly < 3 || ly > topEnd - 4) c = rgb(0xd8a840); if (Math.abs(lx - TT / 2) < 2 && ly > 5 && ly < 16 || Math.abs(ly - 9) < 2 && Math.abs(lx - TT / 2) < 6) c = rgb(0xf0c040); }
+          } else {
+            c = mix(rgb(0x4a2a16), rgb(0x60381e), noise(X * 0.06, Y * 0.5) * 0.8); if (X % 10 === 0) c = mul(c, 0.6); if (ly === TT - 1) c = rgb(0x1a100a);
+            if (ch === '+') { c = mix(rgb(0xb02a3a), rgb(0xd0404a), noise(X * 0.2, Y * 0.5) * 0.5); if (ly > TT - 4) c = rgb(0xd8a840); }
+            c = mul(c, 0.85 + 0.15 * (TT - ly) / 12);
+          }
           break;
         }
         case Ter.WATER: { c = C.mud; break; }

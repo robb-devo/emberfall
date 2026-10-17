@@ -30,8 +30,12 @@ Regression tests: run against a *built* copy so Vite HMR reloads don't break the
 - [x] Battle hit flash = brief additive silhouette (110ms, 42%) instead of solid tintFill (was a white blob under bloom).
 - [x] Diorama depth: projective ground-plane tilt in DioramaFX (k=0.6 outdoor), camera zoom 4 -> 4.6 (`ZOOM`), raised plaza with stone curb faces + cast shadow, taller house walls (+WALLX) and roofs, front cross-gables with round windows, foreground blurred foliage silhouettes at screen edges with parallax.
 
+- [x] Interiors (ground.ts Ter.WOOD/RUG/IWALL/COUNTER): staggered plank floors with grain + contact shadows, ornate bordered rugs with medallions, 2-tile back walls (crown beam, plaster + timber posts, wainscot panels, baseboard), dark cut-away wall tops with lit rims, wooden counters, woven doormats; chapel: stone walls with stained-glass arches, slab floor, wooden pews, clothed altar; window light shafts + hearth glow; no fake 'house' structure indoors.
+  Shots: progress/r3-17-int-*, r3-21-int-chapel. Tool: `MAPS=map:x:y,... node tests/tools/r3int.mjs <prefix>`.
+
 ## Next
-- [ ] Interiors pass; HD bridge/sign/lantern polish if needed.
+- [ ] Full regression run on the built test server, fix regressions.
+- [ ] Final critical polish pass (characters, monsters, title).
 - [ ] APK + release v0.3.0.
 
 ## Scope update (user, 11:16)

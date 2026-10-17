@@ -207,10 +207,10 @@ export function ensureTreeAtlas(scene: Phaser.Scene) {
 }
 
 /** Build all HD structures for a map. `ground` is the HD ground canvas (shadows are baked into it when fresh). */
-export function buildStructures(scene: Phaser.Scene, id: string, grid: string[], night: boolean, groundKey: string, fresh: boolean): StructResult {
+export function buildStructures(scene: Phaser.Scene, id: string, grid: string[], night: boolean, groundKey: string, fresh: boolean, indoor = false): StructResult {
   ensureTreeAtlas(scene);
   const houses: HouseInfo[] = []; const trees: StructResult['trees'] = [];
-  for (const hx of findHouses(grid)) {
+  for (const hx of indoor ? [] : findHouses(grid)) {
     const key = `hdh_${id}_${hx.x0}_${hx.y0}_${night ? 'n' : 'd'}`;
     let info: Omit<HouseInfo, 'key' | 'x0' | 'y0' | 'x1' | 'y1'>;
     const cacheKey = key + '_meta'; const cached = (scene.registry.get(cacheKey) as any);
