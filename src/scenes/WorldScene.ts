@@ -119,6 +119,7 @@ export class WorldScene extends Phaser.Scene {
         if (DioramaFX.quality > 0 && this.game.renderer instanceof Phaser.Renderer.WebGL.WebGLRenderer) { this.water.setPostPipeline(WaterFX); const wf = this.water.getPostPipeline(WaterFX) as any; const n = this.isNight() || !this.def.outdoor; if (wf) { wf.night = n ? 1 : 0; wf.sky = n ? 0x203060 : 0xd8ecff; } }
       }
       this.hdStruct = true;
+      if (this.w3) { this.w3.addBlocks(g.ter, this.textures.get(g.key)); }
       const st = buildStructures(this, this.def.id, this.grid, this.isNight(), g.key, !!g.fresh, !this.def.outdoor, !!this.w3);
       for (const hs of st.houses) {
         const him = this.add.image(hs.x0 * TS - OH / HD, (hs.y1 + 1) * TS, hs.key).setOrigin(0, 1).setScale(1 / HD).setDepth(10 + (hs.y1 + 1) * TS - 1);
@@ -131,6 +132,7 @@ export class WorldScene extends Phaser.Scene {
         this.trees.push(im); im.setData('ph', (t.x * 0.7 + t.y * 0.3));
       }
       ensureTallGrass(this);
+      if (this.w3) this.w3.addSurroundings(!!this.def.outdoor && this.def.id !== 'spire', this.isNight(), this.textures.exists('hdtrees') ? this.textures.get('hdtrees') : undefined, this.grid.some(r => r.includes('P')) ? 'pine' : this.grid.some(r => r.includes('A')) ? 'aut' : 'oak');
       for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const c = this.grid[y][x]; if (c !== '"' && c !== '&') continue;
         const im = this.add.image(x * TS + 8 + ((x * 5 + y * 3) % 3 - 1), y * TS + 16 + 1 + ((x * 11 + y * 7) % 5) - 2, 'hdtall', (c === '&' ? 'a' : 'g') + ((x * 7 + y * 13) % 4)).setOrigin(0.5, 1).setScale(1 / HD).setDepth(10 + y * TS + 16.5).setFlipX((x + y) % 2 === 0);
         this.tall.set(x + ',' + y, im); }

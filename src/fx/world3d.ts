@@ -22,6 +22,8 @@ THREE.ColorManagement.enabled = false;
 /** camera elevation, field of view, vertical stretch of standing art (keeps on-screen proportions of the 2D art) */
 export const ELEV = 47 * Math.PI / 180, FOV = 30;
 export const SV = 1.32;
+/** 3D view zoom (world px across the screen = W / ZOOM3 at the focus point) */
+const ZOOM3 = 5.1;
 /** shadow direction: ground offset per unit of height (sun low in the front-left, shadows fall back-right) */
 const SUN = { x: 0.62, z: -0.78 };
 const UP = new THREE.Vector3(0, Math.cos(ELEV), -Math.sin(ELEV));
@@ -52,6 +54,7 @@ void main() {
     c.rgb *= mix(vec3(1.0), shadowTint, s * shadowK);
   }
   if (useLight > 0.5) c.rgb *= texture2D(lightMap, g).rgb * 1.08;
+  c.rgb *= 0.95;
   gl_FragColor = c;
 }`;
 /** shadow pass: flatten geometry along the sun onto the ground, top-down orthographic into the shadow map */
@@ -281,6 +284,60 @@ export class World3D {
     this.addStatic(q, tex);
     return { ridgeY, ridgeZ, Hw, X0, Zf };
   }
+  /**
+   * Extrude dungeon/cave walls and interior back walls out of the painted ground: wall tops are lifted to the wall height,
+   * the painted face rows stand up as vertical walls on the floor edge, open sides get side faces. Cliffs stay painted
+   * (their high ground is walkable).
+   */
+  addBlocks(ter: number[][], groundTex: Phaser.Textures.Texture) {
+    const src: any = groundTex.getSourceImage(); const tex = this.tex(src); const h = ter.length, w = ter[0].length;
+    const TOP = new Set([10, 12]), FACE = new Set([11, 13]), IW = 18; // Ter.WTOP, CTOP / WFACE, CFACE / IWALL
+    const interior = ter.some(r => r.includes(IW));
+    const wallT = (x: number, y: number) => { if (x < 0 || y < 0 || x >= w || y >= h) return true; const t = ter[y][x]; return TOP.has(t) || FACE.has(t) || t === IW; };
+    // interiors are cut-away dioramas: the front (bottom) wall row and walls with no room south of them stay flat
+    const roomSouth = (x: number, y: number) => { for (let yy = y + 1; yy < h; yy++) if (!wallT(x, yy)) return true; return false; };
+    const raised = (x: number, y: number) => { if (!wallT(x, y)) return false; if (!interior) return true; if (x < 0 || y < 0 || x >= w || y >= h) return false; if (y >= h - 1) return false; return roomSouth(x, y) || (!wallT(x - 1, y) || !wallT(x + 1, y)) && y < h - 2; };
+    const isFaceT = (x: number, y: number) => FACE.has(ter[y]?.[x]);
+    const Hb = interior ? 2 * 16 * SV * 0.92 : 16 * SV * 1.35;
+    const U = (px: number) => px / this.mapW, V = (py: number) => py / this.mapH; const q: Quad[] = [];
+    const quad = (p: number[], uv: number[], k: number) => q.push({ p, uv, c: [k, k, k, 1], f: [p[0], p[2] + 1, p[3], p[5] + 1, p[6], p[8] + 1, p[9], p[11] + 1] });
+    const faceRows = (x: number, y: number) => { if (ter[y][x] === IW) { let k = 1; while (k < 2 && ter[y - k]?.[x] === IW) k++; return k; } let k = 0; while (k < 2 && isFaceT(x, y - k)) k++; return Math.max(1, k); };
+    const faceOf = new Map<number, number>(); // tile -> top texture row to use for its lid
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      if (!raised(x, y)) continue;
+      const X = x * 16, Z = y * 16;
+      if (!raised(x, y + 1)) { // the floor starts south of here: stand the painted face up
+        const k = faceRows(x, y), z = (y + 1) * 16;
+        quad([X, Hb, z, X + 16, Hb, z, X + 16, 0, z, X, 0, z], [U(X), V(z - k * 16), U(X + 16), V(z - k * 16), U(X + 16), V(z), U(X), V(z)], 1);
+        for (let i = 0; i < k; i++) faceOf.set((y - i) * w + x, Math.max(0, y - k));
+      }
+    }
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      if (!raised(x, y)) continue; const X = x * 16, Z = y * 16;
+      const fr = faceOf.get(y * w + x); const ty = fr !== undefined ? fr : y; const dark = fr !== undefined && !raised(x, fr) ? 0.55 : interior ? 0.9 : 1;
+      quad([X, Hb, Z, X + 16, Hb, Z, X + 16, Hb, Z + 16, X, Hb, Z + 16], [U(X), V(ty * 16), U(X + 16), V(ty * 16), U(X + 16), V(ty * 16 + 16), U(X), V(ty * 16 + 16)], dark);
+      // side faces where the block meets open floor to the west/east (reuse a face strip of this column)
+      for (const [dx, k] of [[-1, 0.78], [1, 0.58]] as const) { if (raised(x + dx, y)) continue; const sx = dx < 0 ? X : X + 16;
+        const fy = fr !== undefined ? y + 1 : y + 1; quad([sx, Hb, Z, sx, Hb, Z + 16, sx, 0, Z + 16, sx, 0, Z], [U(X + 4), V(fy * 16 - 16), U(X + 12), V(fy * 16 - 16), U(X + 12), V(fy * 16), U(X + 4), V(fy * 16)], k); }
+      if (!raised(x, y - 1)) quad([X, Hb, Z, X + 16, Hb, Z, X + 16, 0, Z, X, 0, Z], [U(X), V(Z), U(X + 16), V(Z), U(X + 16), V(Z + 16), U(X), V(Z + 16)], 0.4);
+    }
+    if (q.length) this.addStatic(q, tex, !interior);
+    return Hb;
+  }
+  /** Outdoor maps: an endless ground plane and two rings of trees past the map edge, so the tilted camera never sees the void. */
+  addSurroundings(outdoor: boolean, night: boolean, treeTex?: Phaser.Textures.Texture, kind = 'oak') {
+    const g = new THREE.PlaneGeometry(this.mapW + 2400, this.mapH + 2400); g.rotateX(-Math.PI / 2); g.translate(this.mapW / 2, -0.2, this.mapH / 2);
+    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: !outdoor ? 0x05040a : night ? 0x0c1a14 : 0x2a4a22 })); m.renderOrder = -1; this.scene.add(m); this.staticMeshes.push(m);
+    if (!outdoor || !treeTex) return;
+    const src: any = treeTex.getSourceImage(); const tex = this.tex(src); const q: Quad[] = []; const TW = 72, TH = 92; const kinds = ['oak', 'aut', 'pine']; const ki = Math.max(0, kinds.indexOf(kind));
+    let s = 7; const r = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+    const tree = (x: number, z: number) => { const v = Math.floor(r() * 4), sc = 0.5 * (0.9 + r() * 0.35), w = TW * sc, h = TH * sc * SV; const u0 = v * TW / src.width, u1 = (v + 1) * TW / src.width, v0 = ki * TH / src.height, v1 = (ki + 1) * TH / src.height; const fl = r() < 0.5;
+      q.push({ p: [x - w / 2, h, z, x + w / 2, h, z, x + w / 2, 0, z, x - w / 2, 0, z], uv: fl ? [u1, v0, u0, v0, u0, v1, u1, v1] : [u0, v0, u1, v0, u1, v1, u0, v1], c: [0.85, 0.85, 0.85, 1], f: [x, z, x, z, x, z, x, z] }); };
+    for (let ring = 1; ring <= 4; ring++) { const o = ring * 15;
+      for (let x = -o; x <= this.mapW + o; x += 13 + r() * 6) { tree(x, -o + r() * 6); if (ring <= 2) tree(x, this.mapH + o + r() * 6); }
+      for (let z = -o; z <= this.mapH + o; z += 13 + r() * 6) { tree(-o + r() * 6, z); tree(this.mapW + o + r() * 6, z); } }
+    this.addStatic(q, tex, false);
+  }
   // ------------------------------------------------------------------ per-frame mirroring
   items: Item[] = [];
   push(pass: 0 | 1 | 2 | 3, key: number, tex: Tex, blend: number, q: Quad, water = false) { this.items.push({ pass, key, tex, blend, q, water }); }
@@ -382,7 +439,7 @@ export class World3D {
   // ------------------------------------------------------------------ render
   /** world-px centre of the view, clamped like Phaser's camera bounds */
   viewCentre(zr: number) {
-    const w = this.world; const vw = this.W / 4.6 / zr;
+    const w = this.world; const vw = this.W / ZOOM3 / zr;
     let x = w.camX, y = w.camY; const mw = this.mapW, mh = this.mapH;
     x = mw <= vw ? mw / 2 : Math.min(mw - vw / 2, Math.max(vw / 2, x));
     const vh = vw * this.H / this.W * 0.62; y = mh <= vh ? mh / 2 : Math.min(mh - vh * 0.42, Math.max(vh * 0.5, y));
@@ -401,7 +458,7 @@ export class World3D {
     // camera: Phaser zoom tweens / shake / rotation carry over
     const zr = pc.zoom / 4.6; const [cx, cy] = this.viewCentre(zr);
     let sx = 0, sy = 0; const sh: any = pc.shakeEffect; if (sh?.isRunning) { sx = (sh._offsetX || 0) / pc.zoom; sy = (sh._offsetY || 0) / pc.zoom; }
-    const vw = this.W / 4.6 / zr; const D = vw / (2 * Math.tan(FOV / 2 * Math.PI / 180) * (this.W / this.H));
+    const vw = this.W / ZOOM3 / zr; const D = vw / (2 * Math.tan(FOV / 2 * Math.PI / 180) * (this.W / this.H));
     const tx = cx + sx, tz = cy + 20 + sy;
     this.cam.position.set(tx, D * Math.sin(ELEV), tz + D * Math.cos(ELEV)); this.cam.up.set(0, 1, 0); this.cam.lookAt(tx, 0, tz); this.cam.rotateZ(-(pc.rotation || 0));
     this.cam.near = D * 0.3; this.cam.far = D * 3 + 800; this.cam.updateProjectionMatrix();
