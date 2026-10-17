@@ -191,8 +191,8 @@ export class WorldScene extends Phaser.Scene {
     const d = this.initData;
     // hero + followers
     const party = Game.s.party;
-    this.hero = this.makeActor('hero', ensureDoll(this, specOf(party[0])), d.x, d.y, d.dir ?? 0);
-    for (let i = 1; i < party.length; i++) { const f = this.makeActor('f' + i, ensureDoll(this, specOf(party[i])), d.x, d.y, d.dir ?? 0); this.followers.push(f); }
+    this.hero = this.makeActor('hero', ensureDoll(this, specOf(party[0])), d.x, d.y, d.dir ?? 0); (this.hero.spr as any).__xray = true;
+    for (let i = 1; i < party.length; i++) { const f = this.makeActor('f' + i, ensureDoll(this, specOf(party[i])), d.x, d.y, d.dir ?? 0); (f.spr as any).__xray = true; this.followers.push(f); }
     for (let i = 0; i < 8; i++) this.history.push({ x: d.x, y: d.y, dir: d.dir ?? 0 });
     // NPCs
     for (const n of this.def.npcs) {
@@ -762,7 +762,7 @@ export class WorldScene extends Phaser.Scene {
   refreshParty() {
     const p = Game.s.party; this.hero.spr.setTexture(ensureDoll(this, specOf(p[0]))); this.setFrame(this.hero);
     this.followers.forEach(f => { f.spr.destroy(); f.shadow.destroy(); }); this.followers = [];
-    for (let i = 1; i < p.length; i++) { const hp = this.history[i - 1]; const f = this.makeActor('f' + i, ensureDoll(this, specOf(p[i])), hp.x, hp.y, this.hero.dir); this.followers.push(f); }
+    for (let i = 1; i < p.length; i++) { const hp = this.history[i - 1]; const f = this.makeActor('f' + i, ensureDoll(this, specOf(p[i])), hp.x, hp.y, this.hero.dir); (f.spr as any).__xray = true; this.followers.push(f); }
     this.updateFollowers(true, true);
     if (this.def.id === 'hearth') { // rebuild roster idlers
       this.npcs.filter(n => n.def?.script === 'roster').forEach(n => { n.spr.destroy(); n.shadow.destroy(); });

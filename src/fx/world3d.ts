@@ -42,11 +42,12 @@ varying vec2 vUv; varying vec4 vCol; varying vec2 vFoot;
 void main() { vUv = uv; vCol = color; vFoot = foot; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
 const FRAG = `
 uniform sampler2D map; uniform sampler2D lightMap; uniform sampler2D shadowMap;
-uniform vec2 mapSize; uniform float useLight; uniform float useShadow; uniform float alphaTest; uniform float shadowK; uniform vec3 shadowTint; uniform float soft;
+uniform vec2 mapSize; uniform float useLight; uniform float useShadow; uniform float alphaTest; uniform float shadowK; uniform vec3 shadowTint; uniform float soft; uniform float xray;
 varying vec2 vUv; varying vec4 vCol; varying vec2 vFoot;
 void main() {
   vec4 c = texture2D(map, vUv) * vCol;
   if (c.a < alphaTest) discard;
+  if (xray > 0.5) { gl_FragColor = vec4(0.62, 0.8, 1.0, 0.42); return; }
   vec2 g = vec2(vFoot.x / mapSize.x, 1.0 - vFoot.y / mapSize.y);
   if (useShadow > 0.5) {
     vec2 px = 1.0 / mapSize; float s = texture2D(shadowMap, g).r;
@@ -154,7 +155,7 @@ class Batch {
   }
 }
 
-interface Item { pass: 0 | 1 | 2 | 3; key: number; tex: Tex; blend: number; q: Quad; water?: boolean }
+interface Item { pass: 0 | 1 | 2 | 3 | 4; key: number; tex: Tex; blend: number; q: Quad; water?: boolean }
 
 export class World3D {
   static inst?: World3D;
@@ -198,8 +199,9 @@ export class World3D {
     const m = new THREE.ShaderMaterial({
       vertexShader: VERT, fragmentShader: water ? WFRAG : FRAG, transparent: pass !== 1, depthWrite: pass === 1, depthTest: true, side: THREE.DoubleSide,
       uniforms: { map: { value: this.white }, lightMap: u.lightMap, shadowMap: u.shadowMap, mapSize: u.mapSize, useLight: u.useLight, shadowK: u.shadowK, shadowTint: u.shadowTint, soft: u.soft,
-        useShadow: { value: pass === 0 || pass === 1 ? 1 : 0 }, alphaTest: { value: pass === 1 ? 0.5 : 0.004 }, uTime: u.uTime, uSky: { value: new THREE.Color(0xd8ecff) }, uNight: { value: 0 }, texSize: { value: new THREE.Vector2(512, 512) } },
+        useShadow: { value: pass === 0 || pass === 1 ? 1 : 0 }, xray: { value: pass === 4 ? 1 : 0 }, alphaTest: { value: pass === 1 ? 0.5 : 0.004 }, uTime: u.uTime, uSky: { value: new THREE.Color(0xd8ecff) }, uNight: { value: 0 }, texSize: { value: new THREE.Vector2(512, 512) } },
     });
+    if (pass === 4) { m.depthFunc = THREE.GreaterDepth; m.depthWrite = false; m.transparent = true; (m.uniforms.alphaTest as any).value = 0.5; }
     return m;
   }
   smat(): THREE.ShaderMaterial { return new THREE.ShaderMaterial({ vertexShader: SVERT, fragmentShader: SFRAG, uniforms: { map: { value: this.white }, mapSize: this.uniforms.mapSize, sun: this.uniforms.sun }, depthTest: false, depthWrite: false, side: THREE.DoubleSide }); }
@@ -340,7 +342,7 @@ export class World3D {
   }
   // ------------------------------------------------------------------ per-frame mirroring
   items: Item[] = [];
-  push(pass: 0 | 1 | 2 | 3, key: number, tex: Tex, blend: number, q: Quad, water = false) { this.items.push({ pass, key, tex, blend, q, water }); }
+  push(pass: 0 | 1 | 2 | 3 | 4, key: number, tex: Tex, blend: number, q: Quad, water = false) { this.items.push({ pass, key, tex, blend, q, water }); }
   /** UVs of a Phaser frame (with flipX) */
   fuv(fr: any, flip: boolean, src: any) { const W = src.width, H = src.height; let u0 = fr.cutX / W, u1 = (fr.cutX + fr.cutWidth) / W; const v0 = fr.cutY / H, v1 = (fr.cutY + fr.cutHeight) / H; if (flip) [u0, u1] = [u1, u0]; return [u0, v0, u1, v0, u1, v1, u0, v1]; }
   color(o: any, a: number) { const t = o.tintTopLeft ?? 0xffffff; return [((t >> 16) & 255) / 255, ((t >> 8) & 255) / 255, (t & 255) / 255, a]; }
@@ -377,7 +379,8 @@ export class World3D {
         const p: number[] = []; const f: number[] = [];
         for (const [cx, cy] of P) { p.push(cx, lift + (foot - cy) * SV, z); f.push(cx, foot - 3); }
         // translucent standing sprites (ghosts, fading) go in the sorted pass; opaque pixel art is alpha-tested with depth
-        this.push(alpha < 0.98 || blend === 1 ? 2 : 1, z, tex, blend, { p, uv, c, f });
+        const q = { p, uv, c, f }; this.push(alpha < 0.98 || blend === 1 ? 2 : 1, z, tex, blend, q);
+        if (o.__xray) this.push(4, z, tex, 0, q); // silhouette of the party when hidden behind houses/walls
       } else {
         const foot = o.__foot ?? (y + 8); this.fxQuad(x, y, foot, o.__lift || 0, w, h, rot, uv, c, tex, blend, d);
       }
@@ -464,14 +467,14 @@ export class World3D {
     this.cam.near = D * 0.3; this.cam.far = D * 3 + 800; this.cam.updateProjectionMatrix();
     // mirror the display list into batches
     this.items.length = 0; this.collect(w.children.list);
-    const per: Item[][] = [[], [], [], []]; for (const it of this.items) per[it.pass].push(it);
+    const per: Item[][] = [[], [], [], [], []]; for (const it of this.items) per[it.pass].push(it);
     per[0].sort((a, b) => a.key - b.key); per[2].sort((a, b) => a.key - b.key); per[3].sort((a, b) => a.key - b.key);
     let order = 0;
     const fill = (pass: number, list: Item[], group: boolean) => {
       const pool = this.pools[pass]; let bi = 0; let cur: Batch | null = null; let ct: Tex | null = null, cb = -1, cw = false;
       if (group) { const m = new Map<Tex, Item[]>(); for (const it of list) { let a = m.get(it.tex); if (!a) m.set(it.tex, a = []); a.push(it); } list = [...m.values()].flat(); }
       for (const it of list) {
-        if (it.water) { if (!this.waterBatch) { const m = this.mat(0, true); this.waterBatch = new Batch(m, this.scene); } const wb = this.waterBatch; wb.mat.uniforms.map.value = it.tex; wb.mat.uniforms.texSize.value.set((it.tex.image as any).width, (it.tex.image as any).height); wb.mat.uniforms.uNight.value = w.isNight() || !w.def.outdoor ? 1 : 0; (wb.mat.uniforms.uSky.value as THREE.Color).setHex(w.isNight() ? 0x203060 : 0xd8ecff); wb.reset(); wb.add(it.q); wb.finish(order++); cur = null; ct = null; continue; }
+        if (it.water) { if (!this.waterBatch) { const m = this.mat(0, true); this.waterBatch = new Batch(m, this.scene); } const wb = this.waterBatch; wb.mat.uniforms.map.value = it.tex; wb.mat.uniforms.texSize.value.set((it.tex.image as any).width, (it.tex.image as any).height); wb.mat.uniforms.uNight.value = w.isNight() || !w.def.outdoor ? 1 : 0; (wb.mat.uniforms.uSky.value as THREE.Color).setHex(!w.def.outdoor ? 0x0a1420 : w.isNight() ? 0x203060 : 0xd8ecff); wb.reset(); wb.add(it.q); wb.finish(order++); cur = null; ct = null; continue; }
         if (!cur || it.tex !== ct || it.blend !== cb) { if (cur) cur.finish(order++); cur = this.batch(pass, bi++, it.tex, it.blend); cur.reset(); ct = it.tex; cb = it.blend; }
         cur.add(it.q);
       }
@@ -479,7 +482,7 @@ export class World3D {
       for (let i = bi; i < pool.length; i++) { pool[i].reset(); pool[i].finish(0); }
     };
     if (this.waterBatch) this.waterBatch.mesh.visible = false;
-    fill(0, per[0], false); order = Math.max(order, 100); fill(1, per[1], true); order = Math.max(order, 1000); fill(2, per[2], false); order = Math.max(order, 2000); fill(3, per[3], false);
+    fill(0, per[0], false); order = Math.max(order, 100); fill(1, per[1], true); order = Math.max(order, 1000); fill(2, per[2], false); order = Math.max(order, 2000); fill(3, per[3], false); order = Math.max(order, 3000); fill(4, per[4], false);
     // light map + shadow map
     this.drawLight();
     const r = this.renderer; r.setRenderTarget(this.srt); r.setClearColor(0x000000, 1); r.clear(); r.render(this.sscene, this.cam); 
