@@ -36,9 +36,9 @@ async function grind(level, map) {
 }
 // ---- Title
 await h.wait(1500); await shot('01-title-splash');
-await h.key('Enter'); await h.wait(900); await shot('01-title');
-await h.key('Enter'); await h.wait(700); // New Game → Adventure Log picker (first empty log preselected)
-await h.key('Enter'); await h.wait(1300);
+await h.key('Enter'); await h.wait(900); for (let i = 0; i < 40 && !(await topIsMenu()); i++) await h.wait(150); await h.wait(300); await shot('01-title');
+await h.key('Enter'); await h.wait(700); for (let i = 0; i < 40 && (await h.E(() => window.__EMBER.Input.stack.length)) < 2; i++) await h.wait(150); // New Game → Adventure Log picker (first empty log preselected)
+await h.key('Enter'); await h.wait(1300); for (let i = 0; i < 80 && !(await h.E(() => window.__EMBER.active().includes('Create') && window.__EMBER.Input.stack.length > 0)); i++) await h.wait(150); await h.wait(300);
 // ---- Creation: customise a bit
 await h.key('ArrowDown'); await h.key('ArrowRight', 1); // vocation -> mage? (Warrior->Mage)
 await h.key('ArrowLeft', 1); // back to warrior
@@ -129,8 +129,8 @@ for (let i = 0; i < 200; i++) { const r = await h.E(() => !!window.__EMBER.ended
 await h.wait(7000); await shot('19-end');
 assert(await h.E(() => !!window.__EMBER.ended), 'reached the end');
 // ---- Continue straight into Chapter II
-await h.key('Enter', 1, 2500);
-for (let i = 0; i < 40; i++) { const st = await h.hero(); if (st && st.map === 'elder') break; await h.wait(300); }
+// the end card only accepts input after ~4s of game time (slower than wall time on a loaded headless box): keep tapping
+for (let i = 0; i < 60; i++) { const st = await h.hero(); if (st && st.map === 'elder') break; if (await h.E(() => !!window.__EMBER.ended)) await h.key('Enter', 1, 100); await h.wait(500); }
 s = await state(); assert(s.map === 'elder' && s.flags.ch2Started, 'chapter II dawn after the end card'); await shot('20-ch2-dawn');
 log('PLAYTHROUGH COMPLETE', await state(), 'errors:', h.errs);
 await h.b.close();

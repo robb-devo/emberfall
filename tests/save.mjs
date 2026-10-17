@@ -29,7 +29,9 @@ ok(await E(() => !window.__EMBER.world.ui.modal && window.__EMBER.Input.stack.le
 // --- 8 directions
 await E(() => { const w = window.__EMBER.world; w.scene.restart({ map: 'village', x: 6, y: 13, dir: 0, noBanner: true }); }); await h.wait(1500);
 const p0 = await E(() => [window.__EMBER.world.hero.tx, window.__EMBER.world.hero.ty]);
-await h.p.keyboard.down('ArrowDown'); await h.p.keyboard.down('ArrowRight'); await h.wait(230); await h.p.keyboard.up('ArrowDown'); await h.p.keyboard.up('ArrowRight'); await h.wait(300);
+await h.p.keyboard.down('ArrowDown'); await h.p.keyboard.down('ArrowRight');
+await h.p.waitForFunction(([x, y]) => { const w = window.__EMBER.world; return w.hero.tx !== x || w.hero.ty !== y; }, p0, { timeout: 3000 }).catch(() => {});
+await h.p.keyboard.up('ArrowDown'); await h.p.keyboard.up('ArrowRight'); await h.wait(400);
 const p1 = await E(() => [window.__EMBER.world.hero.tx, window.__EMBER.world.hero.ty]);
 ok(p1[0] > p0[0] && p1[1] > p0[1], `diagonal step ${p0} -> ${p1}`);
 // --- manual save + backup + corruption recovery
@@ -45,8 +47,14 @@ ok(refused === false && before === await E(() => localStorage.getItem('emberfall
 await E(() => { window.__EMBER.Game.markDirty('final'); }); await h.wait(1500);
 const want = await E(() => [window.__EMBER.Game.s.map, window.__EMBER.Game.s.gold]);
 await h.p.reload(); await h.wait(2500);
-await h.key('Enter', 1, 900); // tap to begin
-await h.key('Enter', 1, 1800); // Continue (default)
+// the title menu opens 250ms of *game* time after "tap to begin" (>1s wall time on a slow headless box): wait for it,
+// otherwise the Continue press arrives before the menu exists and is dropped
+await h.key('Enter', 1, 0); // tap to begin
+await h.p.waitForFunction(() => window.__EMBER.active().includes('Title') && window.__EMBER.Input.stack.length > 0, null, { timeout: 10000 });
+await h.wait(300);
+ok(await E(() => window.__EMBER.scene('Title').children.list.some(o => o.idx === 0 && o.items?.[0]?.label === 'Continue')), 'Continue is preselected on the title menu');
+await h.key('Enter', 1, 0); // Continue (default)
+await h.p.waitForFunction(() => window.__EMBER.active().includes('World') && !!window.__EMBER.world?.hero, null, { timeout: 15000 }).catch(() => {});
 const got = await E(() => [window.__EMBER.Game.s.map, window.__EMBER.Game.s.gold]);
 ok(JSON.stringify(got) === JSON.stringify(want), `continue restores ${want} (got ${got})`);
 // --- v0.1 save-loss regression. Root cause: v0.1 only saved at Star-Shrines and had no Android back handler,
@@ -63,7 +71,8 @@ ok(await E(() => window.__EMBER.active().includes('World') && !window.__EMBER.wo
 const disk = await E(() => { const r = JSON.parse(localStorage.getItem('emberfall.slot' + window.__EMBER.Game.slot)); const s = JSON.parse(r.data); return { gold: s.gold, flag: !!s.flags.regressionProgress }; });
 ok(disk.gold === 777 && disk.flag, `progress is already on disk before any exit (gold ${disk.gold})`);
 // title screen: hardware back must background the app (minimize), not close it or touch saves
-await h.p.reload(); await h.wait(2500); await h.key('Enter', 1, 900);
+await h.p.reload(); await h.wait(2500); await h.key('Enter', 1, 0);
+await h.p.waitForFunction(() => window.__EMBER.Input.stack.length > 0, null, { timeout: 10000 }); await h.wait(300);
 const before2 = await E(() => localStorage.getItem('emberfall.slot0'));
 await E(() => window.__EMBER.Input.hardwareBack()); await h.wait(400);
 ok(await E(() => window.__EMBER.active().includes('Title')) && before2 === await E(() => localStorage.getItem('emberfall.slot0')), 'hardware back on title: app stays, save untouched');

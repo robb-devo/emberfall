@@ -21,7 +21,7 @@ async function go(x, y, adj = false) {
   let r;
   for (let i = 0; i < 20; i++) {
     r = await h.walkTo(x, y, adj);
-    if (r === 'battle' || (await h.scenes()).includes('Battle')) { await h.fightSmart(); await adv(40); await afterBattle(); continue; }
+    if (r === 'battle' || (await h.scenes()).includes('Battle')) { const before = await h.hero(); await h.fightSmart(); await adv(40); await afterBattle(); await recoverWipe(before); continue; }
     if (r === 'guard' || r === 'nopath') { await adv(40); continue; }
     break;
   }
@@ -41,6 +41,10 @@ async function fieldHeal() {
     }
     window.__EMBER.world?.ui?.refreshHud?.(); return n; });
 }
+let wipes = 0;
+/** The bot only attacks, so it can lose. A player would walk back from the shrine: put the (healed) party back where it was. */
+async function recoverWipe(before) { const now = await h.hero(); if (!before || !now || now.map === before.map) return; wipes++; log('  party wiped -> walking back to', before.map, before.x, before.y);
+  await h.E(([m, x, y]) => { const w = window.__EMBER.world; w.scene.restart({ map: m, x, y, dir: 0, noBanner: true }); }, [before.map, before.x, before.y]); await h.wait(1500); }
 async function afterBattle() { battles++; await fieldHeal(); const s = await state(); if (s.map === 'hearth' || s.flags.__lost) log('  !! party wiped'); if (battles % 4 === 0) log(`  battles ${battles} lv ${s.lv} gold ${s.gold}`); }
 async function talk(x, y) { for (let k = 0; k < 4; k++) { await go(x, y, true); const p = await h.hero(); if (Math.abs(p.x - x) + Math.abs(p.y - y) === 1) break; } await h.E(([x, y]) => { const w = window.__EMBER.world; const dx = x - w.hero.tx, dy = y - w.hero.ty; w.hero.dir = dx < 0 ? 1 : dx > 0 ? 2 : dy < 0 ? 3 : 0; w.setFrame(w.hero); }, [x, y]); await h.key('Enter', 1, 300); return adv(); }
 /** talk to a shopkeeper/innkeeper across the counter tile directly below them */
@@ -120,5 +124,5 @@ await h.wait(4000); await shot('11-end-ch2');
 await h.key('Enter', 1, 3000); await adv(40); s = await state(); await assert(s.map === 'saltmere' && !(await h.E(() => !!window.__EMBER.ended)), 'free roam after chapter II');
 await shot('12-saltmere-relit');
 const save = await h.E(() => window.__EMBER.Game.slotInfo(window.__EMBER.Game.slot)); log('save', JSON.stringify(save));
-log('CHAPTER II COMPLETE', 'lv', s.lv, 'gold', s.gold, 'battles', battles, 'quests', JSON.stringify(s.quests), 'errors:', h.errs);
+log('CHAPTER II COMPLETE', 'lv', s.lv, 'gold', s.gold, 'battles', battles, 'wipes', wipes, 'quests', JSON.stringify(s.quests), 'errors:', h.errs);
 await h.b.close();
