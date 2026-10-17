@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { MAPS, LEGEND, MapDef, NpcDef } from '../data/maps';
 import { T, T2, Pix } from '../systems/art';
+import { W, H } from '../ui/widgets';
 /** Scale4x + re-shaded copy of one prop tile ('props' sheet), cached as prop_hd_<idx>. */
 function ensurePropHd(scene: Phaser.Scene, idx: number): string | null {
   const key = 'prop_hd_' + idx; if (scene.textures.exists(key)) return key;
@@ -54,7 +55,7 @@ export class WorldScene extends Phaser.Scene {
     this.buildAmbient();
     const cam = this.cameras.main; cam.setZoom(4); cam.setRoundPixels(false);
     const mw = this.grid[0].length * TS, mh = this.grid.length * TS;
-    const vw = 720 / 4, vh = 1280 / 4;
+    const vw = W / 4, vh = H / 4;
     cam.setBounds(mw < vw ? (mw - vw) / 2 : 0, mh < vh ? (mh - vh) / 2 : 0, Math.max(mw, vw), Math.max(mh, vh));
     cam.startFollow(this.hero.spr, false, 0.1, 0.1, 0, 36); cam.centerOn(this.hero.spr.x, this.hero.spr.y - 36);
     cam.setBackgroundColor(this.def.outdoor ? '#1b2a1a' : '#05040a');

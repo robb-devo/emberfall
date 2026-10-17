@@ -1,7 +1,7 @@
 import { DioramaFX, diorama } from '../fx/diorama';
 import { ensurePortrait } from '../gfx/portrait';
 import Phaser from 'phaser';
-import { txt, panel, drawPanel, W, H, COL, ListMenu, drawBar, card, MenuItem, SERIF } from '../ui/widgets';
+import { txt, panel, drawPanel, W, H, DY, SAFE_T, COL, ListMenu, drawBar, card, MenuItem, SERIF } from '../ui/widgets';
 import { Input } from '../ui/input';
 import { Audio } from '../systems/audio';
 import { Game, stats, Member, skillsOf, gainXp } from '../systems/state';
@@ -30,27 +30,27 @@ export class BattleScene extends Phaser.Scene {
     this.add.rectangle(0, 0, W, H, 0x07060f).setOrigin(0);
     // cinematic backdrop: far layer blurred for depth of field, slow camera drift
     const bbKey = ensureBackdrop(this, d.bg || 'bg_fields');
-    const bg = this.add.image(W / 2, 0, bbKey || d.bg || 'bg_fields').setOrigin(0.5, 0); const bs = bbKey ? 2 : 936 / bg.width; bg.setScale(bs); this.bgImg = bg;
+    const bg = this.add.image(W / 2, 0, bbKey || d.bg || 'bg_fields').setOrigin(0.5, 0); const K = this.K = (820 + DY) / 800; const bs = (bbKey ? 2 : 936 / bg.width) * K; bg.setScale(bs); this.bgImg = bg;
     const webgl = this.game.renderer.type === Phaser.WEBGL;
     if (webgl && DioramaFX.quality > 0 && !bbKey) bg.preFX?.addBlur(1, 1.2, 1.2, 1);
     this.tweens.add({ targets: bg, scale: bs * 1.02, x: W / 2 - 12, yoyo: true, repeat: -1, duration: 7000, ease: 'Sine.inOut' });
     const gc = ({ bg_fields: 0x3f7f3a, bg_hollow: 0x3a3048, bg_boss: 0x3a2430, bg_road: 0x8a6a30, bg_coast: 0xc8b07a, bg_grotto: 0x245050, bg_choir: 0x34243a } as any)[d.bg || 'bg_fields'] ?? 0x3f7f3a;
-    const ground = this.add.graphics(); if (!bbKey) ground.fillGradientStyle(gc, gc, 0x07060f, 0x07060f, 0, 0, 1, 1); if (!bbKey) { ground.fillRect(0, 540, W, 60); ground.fillGradientStyle(gc, gc, 0x07060f, 0x07060f, 1, 1, 1, 1); ground.fillRect(0, 600, W, 220); }
-    if (!bbKey) for (let i = 0; i < 60; i++) { ground.fillStyle(Phaser.Display.Color.ValueToColor(gc).darken(20).color, 0.8); ground.fillRect(Math.random() * W, 600 + Math.random() * 180, 8 + Math.random() * 12, 4); }
+    const ground = this.add.graphics(); if (!bbKey) ground.fillGradientStyle(gc, gc, 0x07060f, 0x07060f, 0, 0, 1, 1); if (!bbKey) { ground.fillRect(0, 540 * K, W, 60 * K); ground.fillGradientStyle(gc, gc, 0x07060f, 0x07060f, 1, 1, 1, 1); ground.fillRect(0, 600 * K, W, 220 * K); }
+    if (!bbKey) for (let i = 0; i < 60; i++) { ground.fillStyle(Phaser.Display.Color.ValueToColor(gc).darken(20).color, 0.8); ground.fillRect(Math.random() * W, (600 + Math.random() * 180) * K, 8 + Math.random() * 12, 4); }
     // volumetric light shafts + floating motes + foreground blur silhouettes
     const outdoor = ['bg_fields', 'bg_road', 'bg_coast'].includes(d.bg || 'bg_fields');
     const shaftC = outdoor ? 0xfff0c0 : this.boss ? 0xff8040 : 0x9a80ff;
     for (let i = 0; i < 4; i++) {
-      const sh = this.add.image(120 + i * 170, -40, 'light').setOrigin(0.5, 0).setScale(0.9, 9).setAngle(-24).setTint(shaftC).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.10 + (i % 2) * 0.05);
+      const sh = this.add.image(120 + i * 170, -40, 'light').setOrigin(0.5, 0).setScale(0.9, 9 * K).setAngle(-24).setTint(shaftC).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.10 + (i % 2) * 0.05);
       this.tweens.add({ targets: sh, alpha: 0.03, duration: 2600 + i * 700, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
     }
-    this.add.particles(0, 0, 'dot', { x: { min: 0, max: W }, y: { min: 120, max: 780 }, lifespan: 4000, speedX: { min: -12, max: 12 }, speedY: { min: -20, max: -4 }, scale: { start: 0.9, end: 0 }, alpha: { start: 0.8, end: 0 }, tint: outdoor ? [0xfff4c0, 0xc8ffb0] : [0xb0a0ff, 0xff9a60], blendMode: 'ADD', frequency: 140 }).setDepth(70);
+    this.add.particles(0, 0, 'dot', { x: { min: 0, max: W }, y: { min: 120, max: 780 * K }, lifespan: 4000, speedX: { min: -12, max: 12 }, speedY: { min: -20, max: -4 }, scale: { start: 0.9, end: 0 }, alpha: { start: 0.8, end: 0 }, tint: outdoor ? [0xfff4c0, 0xc8ffb0] : [0xb0a0ff, 0xff9a60], blendMode: 'ADD', frequency: 140 }).setDepth(70);
     for (const [fx, fy, sc] of [[-30, 820, 7], [W + 30, 800, 8]] as const) {
-      const fg = this.add.image(fx, fy, 'light').setTint(outdoor ? 0x0c2410 : 0x07040c).setScale(sc, sc * 0.55).setDepth(72).setAlpha(0.95);
+      const fg = this.add.image(fx, fy * K, 'light').setTint(outdoor ? 0x0c2410 : 0x07040c).setScale(sc, sc * 0.55).setDepth(72).setAlpha(0.95);
       if (webgl && DioramaFX.quality > 0) fg.preFX?.addBlur(1, 2, 2, 1.5);
     }
-    this.add.image(W / 2, 760, 'vignette').setDisplaySize(W * 1.6, 900).setAlpha(0.7);
-    if (this.boss) this.add.particles(0, 0, 'dot', { x: { min: 0, max: W }, y: 620, lifespan: 2500, speedY: { min: -80, max: -30 }, scale: { start: 1.2, end: 0 }, tint: [0xff7a2a, 0xffc860], blendMode: 'ADD', frequency: 50 });
+    this.add.image(W / 2, 760 * K, 'vignette').setDisplaySize(W * 1.6, 900 * K).setAlpha(0.7);
+    if (this.boss) this.add.particles(0, 0, 'dot', { x: { min: 0, max: W }, y: 620 * K, lifespan: 2500, speedY: { min: -80, max: -30 }, scale: { start: 1.2, end: 0 }, tint: [0xff7a2a, 0xffc860], blendMode: 'ADD', frequency: 50 });
     // foes
     const counts: Record<string, number> = {};
     const n = d.group.length;
@@ -59,7 +59,7 @@ export class BattleScene extends Phaser.Scene {
       const L = [[[250, 640]], [[170, 560], [330, 700]], [[140, 540], [330, 600], [200, 720]], [[120, 520], [300, 560], [160, 700], [350, 730]]][Math.min(n, 4) - 1];
       const hasBoss = d.group.some((g: string) => ENEMIES[g].boss);
       const minion = d.group.slice(0, i).filter((g: string) => !ENEMIES[g].boss).length;
-      const [x, y] = def.boss ? [hasBoss && n > 1 ? 240 : 230, n > 1 ? 650 : 690] : hasBoss ? ([[80, 590], [400, 745], [70, 760]][minion % 3] as number[]) : L[i % L.length];
+      const [x, y0] = def.boss ? [hasBoss && n > 1 ? 240 : 230, n > 1 ? 650 : 690] : hasBoss ? ([[80, 590], [400, 745], [70, 760]][minion % 3] as number[]) : L[i % L.length]; const y = Math.round(y0 * K);
       if (def.boss || n === 1) this.add.image(x, y - 160, 'light').setTint(def.boss ? 0xff5020 : 0xffe0b0).setScale(def.boss ? 3.4 : 2).setAlpha(def.boss ? 0.35 : 0.18).setBlendMode(Phaser.BlendModes.ADD);
       const hd4 = this.textures.exists(def.sprite + '_hd4'); const spr = this.add.sprite(x, y + (hd4 ? 2 : 0), hd4 ? def.sprite + '_hd4' : def.sprite + '_hd').setOrigin(0.5, 1).setScale((def.boss ? 2.7 : 2.6) * (def.scale ?? 1) * (hd4 ? 0.5 : 1)).setDepth(y / 100);
       this.add.image(x, y - 4, 'shadow').setScale(def.boss ? 16 : 8, 4.5).setDepth(-0.5).setAlpha(0.8);
@@ -71,7 +71,7 @@ export class BattleScene extends Phaser.Scene {
     // party (OT2-style side view on the right, facing the foes)
     const pn = this.party.length;
     this.party.forEach((m, i) => {
-      const x = pn === 1 ? 590 : 545 + (i % 2) * 70 - (pn > 3 ? 10 : 0) + i * 12, y = pn === 1 ? 640 : 500 + i * (pn > 3 ? 72 : 88);
+      const x = pn === 1 ? 590 : 545 + (i % 2) * 70 - (pn > 3 ? 10 : 0) + i * 12, y = Math.round((pn === 1 ? 640 : 500 + i * (pn > 3 ? 72 : 88)) * this.K);
       const spr = this.add.sprite(x, y, ensureDollHd(this, specOf(m)), 3).setOrigin(0.5, 1).setScale(3.9).setDepth(y / 100);
       spr.setData('hx', x); spr.setData('hy', y);
       this.tweens.add({ targets: spr, scaleY: 3.9 * 1.02, yoyo: true, repeat: -1, duration: 900 + i * 120, ease: 'Sine.inOut' });
@@ -80,12 +80,12 @@ export class BattleScene extends Phaser.Scene {
       this.pSpr.push(spr);
     });
     this.buildCards();
-    this.add.existing(panel(this, 16, 810, W - 32, 150));
-    this.msgT = txt(this, 46, 836, '', 30, COL.text, { wordWrap: { width: W - 100 }, lineSpacing: 8 });
-    this.add.zone(0, 0, W, 960).setOrigin(0).setInteractive().on('pointerdown', () => (this.skip = true));
+    this.add.existing(panel(this, 16, 810 + DY, W - 32, 150));
+    this.msgT = txt(this, 46, 836 + DY, '', 30, COL.text, { wordWrap: { width: W - 100 }, lineSpacing: 8 });
+    this.add.zone(0, 0, W, 960 + DY).setOrigin(0).setInteractive().on('pointerdown', () => (this.skip = true));
     this.run();
   }
-  skip = false; bgImg?: Phaser.GameObjects.Image;
+  K = 1; skip = false; bgImg?: Phaser.GameObjects.Image;
   /** OT2-style run-up: the party member sprints to the target (walk cycle + dust), the camera leans in, then returns. */
   dash(spr: Phaser.GameObjects.Sprite, x: number, y: number, out: boolean): Promise<void> {
     return new Promise(res => {
@@ -105,7 +105,7 @@ export class BattleScene extends Phaser.Scene {
     this.cards.forEach(c => c.destroy()); this.cards = [];
     const n = this.party.length; const X0 = 150; const cw = (W - X0 - 16 - (n - 1) * 8) / n;
     this.party.forEach((m, i) => {
-      const s = stats(m); const c = this.add.container(X0 + i * (cw + 8), 12);
+      const s = stats(m); const c = this.add.container(X0 + i * (cw + 8), 12 + SAFE_T);
       const g = this.add.graphics(); drawPanel(g, cw, 100, 0.9);
       if (m.hp <= 0 || m.hp < s.hp / 4) { g.lineStyle(2, m.hp <= 0 ? 0xff6b6b : 0xffb050, 0.9); g.strokeRect(6, 6, cw - 12, 88); }
       c.add(g);
@@ -185,7 +185,7 @@ export class BattleScene extends Phaser.Scene {
       const s = stats(m); const spd = s.agi * rand(0.75, 1.25);
       const sk = skillsOf(m); const spells = sk.filter(id => SKILLS[id].kind === 'spell'), skills = sk.filter(id => SKILLS[id].kind === 'skill');
       const items: MenuItem[] = [{ label: 'Attack' }, { label: 'Spells', disabled: !spells.length }, { label: 'Skills', disabled: !skills.length }, { label: 'Items' }, { label: 'Defend' }, { label: 'Flee', disabled: !!this.d.noFlee }];
-      const menu = new ListMenu(this, 16, 968, W - 32, items, { cols: 2, itemH: 72, fontSize: 34, back: canBack, title: m.name + `  —  Lv${m.level} ${m.voc[0].toUpperCase() + m.voc.slice(1)}` });
+      const menu = new ListMenu(this, 16, 968 + DY, W - 32, items, { cols: 2, itemH: 72, fontSize: 34, back: canBack, title: m.name + `  —  Lv${m.level} ${m.voc[0].toUpperCase() + m.voc.slice(1)}` });
       (this as any).cmd = { menu, member: i, hpFrac: m.hp / s.hp, spells, skills };
       menu.onCancel = () => { menu.close(); res('back'); };
       menu.onSelect = async c => {
@@ -193,7 +193,7 @@ export class BattleScene extends Phaser.Scene {
         const done = (a: Act | null) => { if (a) { menu.close(); res(a); } else { menu.setActive(true); this.msgT.setText(`What will ${m.name} do?`); } };
         if (c === 0) { const t = await this.pickFoe(); done(t < 0 ? null : { who: 'p', idx: i, kind: 'attack', target: t, spd }); }
         if (c === 1 || c === 2) {
-          const list = c === 1 ? spells : skills; const sm = new ListMenu(this, 16, 680, W - 32, list.map(id => ({ label: SKILLS[id].name, sub: SKILLS[id].mp + ' MP', disabled: SKILLS[id].mp > m.mp })), { rows: 6, title: c === 1 ? 'Spells' : 'Skills' });
+          const list = c === 1 ? spells : skills; const sm = new ListMenu(this, 16, 680 + DY, W - 32, list.map(id => ({ label: SKILLS[id].name, sub: SKILLS[id].mp + ' MP', disabled: SKILLS[id].mp > m.mp })), { rows: 6, title: c === 1 ? 'Spells' : 'Skills' });
           const desc = (k: number) => this.msgT.setText(SKILLS[list[k]].desc); desc(0); sm.onChange = desc;
           const k = await new Promise<number>(r => { sm.onSelect = x => r(x); sm.onCancel = () => r(-1); }); sm.close();
           if (k < 0) return done(null);
@@ -203,7 +203,7 @@ export class BattleScene extends Phaser.Scene {
         if (c === 3) {
           const ids = Object.keys(Game.s.inv).filter(id => Game.s.inv[id] > 0 && ITEMS[id].kind === 'consumable');
           if (!ids.length) { this.msgT.setText('You have no usable items!'); Audio.sfx('cancel'); await this.wait(600); return done(null); }
-          const im = new ListMenu(this, 16, 680, W - 32, ids.map(id => ({ label: ITEMS[id].name, sub: '×' + Game.s.inv[id], icon: 'ic_' + ITEMS[id].icon })), { rows: 6, title: 'Items' });
+          const im = new ListMenu(this, 16, 680 + DY, W - 32, ids.map(id => ({ label: ITEMS[id].name, sub: '×' + Game.s.inv[id], icon: 'ic_' + ITEMS[id].icon })), { rows: 6, title: 'Items' });
           const desc = (k: number) => this.msgT.setText(ITEMS[ids[k]].desc); desc(0); im.onChange = desc;
           const k = await new Promise<number>(r => { im.onSelect = x => r(x); im.onCancel = () => r(-1); }); im.close();
           if (k < 0) return done(null);
@@ -220,7 +220,7 @@ export class BattleScene extends Phaser.Scene {
     if (alive.length === 1) return alive[0].i;
     const arrow = txt(this, 0, 0, '▼', 48, COL.accent).setOrigin(0.5).setDepth(50);
     const place = (k: number) => { const f = alive[k].f; arrow.setPosition(f.x, f.y - f.spr.displayHeight - 30); };
-    const m = new ListMenu(this, 16, 975, W - 32, alive.map(o => ({ label: o.f.name })), { rows: 3, title: 'Target' }); place(0); m.onChange = place;
+    const m = new ListMenu(this, 16, 975 + DY, W - 32, alive.map(o => ({ label: o.f.name })), { rows: 3, title: 'Target' }); place(0); m.onChange = place;
     const zones = alive.map((o, k) => this.add.zone(o.f.x, o.f.y - o.f.spr.displayHeight / 2, o.f.spr.displayWidth, o.f.spr.displayHeight).setInteractive().on('pointerdown', () => { m.idx = k; m.refresh(); place(k); m.confirm(); }));
     const k = await new Promise<number>(r => { m.onSelect = x => r(x); m.onCancel = () => r(-1); });
     m.close(); arrow.destroy(); zones.forEach(z => z.destroy());
@@ -229,7 +229,7 @@ export class BattleScene extends Phaser.Scene {
   async pickTarget(t: string, item = false): Promise<number> {
     if (t === 'enemy') { const k = await this.pickFoe(); return k < 0 ? -2 : k; }
     if (t === 'ally') {
-      const m = new ListMenu(this, 16, 975, W - 32, this.party.map(p => ({ label: p.name, sub: `HP ${p.hp}/${stats(p).hp}` })), { rows: 4, title: 'On whom?' });
+      const m = new ListMenu(this, 16, 975 + DY, W - 32, this.party.map(p => ({ label: p.name, sub: `HP ${p.hp}/${stats(p).hp}` })), { rows: 4, title: 'On whom?' });
       const k = await new Promise<number>(r => { m.onSelect = x => r(x); m.onCancel = () => r(-2); }); m.close(); return k;
     }
     return -1;
@@ -346,7 +346,7 @@ export class BattleScene extends Phaser.Scene {
     await this.damageFoe(t, dmg, crit);
   }
   async damageFoe(t: Foe, dmg: number, crit: boolean, weak = false) {
-    t.hp -= dmg; if (t.asleep && dmg > 0 && Math.random() < 0.5) { t.asleep = 0; this.time.delayedCall(120, () => t.spr.clearTint()); } t.spr.setTintFill(0xffffff); this.time.delayedCall(90, () => t.spr.clearTint());
+    t.hp -= dmg; if (t.asleep && dmg > 0 && Math.random() < 0.5) { t.asleep = 0; this.time.delayedCall(120, () => t.spr.clearTint()); } this.hitFlash(t.spr);
     this.tweens.add({ targets: t.spr, x: t.x + 14, yoyo: true, repeat: 2, duration: 40, onComplete: () => t.spr.setX(t.x) });
     this.burst(t.x, t.y - t.spr.displayHeight / 2, [0xffffff, 0xffe8a0], crit ? 30 : 10, crit ? 300 : 160, 'px');
     if (dmg > 0) this.cameras.main.shake(120, 0.005 + (crit ? 0.01 : 0));
@@ -354,6 +354,12 @@ export class BattleScene extends Phaser.Scene {
     this.popNum(t.x, t.y - t.spr.displayHeight - 10, String(dmg), crit ? '#ffd070' : '#ffffff', crit);
     await this.msg(dmg > 0 ? `${t.name} takes ${dmg} damage!${weak ? ' It\'s super effective!' : ''}` : `${t.name} takes no damage!`, 450);
     if (t.hp <= 0) await this.killFoe(t);
+  }
+  /** Brief, partial white flash: an additive silhouette copy that fades in ~110ms, so the monster stays readable (no solid white blob under bloom). */
+  hitFlash(spr: Phaser.GameObjects.Sprite) {
+    const c = this.add.sprite(spr.x, spr.y, spr.texture.key, spr.frame.name).setOrigin(spr.originX, spr.originY).setScale(spr.scaleX, spr.scaleY).setFlipX(spr.flipX).setDepth(spr.depth + 0.01)
+      .setTintFill(0xfff4e0).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.42);
+    this.tweens.add({ targets: c, alpha: 0, duration: 110, onComplete: () => c.destroy() });
   }
   /** Hit-stop + camera punch: a few frames of freeze, then a quick zoom toward the impact. */
   punch(x: number, y: number, k = 1) {

@@ -1,6 +1,6 @@
 import { DioramaFX } from '../fx/diorama';
 import Phaser from 'phaser';
-import { txt, panel, W, H, COL, ListMenu, DialogBox, card, drawBar, SERIF, MenuItem } from '../ui/widgets';
+import { txt, panel, W, H, SAFE_T, SAFE_B, COL, ListMenu, DialogBox, card, drawBar, SERIF, MenuItem } from '../ui/widgets';
 import { Input, Focus, Action } from '../ui/input';
 import { Audio } from '../systems/audio';
 import { Game, stats, Member, skillsOf, canEquip, baseStats, changeVocation } from '../systems/state';
@@ -31,14 +31,14 @@ export class UIScene extends Phaser.Scene {
   get world() { return this.scene.get('World') as WorldScene; }
   create() {
     this.hud = this.add.container(0, 0);
-    this.partyHud = this.add.container(0, 0); this.hud.add(this.partyHud);
+    this.partyHud = this.add.container(0, SAFE_T); this.hud.add(this.partyHud);
     // menu button
-    const mb = this.add.container(W - 70, 70); const mg = this.add.graphics(); mg.fillStyle(0x0b0c22, 0.8); mg.fillCircle(0, 0, 46); mg.lineStyle(4, COL.gold); mg.strokeCircle(0, 0, 44);
+    const mb = this.add.container(W - 70, 70 + SAFE_T); const mg = this.add.graphics(); mg.fillStyle(0x0b0c22, 0.8); mg.fillCircle(0, 0, 46); mg.lineStyle(4, COL.gold); mg.strokeCircle(0, 0, 44);
     mb.add([mg, txt(this, 0, 0, '☰', 44, COL.goldS).setOrigin(0.5)]); mb.setSize(100, 100).setInteractive();
     mb.on('pointerdown', () => { if (!this.modal && !this.world.busy && !Input.busy) { Audio.sfx('confirm'); this.openMenu(); } });
     this.hud.add(mb);
     // action button
-    this.actBtn = this.add.container(W - 120, H - 190); const ag = this.add.graphics(); ag.fillStyle(0xffcf6e, 0.25); ag.fillCircle(0, 0, 86); ag.lineStyle(5, COL.gold, 0.9); ag.strokeCircle(0, 0, 84);
+    this.actBtn = this.add.container(W - 120, H - 190 - SAFE_B); const ag = this.add.graphics(); ag.fillStyle(0xffcf6e, 0.25); ag.fillCircle(0, 0, 86); ag.lineStyle(5, COL.gold, 0.9); ag.strokeCircle(0, 0, 84);
     this.actBtn.add([ag, txt(this, 0, 0, '✦', 64, COL.goldS).setOrigin(0.5)]); this.actBtn.setSize(180, 180).setInteractive();
     this.actBtn.on('pointerdown', () => { this.tweens.add({ targets: this.actBtn, scale: 0.88, yoyo: true, duration: 70 }); Input.fire('ok'); });
     this.hud.add(this.actBtn);

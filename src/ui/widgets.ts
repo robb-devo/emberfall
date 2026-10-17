@@ -7,7 +7,12 @@ import type { DollSpec } from '../systems/paperdoll';
 export const FONT = '"Alegreya Sans", "Trebuchet MS", "Segoe UI", Roboto, sans-serif';
 export const SERIF = 'Cinzel, Georgia, "Times New Roman", serif';
 export const DECO = '"Cinzel Decorative", Cinzel, Georgia, serif';
-export const W = 720, H = 1280;
+/** Logical width is fixed at 720; height grows with the device aspect ratio so the game fills the whole phone screen (no letterbox). */
+function viewH() { if (typeof window === 'undefined') return 1280; const a = (window.innerHeight || 1280) / (window.innerWidth || 720); return Math.round(Math.min(1700, Math.max(1280, 720 * a)) / 2) * 2; }
+function safeInset(side: 'top' | 'bottom') { try { const d = document.createElement('div'); d.style.cssText = `position:fixed;${side}:0;height:env(safe-area-inset-${side},0px);width:1px;visibility:hidden`; document.body.appendChild(d); const v = d.getBoundingClientRect().height; d.remove(); return Math.round(v * 720 / (window.innerWidth || 720)); } catch { return 0; } }
+export const W = 720, H = viewH();
+/** Extra height beyond the 1280 reference layout, and safe-area insets in game px (notch / gesture bar). */
+export const DY = H - 1280, SAFE_T = safeInset('top'), SAFE_B = safeInset('bottom');
 export const COL = { gold: 0xf0d9a0, goldS: '#f0d9a0', text: '#fdf6e3', dim: '#9a94b8', hp: 0x6fe08a, mp: 0x6fb3ff, red: '#ff6b6b', bg1: 0x1a1d44, bg2: 0x0b0c22, accent: '#ffcf6e' };
 
 export function txt(s: Phaser.Scene, x: number, y: number, str: string, size = 30, color = COL.text, o: Partial<Phaser.Types.GameObjects.Text.TextStyle> = {}) {
@@ -151,7 +156,7 @@ export class DialogBox extends Phaser.GameObjects.Container implements Focus {
   full = ''; shown = 0; resolve?: () => void; typing = false; timer?: Phaser.Time.TimerEvent; auto = false;
   constructor(s: Phaser.Scene) {
     super(s, 0, 0); s.add.existing(this);
-    const y = H - 360;
+    const y = H - 360 - SAFE_B;
     if (!s.textures.exists('bustglow')) { const t = s.textures.createCanvas('bustglow', 300, 200)!; const c = t.getContext(); const g = c.createRadialGradient(150, 130, 10, 150, 130, 150); g.addColorStop(0, 'rgba(20,18,50,0.85)'); g.addColorStop(0.6, 'rgba(20,18,50,0.5)'); g.addColorStop(1, 'rgba(20,18,50,0)'); c.fillStyle = g; c.fillRect(0, 0, 300, 200); t.refresh(); }
     this.bustBg = s.add.image(PW / 2 + 24, y + 30, 'bustglow').setOrigin(0.5, 1).setScale(1.1, 1.5).setVisible(false); this.add(this.bustBg);
     this.bust = s.add.image(24, y + 26, '__DEFAULT').setOrigin(0, 1).setVisible(false); this.add(this.bust);
