@@ -18,6 +18,7 @@ import { Game, stats, skillsOf } from './systems/state';
 import { SKILLS } from './data/skills';
 import { Audio } from './systems/audio';
 import { Input } from './ui/input';
+import { ensureDollHd } from './systems/paperdoll';
 
 const game = new Phaser.Game({
   type: Phaser.AUTO, parent: 'game', width: W, height: H, backgroundColor: '#0b0a14',
@@ -27,7 +28,7 @@ const game = new Phaser.Game({
   scene: [BootScene, TitleScene, CreateScene, WorldScene, UIScene, BattleScene, EndScene, OverlayScene],
 });
 // Debug/test hook (used by headless playthrough tests)
-(window as any).__EMBER = { game, Game, Audio, Input, stats, skillsOf, SKILLS, scene: (k: string) => game.scene.getScene(k), active: () => game.scene.getScenes(true).map(s => s.scene.key) };
+(window as any).__EMBER = { ensureDollHd, game, Game, Audio, Input, stats, skillsOf, SKILLS, scene: (k: string) => game.scene.getScene(k), active: () => game.scene.getScenes(true).map(s => s.scene.key) };
 const unlock = () => Audio.unlock();
 window.addEventListener('pointerdown', unlock); window.addEventListener('keydown', unlock);
 setInterval(() => { if (Game.s) Game.s.playTime += 1; }, 1000);

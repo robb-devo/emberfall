@@ -8,6 +8,7 @@ import Phaser from 'phaser';
 import { ITEMS } from '../data/items';
 import type { Look, Member } from './state';
 import { Pix } from './art';
+import { ensureDoll2 } from '../gfx/doll2';
 
 export const SKIN = [0xf8d9bc, 0xefc19a, 0xd69c6c, 0xa86d43, 0x74472a, 0xc9e0f0];
 export const SKIN_NAMES = ['Porcelain', 'Fair', 'Honey', 'Bronze', 'Umber', 'Starlit'];
@@ -255,6 +256,10 @@ export function ensureDoll(scene: Phaser.Scene, sp: DollSpec): string {
 }
 /** 2× EPX + rim-lit version of the doll sheet (same frame layout) for battle and menu close-ups. */
 export function ensureDollHd(scene: Phaser.Scene, sp: DollSpec): string {
+  return ensureDoll2(scene, sp, dollKey(sp) + '_hd2');
+}
+/** classic EPX-upscaled sheet (kept for reference / fallback) */
+export function ensureDollEpx(scene: Phaser.Scene, sp: DollSpec): string {
   const key = dollKey(sp) + '_hd';
   if (scene.textures.exists(key)) return key;
   const W2 = FW * 2, H2 = FH * 2;
