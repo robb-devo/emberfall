@@ -12,12 +12,15 @@ import { evalCond } from '../systems/cond';
 import { ScriptRunner } from '../systems/script';
 import type { UIScene } from './UIScene';
 import { diorama } from '../fx/diorama';
+import { paintGround, HD, STRUCT } from '../gfx/ground';
+import { DioramaFX } from '../fx/diorama';
 
 const TS = 16; const DX = [0, -1, 1, 0], DY = [1, 0, 0, -1]; // dir: 0 down 1 left 2 right 3 up
 const OCT: [number, number][] = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
 /** 4-way sprite facing for any step vector (diagonals face sideways, like DQ). */
 const dirOf = (dx: number, dy: number) => (dx < 0 ? 1 : dx > 0 ? 2 : dy < 0 ? 3 : 0);
-export interface Actor { id: string; spr: Phaser.GameObjects.Sprite; shadow: Phaser.GameObjects.Image; tx: number; ty: number; dir: number; moving: boolean; doll: boolean; def?: NpcDef; step: number; hidden?: boolean }
+export interface Actor { id: string; spr: Phaser.GameObjects.Sprite; shadow: Phaser.GameObjects.Image; tx: number; ty: number; dir: number; moving: boolean; doll: boolean; def?: NpcDef; step: number; hidden?: boolean;
+  /** in-flight step (driven per frame by stepActors for perfectly smooth, stall-free motion) */ mv?: { x0: number; y0: number; x1: number; y1: number; t: number; ms: number; res: () => void }; over?: number; phase?: number; bob?: number }
 interface Symbol { spr: Phaser.GameObjects.Sprite; shadow: Phaser.GameObjects.Image; tx: number; ty: number; type: string; moving: boolean; next: number; alive: boolean }
 
 export class WorldScene extends Phaser.Scene {
@@ -25,7 +28,7 @@ export class WorldScene extends Phaser.Scene {
   symbols: Symbol[] = []; history: { x: number; y: number; dir: number }[] = []; busy = false; ui!: UIScene; script!: ScriptRunner;
   layer!: Phaser.Tilemaps.TilemapLayer; waterTiles: [number, number, number, number][] = []; dark?: Phaser.GameObjects.RenderTexture; lightImgs: { x: number; y: number; r: number; img?: Phaser.GameObjects.Image; flick: number }[] = [];
   eraser!: Phaser.GameObjects.Image; heroLight = 0; extraSolid = new Set<string>(); initData: any; offInput?: () => void; aura?: Phaser.GameObjects.Container; fxObjs: Record<string, Phaser.GameObjects.GameObject> = {};
-  fx?: any;
+  fx?: any; hdOn = false; hdg?: ReturnType<typeof paintGround>; water?: Phaser.GameObjects.Image; hdStruct = false;
   constructor() { super('World'); }
   init(d: any) { this.initData = d; }
   create() {
@@ -39,11 +42,11 @@ export class WorldScene extends Phaser.Scene {
     this.buildEntities();
     this.buildLighting();
     this.buildAmbient();
-    const cam = this.cameras.main; cam.setZoom(4); cam.setRoundPixels(true);
+    const cam = this.cameras.main; cam.setZoom(4); cam.setRoundPixels(false);
     const mw = this.grid[0].length * TS, mh = this.grid.length * TS;
     const vw = 720 / 4, vh = 1280 / 4;
     cam.setBounds(mw < vw ? (mw - vw) / 2 : 0, mh < vh ? (mh - vh) / 2 : 0, Math.max(mw, vw), Math.max(mh, vh));
-    cam.startFollow(this.hero.spr, true, 0.18, 0.18, 0, 36);
+    cam.startFollow(this.hero.spr, false, 0.1, 0.1, 0, 36); cam.centerOn(this.hero.spr.x, this.hero.spr.y - 36);
     cam.setBackgroundColor(this.def.outdoor ? '#1b2a1a' : '#05040a');
     const preset = this.def.id === 'spire' ? 'sky' : this.def.outdoor ? (this.isNight() ? 'night' : 'outdoor') : (this.def.dark ?? 0) > 0.5 ? 'dungeon' : 'indoor';
     this.fx = diorama(cam, preset);
@@ -85,6 +88,16 @@ export class WorldScene extends Phaser.Scene {
       if (L.anim) this.waterTiles.push([x, y, L.t, L.anim]);
       if (L0.over !== undefined && y > 0) over[y - 1][x] = L0.over;
     }
+    // ---- round 3: HD painted ground (classic tiles stay only where the painter has no art yet)
+    this.hdOn = DioramaFX.quality > 0 || true;
+    if (this.hdOn) {
+      const propChars = new Set(Object.keys(LEGEND).filter(k => PT[LEGEND[k].t] !== undefined));
+      const g = paintGround(this, this.def.id, this.grid, propChars); this.hdg = g;
+      this.add.image(0, 0, g.key).setOrigin(0).setScale(1 / HD).setDepth(-2);
+      if (g.waterKey) this.water = this.add.image(0, 0, g.waterKey).setOrigin(0).setScale(1 / HD).setDepth(-1);
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (g.blank[y][x] && (!STRUCT.has(this.grid[y][x]) || this.hdStruct)) ground[y][x] = -1;
+      this.waterTiles = this.waterTiles.filter(([x, y]) => ground[y][x] >= 0);
+    }
     const m = this.make.tilemap({ data: ground, tileWidth: TS, tileHeight: TS });
     const ts = m.addTilesetImage('tiles', 'tiles', TS, TS, 0, 0)!;
     this.layer = m.createLayer(0, ts, 0, 0)!.setDepth(0);
@@ -104,7 +117,7 @@ export class WorldScene extends Phaser.Scene {
     const sides: [number, number][] = [[0, -1], [0, 1], [-1, 0], [1, 0]];
     sides.forEach(([dx, dy], si) => {
       const data: number[][] = []; let any = false;
-      for (let y = 0; y < h; y++) { data.push([]); for (let x = 0; x < w; x++) { const c = this.grid[y][x], n = this.grid[y + dy]?.[x + dx]; let v = -1; for (const r of rules) if (r.me(c) && r.nb(n)) { v = r.tiles[si]; break; } if (v >= 0) any = true; data[y].push(v); } }
+      for (let y = 0; y < h; y++) { data.push([]); for (let x = 0; x < w; x++) { const c = this.grid[y][x], n = this.grid[y + dy]?.[x + dx]; let v = -1; if (!(this.hdg?.blank[y][x])) for (const r of rules) if (r.me(c) && r.nb(n)) { v = r.tiles[si]; break; } if (v >= 0) any = true; data[y].push(v); } }
       if (!any) return;
       const me = this.make.tilemap({ data, tileWidth: TS, tileHeight: TS }); const tse = me.addTilesetImage('tiles', 'tiles', TS, TS, 0, 0)!; me.createLayer(0, tse, 0, 0)!.setDepth(0.5);
     });
@@ -113,7 +126,7 @@ export class WorldScene extends Phaser.Scene {
     const ts2 = m2.addTilesetImage('tiles', 'tiles', TS, TS, 0, 0)!;
     m2.createLayer(0, ts2, 0, 0)!.setDepth(5000);
   }
-  animWater() { const f = Math.floor(this.time.now / 550) % 2; for (const [x, y, a, b] of this.waterTiles) this.layer.putTileAt(f ? b : a, x, y); }
+  animWater() { if (!this.waterTiles.length) return; const f = Math.floor(this.time.now / 550) % 2; for (const [x, y, a, b] of this.waterTiles) this.layer.putTileAt(f ? b : a, x, y); }
   makeActor(id: string, tex: string, x: number, y: number, dir: number, doll = true): Actor {
     const shadow = this.add.image(x * TS + 8, y * TS + 15, 'shadow').setDepth(1);
     const spr = this.add.sprite(x * TS + 8, y * TS + 16, tex, doll ? dir * 3 : undefined).setOrigin(0.5, 1);
@@ -121,7 +134,7 @@ export class WorldScene extends Phaser.Scene {
     const a: Actor = { id, spr, shadow, tx: x, ty: y, dir, moving: false, doll, step: 0 };
     this.depthOf(a); return a;
   }
-  depthOf(a: Actor) { a.spr.setDepth(10 + a.spr.y); a.shadow.setPosition(a.spr.x, a.spr.y - 1); }
+  depthOf(a: Actor) { const y = a.spr.y + (a.bob || 0); a.spr.setDepth(10 + y); a.shadow.setPosition(a.spr.x, y - 1); }
   buildEntities() {
     const d = this.initData;
     // hero + followers
@@ -323,13 +336,35 @@ export class WorldScene extends Phaser.Scene {
     this.drawLighting();
     if (this.aura) this.aura.setPosition(this.hero.spr.x, this.hero.spr.y);
     this.updateSymbols(time);
+    this.handleMoveInput();
+    this.stepActors(dt);
+  }
+  handleMoveInput() {
     if (this.busy || Input.busy || this.hero.moving || this.ui.modal) return;
     const d = Input.dir();
-    if (Math.hypot(d.x, d.y) < 0.3) { if (this.hero.step) { this.hero.step = 0; this.setFrame(this.hero); } return; }
+    if (Math.hypot(d.x, d.y) < 0.3) { if (this.hero.step) { this.hero.step = 0; this.hero.phase = 0; this.setFrame(this.hero); } this.hero.over = 0; return; }
     // 8-directional: snap the stick to the nearest of 8 octants
     const oct = (Math.round(Math.atan2(d.y, d.x) / (Math.PI / 4)) + 8) % 8;
     const [vx, vy] = OCT[oct];
     this.tryStep(vx, vy);
+  }
+  /** Advance every walking actor by dt. Frames follow the stride (L, stand, R, stand per two tiles) with a soft bob. */
+  stepActors(dt: number) {
+    const all = [this.hero, ...this.followers, ...this.npcs];
+    for (const a of all) {
+      const m = a.mv; if (!m) continue;
+      m.t += dt / m.ms;
+      const k = Math.min(1, m.t);
+      a.spr.x = m.x0 + (m.x1 - m.x0) * k; const by = m.y0 + (m.y1 - m.y0) * k;
+      if (a.doll) {
+        const ph = ((a.phase || 0) + Math.min(dt / m.ms, 1)) % 2; a.phase = ph;
+        const q = Math.floor(ph * 2) % 4; const f = [1, 0, 2, 0][q];
+        a.spr.setFrame(a.dir * 3 + f);
+        a.bob = k >= 1 ? 0 : Math.abs(Math.sin(ph * Math.PI)) * 0.75; a.spr.y = by - a.bob;
+      } else a.spr.y = by;
+      this.depthOf(a);
+      if (m.t >= 1) { a.bob = 0; a.spr.setPosition(m.x1, m.y1); this.depthOf(a); a.over = Math.min((m.t - 1) * m.ms, 34); a.mv = undefined; a.moving = false; m.res(); }
+    }
   }
   setFrame(a: Actor) { if (a.doll) a.spr.setFrame(a.dir * 3 + (a.step ? (a.step % 2 ? 1 : 2) : 0)); }
   /** Step the hero by (dx,dy) — orthogonal or diagonal. Diagonals never cut corners; blocked diagonals slide along walls. */
@@ -361,9 +396,11 @@ export class WorldScene extends Phaser.Scene {
   walk(a: Actor, dir: number, ms: number): Promise<void> { a.dir = dir; return this.walkTo(a, a.tx + DX[dir], a.ty + DY[dir], ms, dir); }
   walkTo(a: Actor, nx: number, ny: number, ms: number, dir = dirOf(nx - a.tx, ny - a.ty)): Promise<void> {
     a.dir = dir; a.moving = true; a.tx = nx; a.ty = ny;
-    a.step = (a.step % 4) + 1; this.setFrame(a);
+    a.step = (a.step % 4) + 1; if (!a.doll) this.setFrame(a);
     if (a === this.hero && Game.s.steps % 2 === 0) Audio.sfx('step');
-    return new Promise(res => this.tweens.add({ targets: a.spr, x: nx * TS + 8, y: ny * TS + 16, duration: ms, onUpdate: () => this.depthOf(a), onComplete: () => { a.moving = false; res(); } }));
+    // carry the overshoot of the previous step so chained steps never stall for a frame
+    const carry = a.over || 0; a.over = 0;
+    return new Promise(res => { a.mv = { x0: a.spr.x, y0: a.spr.y + (a.bob || 0), x1: nx * TS + 8, y1: ny * TS + 16, t: carry / ms, ms, res }; });
   }
   updateFollowers(instant: boolean) {
     this.followers.forEach((f, i) => {
