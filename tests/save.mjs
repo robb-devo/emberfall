@@ -14,7 +14,7 @@ ok(await E(() => window.__EMBER.lastSave?.reason?.startsWith('auto:map')), 'auto
 await h.key('KeyM', 1, 500);
 ok(await E(() => window.__EMBER.Input.canBack()), 'menu open -> Back available');
 ok(await E(() => window.__EMBER.overlay.btn.visible), 'Back button visible');
-await h.p.mouse.click(40, 100); await h.wait(500);
+{ const [cx, cy] = await E(() => { const o = window.__EMBER.overlay, r = window.__EMBER.game.canvas.getBoundingClientRect(), k = r.width / window.__EMBER.game.scale.width; return [r.left + (o.btn.x + 62) * k, r.top + (o.btn.y + 30) * k]; }); await h.p.mouse.click(cx, cy); } await h.wait(500);
 ok(await E(() => !window.__EMBER.world.ui.modal && window.__EMBER.Input.stack.length === 0), 'tapping Back closes the menu');
 await E(() => window.__EMBER.Input.hardwareBack()); await h.wait(500);
 ok(await E(() => window.__EMBER.world.ui.modal), 'hardware back in field opens the menu');

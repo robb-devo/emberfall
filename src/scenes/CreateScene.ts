@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { txt, panel, W, H, COL, SERIF } from '../ui/widgets';
+import { txt, panel, W, H, DY, COL, SERIF } from '../ui/widgets';
 import { Input, Focus, Action } from '../ui/input';
 import { Audio } from '../systems/audio';
 import { Game, newMember, Look, stats, Member } from '../systems/state';
@@ -29,7 +29,7 @@ export class CreateScene extends Phaser.Scene implements Focus {
     if (this.mode === 'hero') Audio.play('hearth');
     this.look = this.mode === 'hero' ? { body: 0, skin: 1, hairStyle: 1, hair: 1, eyes: 1, face: 0, outfit: 0, outfit2: 6 } : randomLook();
     if (this.mode === 'companion') { this.name = NAMES[Math.floor(Math.random() * NAMES.length)]; this.voc = ['priest', 'mage', 'thief', 'warrior'][Game.s.party.length % 4]; }
-    const bg = this.add.graphics(); bg.fillGradientStyle(0x1a1440, 0x1a1440, 0x070512, 0x070512, 1); bg.fillRect(0, 0, W, H);
+    const bg = this.add.graphics(); bg.fillGradientStyle(0x1a1440, 0x1a1440, 0x070512, 0x070512, 1); bg.fillRect(0, -DY, W, H + DY * 2); this.cameras.main.setScroll(0, -DY / 2);
     for (let i = 0; i < 60; i++) { const s = this.add.image(Math.random() * W, Math.random() * 520, 'px').setAlpha(Math.random()); this.tweens.add({ targets: s, alpha: 0.1, yoyo: true, repeat: -1, duration: 800 + Math.random() * 2000 }); }
     txt(this, W / 2, 46, this.mode === 'hero' ? 'Who are you, Star-Warden?' : 'Register a Companion', 40, COL.accent, { fontFamily: SERIF }).setOrigin(0.5);
     // pedestal + doll
@@ -130,7 +130,7 @@ class NameEntry implements Focus {
   c: Phaser.GameObjects.Container; value: string; t: Phaser.GameObjects.Text; keyH: (e: KeyboardEvent) => void;
   constructor(public s: Phaser.Scene, init: string, public done: (v: string | null) => void) {
     this.value = init; this.c = s.add.container(0, 0).setDepth(100);
-    this.c.add(s.add.rectangle(0, 0, W, H, 0, 0.7).setOrigin(0).setInteractive());
+    this.c.add(s.add.rectangle(0, -DY, W, H + DY * 2, 0, 0.7).setOrigin(0).setInteractive());
     this.c.add(panel(s, 30, 300, W - 60, 720));
     this.c.add(txt(s, W / 2, 340, 'Enter a name', 32, COL.accent).setOrigin(0.5));
     this.t = txt(s, W / 2, 410, '', 46).setOrigin(0.5); this.c.add(this.t);

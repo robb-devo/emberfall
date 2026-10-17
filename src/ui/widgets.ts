@@ -95,7 +95,7 @@ export class ListMenu extends Phaser.GameObjects.Container implements Focus {
     });
     zone.on('pointerup', (p: Phaser.Input.Pointer) => {
       dragY = null; if (moved || !this.active) return;
-      const lx = p.x - this.x - (this.parentContainer?.x || 0), ly = p.y - this.y - (this.parentContainer?.y || 0) - 18 - titleH;
+      const lx = p.worldX - this.x - (this.parentContainer?.x || 0), ly = p.worldY - this.y - (this.parentContainer?.y || 0) - 18 - titleH; // world coords: Title/Create scroll the camera on tall phones
       const r = Math.floor(ly / this.itemH), c = Math.floor((lx - 10) / ((this.w - 20) / this.cols));
       const i = (this.top + r) * this.cols + Math.max(0, Math.min(this.cols - 1, c));
       if (r < 0 || r >= this.visible_ || i >= this.items.length) return;
@@ -204,7 +204,7 @@ export class DialogBox extends Phaser.GameObjects.Container implements Focus {
 export function card(s: Phaser.Scene, title: string, body: string, icon?: string): Promise<void> {
   return new Promise(res => {
     const c = s.add.container(0, 0).setDepth(2000);
-    const dim = s.add.rectangle(0, 0, W, H, 0x000000, 0.55).setOrigin(0).setInteractive(); c.add(dim);
+    const dim = s.add.rectangle(0, -DY, W, H + DY * 2, 0x000000, 0.55).setOrigin(0).setInteractive(); c.add(dim);
     const bodyT = txt(s, W / 2, 0, body, 30, COL.text, { wordWrap: { width: W - 160 }, align: 'center', lineSpacing: 10 }).setOrigin(0.5, 0);
     const h = bodyT.height + 230; const y0 = H / 2 - h / 2;
     c.add(panel(s, 40, y0, W - 80, h));

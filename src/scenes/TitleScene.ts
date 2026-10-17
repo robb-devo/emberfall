@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { FONT as FONT_SANS, txt, W, H, ListMenu, SERIF, DECO, COL, card, panel } from '../ui/widgets';
+import { FONT as FONT_SANS, txt, W, H, DY, SAFE_B, ListMenu, SERIF, DECO, COL, card, panel } from '../ui/widgets';
 import { ensureTitleArt, CLIFF_Y } from '../gfx/titleart';
 import { diorama } from '../fx/diorama';
 import { Input, minimizeApp } from '../ui/input';
@@ -14,7 +14,14 @@ export class TitleScene extends Phaser.Scene {
     this.cameras.main.fadeIn(800, 0, 0, 0);
     // ---- painted HD-2D vista: 4 parallax layers + light
     ensureTitleArt(this);
-    const L = (k: string, d: number, amp: number, dur: number) => { const im = this.add.image(W / 2, 0, k).setOrigin(0.5, 0).setScale(2.06).setDepth(d); if (amp) this.tweens.add({ targets: im, x: W / 2 + amp, yoyo: true, repeat: -1, duration: dur, ease: 'Sine.inOut' }); return im; };
+    // taller-than-16:9 phones: the 1280-high composition is centred and the painted layers are extended
+    // (sky colour above, each layer's bottom row stretched below) so the vista fills the whole screen
+    this.cameras.main.setScroll(0, -DY / 2);
+    if (DY > 0) this.add.rectangle(0, -DY, W, DY + 4, 0x060824).setOrigin(0).setDepth(-10.5);
+    const strip = (k: string) => { const sk = k + '_b'; if (!this.textures.exists(sk)) { const src = this.textures.get(k).getSourceImage() as HTMLCanvasElement; const t = this.textures.createCanvas(sk, src.width, 1)!; t.getContext().drawImage(src, 0, src.height - 1, src.width, 1, 0, 0, src.width, 1); t.refresh(); } return sk; };
+    const L = (k: string, d: number, amp: number, dur: number) => { const im = this.add.image(W / 2, 0, k).setOrigin(0.5, 0).setScale(2.06).setDepth(d); const tg: Phaser.GameObjects.Image[] = [im];
+      if (DY > 0) { const b = this.add.image(W / 2, im.displayHeight - 2, strip(k)).setOrigin(0.5, 0).setScale(2.06, DY / 2 + 8).setDepth(d); tg.push(b); }
+      if (amp) this.tweens.add({ targets: tg, x: W / 2 + amp, yoyo: true, repeat: -1, duration: dur, ease: 'Sine.inOut' }); return im; };
     L('tt_sky', -10, 0, 0);
     // stars twinkle on top of the painted ones
     for (let i = 0; i < 60; i++) { const st = this.add.image(Math.random() * W, Math.random() * 560, 'px').setScale(Math.random() < 0.2 ? 2 : 1).setDepth(-9).setBlendMode(Phaser.BlendModes.ADD); this.tweens.add({ targets: st, alpha: { from: 0.05, to: 0.9 }, duration: 700 + Math.random() * 2500, yoyo: true, repeat: -1, delay: Math.random() * 2000 }); }
@@ -56,7 +63,7 @@ export class TitleScene extends Phaser.Scene {
     };
     fallStar(); this.time.addEvent({ delay: 4200, loop: true, callback: fallStar });
     // embers + fireflies
-    this.add.particles(0, 0, 'dot', { x: { min: 0, max: W }, y: H + 10, lifespan: 6000, speedY: { min: -60, max: -140 }, speedX: { min: -20, max: 20 }, scale: { start: 1.2, end: 0 }, alpha: { start: 1, end: 0 }, tint: [0xff9a40, 0xffd070, 0xff5a30], blendMode: 'ADD', frequency: 110 });
+    this.add.particles(0, 0, 'dot', { x: { min: 0, max: W }, y: 1290 + DY / 2, lifespan: 6000, speedY: { min: -60, max: -140 }, speedX: { min: -20, max: 20 }, scale: { start: 1.2, end: 0 }, alpha: { start: 1, end: 0 }, tint: [0xff9a40, 0xffd070, 0xff5a30], blendMode: 'ADD', frequency: 110 });
     this.add.particles(0, 0, 'dot', { x: { min: 380, max: W }, y: { min: 880, max: 1180 }, lifespan: 3000, speed: { min: 4, max: 18 }, scale: { start: 0.9, end: 0 }, alpha: { start: 0, end: 1, ease: 'Sine.inOut' } as any, tint: [0xd8ff90, 0xfff0a0], blendMode: 'ADD', frequency: 260 });
     // logo: Cinzel Decorative, molten-gold gradient, filigree rules, glints
     const logo = this.add.text(W / 2, 400, 'EMBERFALL', { fontFamily: DECO, fontSize: '84px', fontStyle: '900', color: '#ffe8b0', stroke: '#2a0e1a', strokeThickness: 10, padding: { x: 20, y: 20 } }).setOrigin(0.5);
@@ -78,8 +85,8 @@ export class TitleScene extends Phaser.Scene {
     this.time.addEvent({ delay: 900, loop: true, callback: glint });
     const sub = txt(this, W / 2, 492, 'A TALE OF FALLEN STARS', 24, '#efe0ff', { fontFamily: SERIF, letterSpacing: 6 } as any).setOrigin(0.5).setAlpha(0);
     this.tweens.add({ targets: sub, alpha: 1, delay: 900, duration: 900 });
-    diorama(this.cameras.main, 'sky', { persp: 0, blur: 0, bloom: 1.5, rays: 0.16, fogAmt: 0, vig: 0.5, sat: 1.15 });
-    this.add.text(W / 2, H - 30, `v${__APP_VERSION__} · an original JRPG · made with Grok Bot`, { fontFamily: FONT_SANS, fontSize: '19px', color: '#b8acd8' }).setOrigin(0.5).setDepth(5);
+    diorama(this.cameras.main, 'sky', { persp: 0, blur: 0, bloom: 1.1, rays: 0.16, fogAmt: 0, vig: 0.5, sat: 1.15 });
+    this.add.text(W / 2, 1280 + DY / 2 - 30 - SAFE_B, `v${__APP_VERSION__} · an original JRPG · made with Grok Bot`, { fontFamily: FONT_SANS, fontSize: '19px', color: '#b8acd8' }).setOrigin(0.5).setDepth(5);
 
     const tap = txt(this, W / 2, 700, 'Tap to Begin', 38, '#ffe6b0', { fontFamily: SERIF }).setOrigin(0.5);
     this.tweens.add({ targets: tap, alpha: 0.25, yoyo: true, repeat: -1, duration: 700 });
@@ -137,7 +144,7 @@ export class TitleScene extends Phaser.Scene {
   }
   confirm(q: string): Promise<boolean> {
     return new Promise(res => {
-      const c = this.add.container(0, 0).setDepth(60); c.add(this.add.rectangle(0, 0, W, H, 0, 0.6).setOrigin(0).setInteractive());
+      const c = this.add.container(0, 0).setDepth(60); c.add(this.add.rectangle(0, -DY, W, H + DY * 2, 0, 0.6).setOrigin(0).setInteractive());
       c.add(panel(this, 40, 420, W - 80, 220)); c.add(txt(this, W / 2, 450, q, 28, COL.text, { align: 'center', wordWrap: { width: W - 140 } }).setOrigin(0.5, 0));
       const m = new ListMenu(this, 160, 660, 400, [{ label: 'No, go back' }, { label: 'Yes, overwrite' }], { itemH: 76 }).setDepth(61);
       const done = (v: boolean) => { m.close(); c.destroy(); res(v); };

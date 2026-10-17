@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { txt, COL, W, H } from '../ui/widgets';
+import { txt, COL, W, H, SAFE_T, SAFE_B } from '../ui/widgets';
 import { DioramaFX } from '../fx/diorama';
 import { Input } from '../ui/input';
 import { Audio } from '../systems/audio';
@@ -12,7 +12,7 @@ export class OverlayScene extends Phaser.Scene {
   btn!: Phaser.GameObjects.Container; saveIcon!: Phaser.GameObjects.Container; shown = false;
   constructor() { super({ key: 'Overlay', active: false }); }
   create() {
-    const c = this.add.container(14, 14).setDepth(10);
+    const c = this.add.container(14, 14 + SAFE_T).setDepth(10);
     const g = this.add.graphics();
     g.fillStyle(0x000000, 0.35); g.fillRoundedRect(3, 6, 124, 60, 30);
     g.fillGradientStyle(0x2a2a5e, 0x2a2a5e, 0x0b0c22, 0x0b0c22, 0.96); g.fillRoundedRect(0, 0, 124, 60, 30);
@@ -22,7 +22,7 @@ export class OverlayScene extends Phaser.Scene {
     c.on('pointerdown', () => { if (!Input.canBack()) return; this.tweens.add({ targets: c, scale: 0.9, yoyo: true, duration: 70 }); Input.back(); });
     c.setVisible(false); this.btn = c;
     // autosave indicator (bottom-left)
-    const s = this.add.container(40, 1240).setAlpha(0);
+    const s = this.add.container(40, H - 40 - SAFE_B).setAlpha(0);
     const star = this.add.image(0, 0, 'star').setScale(2.2).setTint(0xffe8a0).setBlendMode(Phaser.BlendModes.ADD);
     s.add([star, txt(this, 26, 0, 'Saving…', 20, COL.goldS).setOrigin(0, 0.5)]); this.saveIcon = s;
     this.tweens.add({ targets: star, angle: 360, duration: 1400, repeat: -1 });
