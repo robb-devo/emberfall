@@ -71,6 +71,7 @@ All art is drawn by code at boot (no image files). On top of that:
   animated water and grass.
 * Battle: blurred cinematic backdrops, light shafts, foreground bokeh silhouettes, and
   **EPX-upscaled, rim-lit monster sprites** at large size.
+* **Prop overlay tiles** (`src/systems/props.ts`): bushes, signs, lamps, crates, posts and rocks are cut out and drawn over whatever ground they stand on, with grass and leaf fringes blending cobble, sand and paths.
 * Settings → Graphics: `HD-2D` / `Fast`, for weaker phones.
 
 ## Extending
@@ -81,7 +82,8 @@ Add a map in `maps.ts`, enemies and encounter tables in `enemies.ts`, dialogue i
 Run `npm run dev`, then:
 * `node tests/playthrough.mjs`: Playwright plays Chapter I (creation → boss → party → ending → Chapter II dawn).
 * `node tests/playthrough2.mjs`: plays Chapter II from the road to the Cantor and the relit lighthouse.
-* `node tests/save.mjs`: save robustness (corruption, backup fallback, legacy import, slot safety).
+* `node tests/save.mjs`: save robustness (corruption, backup fallback, legacy import, slot safety) and the v0.1 save-loss regression (menu tour + Android back, progress already on disk).
+* `node tests/battle-smoke.mjs`: battles at normal speed (hit-stop, camera punch, kill FX, victory).
 * `node tests/fuzz-menus.mjs`: random walks through every menu path, checking that saves are never lost.
 * `node tests/maps-check.mjs` and `node tests/data-check.mjs`: static checks of maps and story data.
 
