@@ -194,10 +194,10 @@ function lair() {
 
 const L = (body: number, skin: number, hairStyle: number, hair: number, eyes: number, face: number, outfit: number, outfit2: number): Look => ({ body, skin, hairStyle, hair, eyes, face, outfit, outfit2 });
 export const NPC_LOOKS = {
-  mira: L(0, 1, 3, 2, 2, 1, 2, 6), dahlia: L(0, 3, 4, 8, 5, 0, 4, 3), innkeep: L(1, 2, 5, 1, 3, 2, 7, 1), elder: L(1, 1, 0, 4, 3, 2, 5, 6),
-  smith: L(1, 4, 1, 0, 0, 3, 5, 7), armorer: L(1, 2, 0, 1, 1, 0, 1, 5), grocer: L(0, 0, 2, 3, 1, 1, 3, 2), guard: L(1, 1, 0, 1, 0, 3, 1, 5),
+  mira: { ...L(0, 1, 3, 2, 2, 1, 2, 6), fig: 1 }, dahlia: { ...L(0, 3, 4, 8, 5, 0, 4, 3), fig: 1 }, innkeep: { ...L(1, 2, 5, 1, 3, 2, 7, 1), fig: 1 }, elder: L(1, 1, 0, 4, 3, 2, 5, 6),
+  smith: L(1, 4, 1, 0, 0, 3, 5, 7), armorer: { ...L(1, 2, 0, 1, 1, 0, 1, 5), fig: 1 }, grocer: L(0, 0, 2, 3, 1, 1, 3, 2), guard: L(1, 1, 0, 1, 0, 3, 1, 5),
   kid: { ...L(0, 0, 1, 3, 1, 0, 0, 1), child: true }, fisher: L(1, 2, 0, 4, 3, 2, 8, 5), farmer: L(1, 3, 0, 1, 3, 0, 3, 2), tobin: L(1, 1, 5, 4, 0, 2, 7, 1),
-  solenne: L(0, 5, 2, 4, 6, 1, 6, 3), vesper: L(0, 5, 1, 0, 4, 3, 5, 0), granny: L(0, 1, 4, 4, 0, 2, 4, 6), bard: L(0, 2, 3, 5, 6, 0, 8, 3),
+  solenne: { ...L(0, 5, 2, 4, 6, 1, 6, 3), fig: 1 }, vesper: { ...L(0, 5, 1, 0, 4, 3, 5, 0), fig: 1 }, granny: { ...L(0, 1, 4, 4, 0, 2, 4, 6), fig: 1 }, bard: L(0, 2, 3, 5, 6, 0, 8, 3),
 };
 
 export const MAPS: Record<string, MapDef> = {
@@ -429,8 +429,8 @@ function grotto2() {
 }
 
 const C2 = {
-  maren: L(0, 0, 4, 4, 1, 1, 6, 4), ione: L(0, 1, 2, 8, 2, 1, 8, 6), hallam: L(1, 1, 0, 1, 3, 2, 4, 3), pell: L(1, 3, 1, 1, 3, 0, 7, 3),
-  marla: L(1, 2, 3, 2, 1, 0, 1, 6), delphine: L(0, 4, 3, 0, 5, 1, 1, 3), sailor: L(1, 3, 0, 0, 0, 3, 1, 6), fisherwife: L(0, 2, 4, 1, 2, 1, 8, 6),
+  maren: { ...L(0, 0, 4, 4, 1, 1, 6, 4), fig: 1 }, ione: { ...L(0, 1, 2, 8, 2, 1, 8, 6), fig: 1 }, hallam: L(1, 1, 0, 1, 3, 2, 4, 3), pell: L(1, 3, 1, 1, 3, 0, 7, 3),
+  marla: { ...L(1, 2, 3, 2, 1, 0, 1, 6), fig: 1 }, delphine: { ...L(0, 4, 3, 0, 5, 1, 1, 3), fig: 1 }, sailor: L(1, 3, 0, 0, 0, 3, 1, 6), fisherwife: { ...L(0, 2, 4, 1, 2, 1, 8, 6), fig: 1 },
   acolyte: L(1, 1, 0, 4, 4, 3, 5, 5), girl: { ...L(0, 0, 3, 3, 1, 0, 0, 6), child: true }, oldsalt: L(1, 2, 0, 4, 3, 2, 1, 5), smith2: L(1, 4, 1, 0, 0, 3, 5, 1),
 };
 export const NPC_LOOKS2 = C2;

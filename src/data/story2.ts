@@ -12,7 +12,7 @@ export const STORY_MEMBERS: Record<string, { name: string; voc: string; look: Lo
 
 export const QUESTS2: Record<string, { name: string; desc: string; done?: string }> = {
   main2: { name: 'A Letter for the Abbess', desc: 'Elder Bram asked you to carry his letter east along the Emberwood Road to Abbess Maren in the harbour town of Saltmere.', done: 'You delivered Bram\'s letter. The Abbess opened the Chapel of Alltrades to you.' },
-  main2b: { name: 'The Singer by the Sea', desc: 'Abbess Maren believes Ione, a girl who sings at the Gull & Anchor inn, may be a fallen Warden. Find her.', done: 'You heard Ione sing… and lost her the same night.' },
+  main2b: { name: 'The Singer by the Sea', desc: 'Abbess Maren believes Ione, a young woman who sings at the Gull & Anchor inn, may be a fallen Warden. Find her.', done: 'You heard Ione sing… and lost her the same night.' },
   main2c: { name: 'The Drowned Choir', desc: 'The Ashen Choir dragged Ione into the Weeping Grotto, the sea cave west of the beach. Rescue her before their Requiem ends.', done: 'You defeated Cantor Mordane and freed Ione, Warden of the Tides.' },
   mule: { name: 'Turnip the Mule', desc: 'Pell the Peddler\'s mule bolted into the Emberwood when an Ashwolf howled. Pell thinks he went toward the mushroom grove to the north-west.', done: 'Turnip is home, and Pell is a happy peddler.' },
   pearls: { name: 'Catch of the Day', desc: 'Old Salt Nab on the Saltmere docks will trade an heirloom for 3 Brine Pearls. Brinecrabs on the coast and in the grotto carry them.', done: 'You traded 3 Brine Pearls for Nab\'s Tidecaller Spear.' },
@@ -142,7 +142,7 @@ export const SCRIPTS2: Record<string, Cmd[]> = {
   ],
   nanPearl: [
     { say: 'Granny Pearl', t: 'When I was a girl, my gran told me the lighthouse wasn\'t lit by oil at all. A star kept it, she said. A Warden of the Tides.' },
-    { say: 'Granny Pearl', t: 'The Warden sang, and the light answered. Silly old story. …Though I\'ve heard that Ione girl sing, and I wonder.' },
+    { say: 'Granny Pearl', t: 'The Warden sang, and the light answered. Silly old story. …Though I\'ve heard that Ione lass sing, and I wonder.' },
     { if: 'ioneTaken&!grottoDone', then: [{ say: 'Granny Pearl', t: 'Take my old remedy, dearie. The grotto is cruel to the unprepared.' }, { if: '!nanGift', then: [{ give: 'hiHerb', n: 2 }, { give: 'antidote', n: 2 }, { set: 'nanGift' }, { narr: 'Received 2 Strong Herbs and 2 Antidotes!' }] }] },
   ],
   tideWeapons: [{ say: 'Brannoc', t: 'Saltsteel never rusts, never dulls, never lies. Unlike sailors. Have a look.' }, { shop: 'tideWeapons' }],
@@ -177,7 +177,7 @@ export const SCRIPTS2: Record<string, Cmd[]> = {
     { narr: 'The Chapel of Alltrades is open to you! Speak with the Abbess to change any party member\'s vocation.' },
     { tut: 'vocation' },
     { say: 'Abbess Maren', t: 'Now listen, for this matters. Three weeks ago a light fell into the bay, and the lighthouse died the same night.' },
-    { say: 'Abbess Maren', t: 'The next morning, a girl walked out of the surf with no memory and no name. The fishers call her Ione. She sings at the Gull & Anchor.' },
+    { say: 'Abbess Maren', t: 'The next morning, a young woman walked out of the surf with no memory and no name. The fishers call her Ione. She sings at the Gull & Anchor.' },
     { say: 'Abbess Maren', t: 'When she sings, the tide turns early. I believe she is one of you, {hero}. A Warden who has forgotten herself.' },
     { say: 'Abbess Maren', t: 'And the Ashen Choir arrived in Saltmere the very same week. I do not believe in coincidences. Find her. Keep her close.' },
     { set: 'metMaren' }, { quest: 'main2', state: 'done' }, { quest: 'main2b', state: 'active' },
@@ -196,7 +196,7 @@ export const SCRIPTS2: Record<string, Cmd[]> = {
   // ---- the Gull & Anchor
   innSalt: [
     { if: 'metIone&!ioneTaken', then: [
-      { say: 'Marla', t: 'Ione asked me to give you a room tonight. No charge. Said the sea told her you were kind. Odd girl. Lovely voice.' },
+      { say: 'Marla', t: 'Ione asked me to give you a room tonight. No charge. Said the sea told her you were kind. Odd one. Lovely voice.' },
       { say: 'Marla', t: 'Get some rest, love. You look like you fell off a star.' },
       { call: 'abduction' }, { stop: true },
     ] },
@@ -217,7 +217,7 @@ export const SCRIPTS2: Record<string, Cmd[]> = {
       { say: 'Ione', t: 'You came back. Marla will give you a room — I asked her. Rest. Something about tonight feels… loud.' }, { stop: true },
     ] },
     { music: 'none' }, { fx: 'song' },
-    { narr: 'The tavern hushes. On the little stage, a barefoot girl with sea-green hair begins to sing. No words, just a melody older than the town.' },
+    { narr: 'The tavern hushes. On the little stage, a barefoot young woman with sea-green hair begins to sing. No words, just a melody older than the town.' },
     { narr: 'Through the window, the sea goes perfectly still.' },
     { say: 'Ione', t: '…Oh. I\'m sorry. I didn\'t see you there. Did I sing too long again? Marla says I forget the time.' },
     { say: 'Ione', t: 'I\'m Ione. At least, that\'s what they call me. I don\'t remember my real name. I don\'t remember anything before the surf.' },
@@ -261,7 +261,7 @@ export const SCRIPTS2: Record<string, Cmd[]> = {
     { if: 'ioneTaken', then: [
       { say: 'Mayor Hallam', t: 'Get OUT. I— no. No, wait.' },
       { say: 'Mayor Hallam', t: 'They said they would sink every boat in the harbour. They said the sea would take this town the way it took my wife.' },
-      { say: 'Mayor Hallam', t: 'One girl nobody knew, for a whole town. I told myself it was arithmetic. …It was cowardice.' },
+      { say: 'Mayor Hallam', t: 'One stranger nobody knew, for a whole town. I told myself it was arithmetic. …It was cowardice.' },
       { say: 'Mayor Hallam', t: 'The Grotto goes deep. The Choir\'s chapel is at the very bottom. Please… bring her back. I can\'t.' },
       { stop: true },
     ] },
@@ -272,14 +272,14 @@ export const SCRIPTS2: Record<string, Cmd[]> = {
   grottoIntro: [
     { caption: 'The Weeping Grotto' },
     { narr: 'Water drips from coral-crusted stone. Far below, the sea breathes in and out — and with every breath the cave weeps a low, sad note.' },
-    { narr: 'And beneath it, faint as a dream, a girl is singing.' },
+    { narr: 'And beneath it, faint as a dream, a woman is singing.' },
   ],
   ghost: [
     { if: 'quest:lookout=done', then: [{ narr: 'Only the drip of water remains where the lookout stood. His watch is over.' }, { stop: true }] },
     { if: 'quest:lookout=active', then: [{ say: 'Drowned Lookout', t: 'Brenna… on the beach, by the nets. Tell her I kept the watch.' }, { stop: true }] },
     { say: 'Drowned Lookout', t: 'Halt! Who goes th- oh. You can see me? Nobody can see me.' },
     { say: 'Drowned Lookout', t: 'Davy Marsh, night lookout. I followed a falling light in here three weeks back. The grey singers caught me by the stairs.' },
-    { say: 'Drowned Lookout', t: 'They\'ve got the singing girl down below, in their drowned chapel. The stairs are north, past the coral hall.' },
+    { say: 'Drowned Lookout', t: 'They\'ve got the singing woman down below, in their drowned chapel. The stairs are north, past the coral hall.' },
     { say: 'Drowned Lookout', t: 'Would you do a dead man a kindness? Take my badge to my wife, Brenna. She\'ll be on the beach, mending nets. She\'s always mending nets.' },
     { give: 'badge' }, { narr: 'Received Davy\'s Watch Badge!' }, { quest: 'lookout', state: 'active' },
   ],
