@@ -12,8 +12,8 @@ export const STORY_MEMBERS: Record<string, { name: string; voc: string; look: Lo
 
 export const QUESTS2: Record<string, { name: string; desc: string; done?: string }> = {
   main2: { name: 'A Letter for the Abbess', desc: 'Elder Bram asked you to carry his letter east along the Emberwood Road to Abbess Maren in the harbour town of Saltmere.', done: 'You delivered Bram\'s letter. The Abbess opened the Chapel of Alltrades to you.' },
-  main2b: { name: 'The Singer by the Sea', desc: 'Abbess Maren believes a girl called Ione — who sings to the sea at the Gull & Anchor inn — may be a fallen Warden. Find her.', done: 'You heard Ione sing… and lost her the same night.' },
-  main2c: { name: 'The Drowned Choir', desc: 'The Ashen Choir carried Ione into the sea cave west of the beach — the Weeping Grotto. Rescue her before their Requiem ends.', done: 'You defeated Cantor Mordane and freed Ione, Warden of the Tides.' },
+  main2b: { name: 'The Singer by the Sea', desc: 'Abbess Maren believes Ione, a girl who sings at the Gull & Anchor inn, may be a fallen Warden. Find her.', done: 'You heard Ione sing… and lost her the same night.' },
+  main2c: { name: 'The Drowned Choir', desc: 'The Ashen Choir dragged Ione into the Weeping Grotto, the sea cave west of the beach. Rescue her before their Requiem ends.', done: 'You defeated Cantor Mordane and freed Ione, Warden of the Tides.' },
   mule: { name: 'Turnip the Mule', desc: 'Pell the Peddler\'s mule bolted into the Emberwood when an Ashwolf howled. Pell thinks he went toward the mushroom grove to the north-west.', done: 'Turnip is home, and Pell is a happy peddler.' },
   pearls: { name: 'Catch of the Day', desc: 'Old Salt Nab on the Saltmere docks will trade an heirloom for 3 Brine Pearls. Brinecrabs on the coast and in the grotto carry them.', done: 'You traded 3 Brine Pearls for Nab\'s Tidecaller Spear.' },
   lookout: { name: 'The Last Watch', desc: 'The ghost of Davy, a harbour lookout, haunts the Weeping Grotto. He asked you to take his watch badge to his wife Brenna on the beach.', done: 'Brenna has her husband\'s badge, and Davy can rest.' },
@@ -23,17 +23,17 @@ export const SCRIPTS2: Record<string, Cmd[]> = {
   // ================================================================ DAWN (Hollowmere)
   ch2Dawn: [
     { set: 'ch2Started' }, { music: 'hearth' }, { fade: 'in', ms: 1400 },
-    { caption: 'EMBERFALL', sub: 'Chapter II — The Drowned Choir' },
-    { say: 'Elder Bram', t: 'Morning, Warden. I didn\'t sleep either. Old stars don\'t, much.' },
-    { say: 'Elder Bram', t: 'I watched the sky all night. Most of the falling lights went north… but one fell into the sea, far to the east, near Saltmere.' },
-    { say: 'Elder Bram', t: 'And here is the strange part. Saltmere\'s lighthouse has burned every night for two hundred years. Last night, it was dark.' },
-    { choice: ['A fallen Warden?', 'Vesper got there first?'], then: [[{ say: 'Elder Bram', t: 'Perhaps. A Warden\'s light draws things to it — good things and very bad ones.' }], [{ say: 'Elder Bram', t: 'Let us pray not. But we would be fools not to hurry.' }]] },
-    { say: 'Elder Bram', t: 'There is a woman in Saltmere — Abbess Maren of the Chapel of Alltrades. She is… an old friend. She knows what I was.' },
-    { say: 'Elder Bram', t: 'Give her this letter. She will help you — and her chapel can teach you new ways to fight. Paladins, rangers, bards…' },
+    { caption: 'EMBERFALL', sub: 'Chapter II: The Drowned Choir' },
+    { say: 'Elder Bram', t: 'Morning, Warden. I didn\'t sleep either. Old stars rarely do.' },
+    { say: 'Elder Bram', t: 'I watched the sky all night. Most of the lights fell north, but one dropped into the sea far to the east, by the harbour town of Saltmere.' },
+    { say: 'Elder Bram', t: 'Here\'s the strange part. Saltmere\'s lighthouse has burned every night for two hundred years. Since that star fell, it has been dark.' },
+    { choice: ['A fallen Warden?', 'Vesper got there first?'], then: [[{ say: 'Elder Bram', t: 'Very likely. And every fallen Warden carries a shard of the Heartstar. That light draws things to it. Kind things, and very unkind ones.' }], [{ say: 'Elder Bram', t: 'Let\'s hope not. But we\'d be fools not to hurry.' }]] },
+    { say: 'Elder Bram', t: 'There\'s a woman in Saltmere, Abbess Maren of the Chapel of Alltrades. An old friend. She knows what I used to be.' },
+    { say: 'Elder Bram', t: 'Give her this letter. She\'ll help you find the Warden, and her chapel can teach you new ways to fight. Paladin, Ranger, Bard…' },
     { give: 'letter' }, { narr: 'Received Bram\'s Letter!' }, { quest: 'main2', state: 'active' },
     { say: 'Elder Bram', t: 'Mira packed you something, too. She made me swear not to say she cried.' },
     { give: 'hiHerb', n: 3 }, { narr: 'Received 3 Strong Herbs!' },
-    { say: 'Elder Bram', t: 'Take the Emberwood Road — cross the river by the east bridge. And {hero}… whatever you find out there, come home.' },
+    { say: 'Elder Bram', t: 'Cross the east bridge and follow the Emberwood Road. And {hero}… whatever you find out there, come home.' },
     { set: 'night', v: false },
   ],
   elderCh2: [
@@ -42,13 +42,13 @@ export const SCRIPTS2: Record<string, Cmd[]> = {
   ],
   eastBlock: [
     { if: 'chapter1Done', then: [{ narr: 'The Emberwood Road leads east. You should speak with Elder Bram before setting out.' }],
-      else: [{ narr: 'Beyond the bridge, the Emberwood Road winds into a forest of red and gold. Not yet — Hollowmere still needs you.' }] },
+      else: [{ narr: 'Beyond the bridge, the Emberwood Road winds into a forest of red and gold. Not yet. Hollowmere still needs you.' }] },
     { step: 'back' },
   ],
   // ================================================================ EMBERWOOD ROAD
   roadIntro: [
     { caption: 'Emberwood Road', sub: 'Autumn never quite leaves this forest.' },
-    { narr: 'Leaves of red and gold drift across the path. Somewhere in the trees, something howls — low, hungry, and much too close.' },
+    { narr: 'Leaves of red and gold drift across the path. Somewhere in the trees, something howls. Low, hungry, and much too close.' },
   ],
   pilgrimRoad: [
     { say: 'Ashen Pilgrim', t: 'Going to Saltmere, child? So are we. The Choir sings there now.' },
@@ -59,14 +59,14 @@ export const SCRIPTS2: Record<string, Cmd[]> = {
   ],
   pell: [
     { if: '!metPell', then: [
-      { say: 'Pell the Peddler', t: 'Oi! A customer! In THIS forest! Pell the Peddler, at your service — fine goods, fair-ish prices.' },
+      { say: 'Pell the Peddler', t: 'Oi! A customer! In THIS forest! Pell the Peddler, at your service. Fine goods, fair-ish prices.' },
       { say: 'Pell the Peddler', t: 'Well. Most of my goods. The rest are on the back of my mule, Turnip, who bolted when an Ashwolf howled last night.' },
       { say: 'Pell the Peddler', t: 'Daft creature loves mushrooms. I\'d bet my boots he\'s in the grove to the north-west. Would you look? I\'d make it worth your while.' },
       { set: 'metPell' }, { quest: 'mule', state: 'active' },
     ] },
     { if: 'muleFound&!quest:mule=done', then: [
       { say: 'Pell the Peddler', t: 'TURNIP! You beautiful, ungrateful, mushroom-stinking beast! He walked in bold as you like!' },
-      { say: 'Pell the Peddler', t: 'You found him, didn\'t you? A deal\'s a deal. Here — my lucky ring, and a little coin besides.' },
+      { say: 'Pell the Peddler', t: 'You found him, didn\'t you? A deal\'s a deal. Here: my lucky ring, and a little coin besides.' },
       { give: 'pearlRing' }, { gold: 200 }, { narr: 'Received a Pearl Ring and 200 gold!' }, { quest: 'mule', state: 'done' },
       { say: 'Pell the Peddler', t: 'And now the good stuff\'s back in stock. Take a look!' },
     ] },
@@ -100,7 +100,7 @@ export const SCRIPTS2: Record<string, Cmd[]> = {
     { if: 'quest:pearls=active', then: [
       { if: 'has:pearl', then: [
         { say: 'Old Salt Nab', t: 'Pearls! Let\'s count \'em…' },
-        { if: 'inv:pearl>=3', then: [{ call: 'pearlsTrade' }], else: [{ say: 'Old Salt Nab', t: 'I need three of \'em, mind. Three pearls for one spear — a fair trade on any tide.' }] },
+        { if: 'inv:pearl>=3', then: [{ call: 'pearlsTrade' }], else: [{ say: 'Old Salt Nab', t: 'I need three of \'em, mind. Three pearls for one spear. A fair trade on any tide.' }] },
       ], else: [{ say: 'Old Salt Nab', t: 'Three Brine Pearls, friend. Brinecrabs carry \'em. Down on the coast, or in the grotto.' }] },
       { stop: true },
     ] },
@@ -109,7 +109,7 @@ export const SCRIPTS2: Record<string, Cmd[]> = {
     { quest: 'pearls', state: 'active' },
   ],
   pearlsTrade: [
-    { say: 'Old Salt Nab', t: 'Three! Beautiful! As promised — the Tidecaller Spear. She sings in a storm, she does.' },
+    { say: 'Old Salt Nab', t: 'Three! Beautiful! As promised, the Tidecaller Spear. She sings in a storm, she does.' },
     { take: 'pearl', n: 3 }, { give: 'spear' }, { narr: 'Received the Tidecaller Spear!' }, { quest: 'pearls', state: 'done' },
   ],
   coralie: [
@@ -128,13 +128,13 @@ export const SCRIPTS2: Record<string, Cmd[]> = {
       { say: 'Fishwife Brenna', t: 'That badge… where did you… That\'s Davy\'s. My Davy\'s.' },
       { narr: 'You tell her about the lookout in the grotto, still keeping his watch.' },
       { say: 'Fishwife Brenna', t: 'Stubborn old fool. Even dead, he wouldn\'t leave his post without telling me.' },
-      { say: 'Fishwife Brenna', t: 'Take his cape. He\'d want it to go somewhere brave — not hang in a cupboard smelling of salt and me crying.' },
+      { say: 'Fishwife Brenna', t: 'Take his cape. He\'d want it to go somewhere brave, not hang in a cupboard smelling of salt and tears.' },
       { take: 'badge' }, { give: 'gullCape' }, { narr: 'Received the Gull-Wing Cape!' }, { quest: 'lookout', state: 'done' }, { stop: true },
     ] },
     { say: 'Fishwife Brenna', t: 'My husband Davy kept the night watch by the sea cave. Three weeks ago he went in after a strange light… and didn\'t come out.' },
   ],
   caveGuard: [
-    { say: 'Harbour Watch', t: 'Sea cave\'s barred. The Weeping Grotto, they call it — you can hear it crying at high tide. Mayor\'s orders: nobody goes in.' },
+    { say: 'Harbour Watch', t: 'Sea cave\'s barred. The Weeping Grotto, they call it. You can hear it crying at high tide. Mayor\'s orders: nobody goes in.' },
   ],
   caveSealed: [
     { narr: 'A rusted iron grate bars the mouth of the cave. From somewhere deep inside comes a faint, sad singing.' },
@@ -171,7 +171,7 @@ export const SCRIPTS2: Record<string, Cmd[]> = {
       { say: 'Abbess Maren', t: '"The old fool still keeps the candle lit." Bram… you stubborn, wonderful old man. You\'re alive.' },
     ], else: [{ say: 'Abbess Maren', t: 'Hollowmere, you say? Then you know Bram. I can see his teaching in how you stand.' }] },
     { say: 'Abbess Maren', t: 'So. You are a Star-Warden. Fallen, and mortal, and carrying all of that on your shoulders. I am so sorry, child.' },
-    { say: 'Abbess Maren', t: 'Bram and I fought side by side, once — long before you were a spark. I chose to stay here and teach. He chose to grow turnips.' },
+    { say: 'Abbess Maren', t: 'Bram and I fought side by side once, long before you were a spark. I chose to stay here and teach. He chose to grow turnips.' },
     { say: 'Abbess Maren', t: 'This chapel holds the old arts of the Alltrades. Any soul may learn to walk a new path: Paladin, Ranger, Bard… or return to the old.' },
     { set: 'vocationsOpen' }, { sfx: 'star' },
     { narr: 'The Chapel of Alltrades is open to you! Speak with the Abbess to change any party member\'s vocation.' },
@@ -196,11 +196,11 @@ export const SCRIPTS2: Record<string, Cmd[]> = {
   // ---- the Gull & Anchor
   innSalt: [
     { if: 'metIone&!ioneTaken', then: [
-      { say: 'Marla', t: 'Ione asked me to give you a room tonight — no charge. Said the sea told her you were kind. Odd girl. Lovely voice.' },
+      { say: 'Marla', t: 'Ione asked me to give you a room tonight. No charge. Said the sea told her you were kind. Odd girl. Lovely voice.' },
       { say: 'Marla', t: 'Get some rest, love. You look like you fell off a star.' },
       { call: 'abduction' }, { stop: true },
     ] },
-    { say: 'Marla', t: 'Welcome to the Gull & Anchor! A bed is 10 gold a head — sea view, if you squint.' },
+    { say: 'Marla', t: 'Welcome to the Gull & Anchor! A bed is 10 gold a head. Sea view, if you squint.' },
     { inn: 10, who: 'Marla' },
   ],
   delphine: [
@@ -208,7 +208,7 @@ export const SCRIPTS2: Record<string, Cmd[]> = {
     { recruit: true, who: 'Delphine' },
   ],
   sailor: [
-    { if: 'grottoDone', then: [{ say: 'Sailor Quill', t: 'Light\'s back! We sail at dawn! Drinks are on me — well, on Marla, she just doesn\'t know it yet.' }, { stop: true }] },
+    { if: 'grottoDone', then: [{ say: 'Sailor Quill', t: 'Light\'s back! We sail at dawn! Drinks are on me! Well, on Marla. She just doesn\'t know it yet.' }, { stop: true }] },
     { say: 'Sailor Quill', t: 'Ever heard a whole grotto cry? The Weeping Grotto does it every high tide. Gives me the shivers.' },
   ],
   snorer: [{ say: 'Snoring Fisherman', t: 'Zzz… more pearls… zzz… no, YOU\'RE a crab… zzz…' }],
@@ -217,22 +217,22 @@ export const SCRIPTS2: Record<string, Cmd[]> = {
       { say: 'Ione', t: 'You came back. Marla will give you a room — I asked her. Rest. Something about tonight feels… loud.' }, { stop: true },
     ] },
     { music: 'none' }, { fx: 'song' },
-    { narr: 'The tavern hushes. On the little stage, a barefoot girl with sea-green hair begins to sing — no words, just a melody older than the town.' },
+    { narr: 'The tavern hushes. On the little stage, a barefoot girl with sea-green hair begins to sing. No words, just a melody older than the town.' },
     { narr: 'Through the window, the sea goes perfectly still.' },
-    { say: 'Ione', t: '…Oh. I\'m sorry. I didn\'t see you there. Did I — did I sing too long again? Marla says I forget the time.' },
+    { say: 'Ione', t: '…Oh. I\'m sorry. I didn\'t see you there. Did I sing too long again? Marla says I forget the time.' },
     { say: 'Ione', t: 'I\'m Ione. At least, that\'s what they call me. I don\'t remember my real name. I don\'t remember anything before the surf.' },
     { choice: ['I fell too. From the sky.', 'Your song moved the sea.'], then: [
       [{ say: 'Ione', t: 'From the sky…? Then that\'s why I dream of falling. Every night. Falling, and a light going out inside me.' }],
       [{ say: 'Ione', t: 'You saw it too? I thought I was imagining it. The sea listens when I sing. I don\'t know why.' }]] },
     { say: 'Ione', t: 'The grey singers in the square… they keep watching me. Their Cantor asked me to join their Choir. I said no. He smiled.' },
-    { say: 'Ione', t: 'Will you stay in Saltmere tonight? I\'d feel safer. Talk to Marla — I\'ll ask her to give you a room.' },
+    { say: 'Ione', t: 'Will you stay in Saltmere tonight? I\'d feel safer. Talk to Marla. I\'ll ask her to give you a room.' },
     { set: 'metIone' }, { music: 'tavern' },
-    { narr: 'Ione might be a fallen Warden. Rest at the inn tonight.' },
+    { narr: 'Ione might be the fallen Warden. Rest at the inn tonight.' },
   ],
   abduction: [
     { fade: 'out', ms: 900 }, { music: 'none' }, { sfx: 'inn' }, { wait: 1600 },
     { caption: 'That night…' },
-    { sfx: 'dark' }, { narr: 'A scream tears through the dark — and is cut short.' },
+    { sfx: 'dark' }, { narr: 'A scream tears through the dark, and is cut short.' },
     { set: 'ioneTaken' }, { quest: 'main2b', state: 'done' },
     { warp: 'saltmere', x: 19, y: 14, dir: 0 },
     { npc: 'mordaneN', show: true }, { npc: 'acoN1', show: true }, { npc: 'acoN2', show: true }, { npc: 'ioneN', show: true }, { npc: 'hallamN', show: true },
@@ -240,7 +240,7 @@ export const SCRIPTS2: Record<string, Cmd[]> = {
     { say: 'Ione', t: 'Let go of me! {hero}! HELP!' },
     { move: 'hero', path: 'DD' },
     { say: 'Cantor Mordane', t: 'Ahh. The second spark. I wondered when you would show yourself, little fallen thing.' },
-    { say: 'Cantor Mordane', t: 'Do not trouble yourself. The Choir sings for one Warden at a time — and tonight, we sing for HER.' },
+    { say: 'Cantor Mordane', t: 'Do not trouble yourself. The Choir sings for one Warden at a time. Tonight, we sing for HER.' },
     { choice: ['Let her go!', '(Charge at him)'], then: [[], [{ move: 'hero', path: 'D' }]] },
     { fx: 'abductFlash' }, { shake: 600 }, { flash: 0xa040ff },
     { narr: 'A wall of ash-grey sound slams into you. Your legs fold. The world goes muffled and slow.' },
@@ -271,13 +271,13 @@ export const SCRIPTS2: Record<string, Cmd[]> = {
   // ================================================================ THE WEEPING GROTTO
   grottoIntro: [
     { caption: 'The Weeping Grotto' },
-    { narr: 'Water drips from coral-crusted stone. Far below, the sea breathes in and out — and with every breath, the cave weeps a low, mournful note.' },
+    { narr: 'Water drips from coral-crusted stone. Far below, the sea breathes in and out — and with every breath the cave weeps a low, sad note.' },
     { narr: 'And beneath it, faint as a dream, a girl is singing.' },
   ],
   ghost: [
     { if: 'quest:lookout=done', then: [{ narr: 'Only the drip of water remains where the lookout stood. His watch is over.' }, { stop: true }] },
     { if: 'quest:lookout=active', then: [{ say: 'Drowned Lookout', t: 'Brenna… on the beach, by the nets. Tell her I kept the watch.' }, { stop: true }] },
-    { say: 'Drowned Lookout', t: 'Halt! Who goes— oh. You can see me? Nobody can see me.' },
+    { say: 'Drowned Lookout', t: 'Halt! Who goes th- oh. You can see me? Nobody can see me.' },
     { say: 'Drowned Lookout', t: 'Davy Marsh, night lookout. I followed a falling light in here three weeks back. The grey singers caught me by the stairs.' },
     { say: 'Drowned Lookout', t: 'They\'ve got the singing girl down below, in their drowned chapel. The stairs are north, past the coral hall.' },
     { say: 'Drowned Lookout', t: 'Would you do a dead man a kindness? Take my badge to my wife, Brenna. She\'ll be on the beach, mending nets. She\'s always mending nets.' },
@@ -285,19 +285,19 @@ export const SCRIPTS2: Record<string, Cmd[]> = {
   ],
   sanctumIntro: [
     { caption: 'Sanctum of the Drowned Choir' },
-    { narr: 'A chapel, swallowed by the sea long ago. Pews rot under green water. And from the altar ahead rises the Requiem — a hundred voices, singing a light to death.' },
+    { narr: 'A chapel, swallowed by the sea long ago. Pews rot under green water. And from the altar ahead rises the Requiem: a hundred voices, singing a light to death.' },
     { tut: 'shrine2' },
   ],
   cantorApproach: [
     { narr: 'Ione hangs in chains of grey light above the altar. Each note of the Requiem pulls a thread of blue light from her chest.' },
-    { say: 'Ione', t: '{hero}…? No — go back! He wants you too!' },
+    { say: 'Ione', t: '{hero}…? No, go back! He wants you too!' },
   ],
   cantorBoss: [
     { music: 'none' },
     { say: 'Cantor Mordane', t: 'Ahh. The second spark has come to the concert. How wonderfully punctual.' },
     { say: 'Cantor Mordane', t: 'Do you know what a star is, child? A wound in the sky that will not close. We are the Choir that closes it.' },
     { say: 'Cantor Mordane', t: 'Her Tideshard is nearly sung out. Shall I conduct you next? I think… a minor key.' },
-    { choice: ['Let her go, Mordane.', 'Your concert is over.'], then: [[{ say: 'Cantor Mordane', t: 'No.' }], [{ say: 'Cantor Mordane', t: 'Oh, I do like you. Acolytes — from the top!' }]] },
+    { choice: ['Let her go, Mordane.', 'Your concert is over.'], then: [[{ say: 'Cantor Mordane', t: 'No.' }], [{ say: 'Cantor Mordane', t: 'Oh, I do like you. Acolytes, from the top!' }]] },
     { battle: ['acolyte', 'cantor', 'acolyte'], boss: true, bg: 'bg_choir', music: 'boss2', noFlee: true },
     { set: 'grottoDone' }, { call: 'cantorAfter' },
   ],
@@ -310,13 +310,13 @@ export const SCRIPTS2: Record<string, Cmd[]> = {
     { fx: 'cantorFade' }, { npc: 'cantor', show: false },
     { narr: 'He crumbles into grey ash, and the sea takes it.' },
     { fx: 'shardRestore' }, { sfx: 'star' },
-    { narr: 'The chains of grey light shatter. A sea-blue shard of light — the Tideshard — sinks gently back into Ione\'s chest.' },
-    { say: 'Ione', t: 'I… I remember. The Spire. The fall. My name — my real name — is Ione. It always was. The sea kept it for me.' },
+    { narr: 'The chains of grey light shatter. A sea-blue shard of the Heartstar, the Tideshard, sinks gently back into Ione\'s chest.' },
+    { say: 'Ione', t: 'I… I remember. The Spire. The fall. My name, my real name, is Ione. It always was. The sea kept it for me.' },
     { say: 'Ione', t: 'I am the Warden of the Tides. And you\'re {hero}. You were the newest of us. Solenne crowned you the night everything broke.' },
     { choice: ['A halo still… what did he mean?', 'Are you all right?'], then: [
       [{ say: 'Ione', t: 'Only Wardens wear halos. If someone still has theirs, then someone up there never fell… and is helping Vesper.' }],
       [{ say: 'Ione', t: 'I\'m alive. I\'m myself. And I\'m angry. That\'s a very good start.' }, { say: 'Ione', t: 'But that thing he said — "a halo still"… only Wardens wear halos. Someone who never fell is helping Vesper.' }]] },
-    { say: 'Ione', t: 'I can\'t go back to singing in a tavern, not now. Take me with you. A Bard\'s song can turn a battle — and mine can turn the sea.' },
+    { say: 'Ione', t: 'I can\'t go back to singing in a tavern, not now. Take me with you. A Bard\'s song can turn a battle, and mine can turn the sea.' },
     { join: 'ione' }, { give: 'tideShard' }, { quest: 'main2c', state: 'done' },
     { say: 'Ione', t: 'First, though… there\'s a lighthouse that has been waiting three weeks for its song. Let\'s go home.' },
     { fade: 'out', ms: 1200 },
@@ -333,9 +333,9 @@ export const SCRIPTS2: Record<string, Cmd[]> = {
     { narr: 'Out on the black water, a lost fishing boat turns its prow toward home.' },
     { fx: 'nightOff' }, { set: 'relit' },
     { say: 'Mayor Hallam', t: 'I… I owe you a debt this town cannot pay. And an apology I don\'t deserve to make.' },
-    { say: 'Mayor Hallam', t: 'Take this. My father\'s sword, forged here in Saltmere — and every coin the Choir paid me. It was never mine.' },
+    { say: 'Mayor Hallam', t: 'Take this. My father\'s sword, forged here in Saltmere, and every coin the Choir paid me. It was never mine.' },
     { give: 'steelsword' }, { gold: 400 }, { narr: 'Received the Saltsteel Sword and 400 gold!' },
-    { say: 'Ione', t: 'The Choir came from somewhere. Their hymns all end with the same word — Kragmoor. The mountain city past Cinder Pass.' },
+    { say: 'Ione', t: 'The Choir came from somewhere. Their hymns all end with the same word: Kragmoor. The mountain city past Cinder Pass.' },
     { say: 'Ione', t: 'If someone with a halo is pulling Vesper\'s strings, the answer is there. …And {hero}? Thank you for listening to me sing.' },
     { set: 'chapter2Done' }, { quest: 'main3', state: 'active' },
     { end: 'chapter', chapter: 2 },
@@ -344,9 +344,9 @@ export const SCRIPTS2: Record<string, Cmd[]> = {
 
 /** Extra tutorials introduced in Chapter II. */
 export const TUTORIALS2: Record<string, { title: string; body: string; icon?: string }> = {
-  vocation: { title: 'Vocations', body: 'Speak with Abbess Maren to change any party member\'s vocation.\n\nEach vocation levels up separately, and every ability learned stays with the hero — mix and match!\n\nNew: PALADIN · RANGER · BARD' },
-  shrine2: { title: 'Autosave', body: 'Your adventure saves automatically when you change areas, after battles and at story moments.\n\nStar-Shrines still heal your party — and Menu → Save lets you save any time.', icon: 'crystal' },
+  vocation: { title: 'Vocations', body: 'Speak with Abbess Maren to change any party member\'s vocation.\n\nEach vocation levels up separately, and every ability learned stays with the hero. Mix and match!\n\nNew: PALADIN · RANGER · BARD' },
+  shrine2: { title: 'Autosave', body: 'Your adventure saves automatically when you change areas, after battles and at story moments.\n\nStar-Shrines still heal your party, and Menu → Save lets you save any time.', icon: 'crystal' },
 };
 export const QUESTS3: Record<string, { name: string; desc: string; done?: string }> = {
-  main3: { name: 'The Ashen Cathedral', desc: 'The Ashen Choir\'s hymns all end with one word: Kragmoor, the mountain city beyond Cinder Pass. (Chapter III — coming in a future update.)' },
+  main3: { name: 'The Ashen Cathedral', desc: 'The Ashen Choir\'s hymns all end with one word: Kragmoor, the mountain city beyond Cinder Pass. (Chapter III arrives in a future update.)' },
 };
