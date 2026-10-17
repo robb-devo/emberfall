@@ -22,11 +22,13 @@ Screenshots for the user: progress/r4-*.png
 - Movement: analog free movement over the tile grid (circle vs tile collision + sliding + corner nudge); tx/ty = tile under feet.
 
 ## Done
-- (nothing yet)
+- [x] Movement (commit "Movement: analog..."): WorldScene.handleMoveInput/enterTile/followTrail/updateCamera; joystick dead-zone in UIScene. Test: tests/tools/move.mjs.
+- [x] 3D renderer v1 src/fx/world3d.ts (Three r18x): mirrors display list each frame (postrender hook); WorldScene camera alpha 0 (NOT invisible – invisible cams stop fades);
+      houses = World3D.addHouse (tagged 'skip' in Phaser); tag3(obj, 'ground'|'stand'|'fx'|'skip', foot, lift) for hints; water tagged __water; ground shadow bake off in 3D (structures noShadow).
+      Disable with localStorage ember_3d=0.
 
 ## Next
-- [ ] Movement
-- [ ] 3D renderer
+- [ ] 3D polish: extrude wall/cliff tiles (ground.ts wall faces), beyond-map forest fill, hero x-ray behind houses, tune ELEV/SV, interiors, fx placement check per map, perf check
 - [ ] Item details
 - [ ] Underwear + Adult toggle
 - [ ] Dialogue rewrite
