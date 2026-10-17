@@ -207,7 +207,7 @@ export function ensureTreeAtlas(scene: Phaser.Scene) {
 }
 
 /** Build all HD structures for a map. `ground` is the HD ground canvas (shadows are baked into it when fresh). */
-export function buildStructures(scene: Phaser.Scene, id: string, grid: string[], night: boolean, groundKey: string, fresh: boolean, indoor = false): StructResult {
+export function buildStructures(scene: Phaser.Scene, id: string, grid: string[], night: boolean, groundKey: string, fresh: boolean, indoor = false, noShadow = false): StructResult {
   ensureTreeAtlas(scene);
   const houses: HouseInfo[] = []; const trees: StructResult['trees'] = [];
   for (const hx of indoor ? [] : findHouses(grid)) {
@@ -230,7 +230,7 @@ export function buildStructures(scene: Phaser.Scene, id: string, grid: string[],
     for (const t of trees) { s.beginPath(); s.ellipse(t.x * TT + TT / 2 + 10, t.y * TT + TT - 4, 26, 11, 0, 0, Math.PI * 2); s.fill(); }
     for (const hx of houses) { const x0 = hx.x0 * TT - OH, x1 = (hx.x1 + 1) * TT + OH, y0 = hx.y0 * TT - RISE, y1 = (hx.y1 + 1) * TT;
       s.beginPath(); s.moveTo(x1 - 4, y0 + 6); s.lineTo(x1 + 22, y0 + 26); s.lineTo(x1 + 22, y1 + 10); s.lineTo(x0 + 18, y1 + 10); s.lineTo(x0 + 6, y1); s.lineTo(x1 - 4, y1); s.closePath(); s.fill(); }
-    g.save(); g.globalAlpha = 0.42; g.filter = 'blur(5px)'; g.drawImage(sh, 0, 0); g.restore();
+    if (!noShadow) { g.save(); g.globalAlpha = 0.42; g.filter = 'blur(5px)'; g.drawImage(sh, 0, 0); g.restore(); } // 3D mode casts real shadows
     // contact AO: sharper, darker strip right at the base
     const a = document.createElement('canvas'); a.width = tex.width; a.height = tex.height; const ac = a.getContext('2d')!; ac.fillStyle = 'rgba(10,10,20,1)';
     for (const hx of houses) ac.fillRect(hx.x0 * TT - 2, (hx.y1 + 1) * TT - 2, (hx.x1 - hx.x0 + 1) * TT + 6, 6);

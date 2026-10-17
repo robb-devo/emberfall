@@ -27,7 +27,7 @@ import { ensureDollHd } from './systems/paperdoll';
 import { ensurePortrait } from './gfx/portrait';
 
 const game = new Phaser.Game({
-  type: Phaser.AUTO, parent: 'game', width: W, height: H, backgroundColor: '#0b0a14',
+  type: Phaser.AUTO, parent: 'game', width: W, height: H, backgroundColor: '#0b0a14', transparent: true,
   pixelArt: true, roundPixels: true, antialias: false,
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   fps: { target: 60 }, pipeline: { DioramaFX, WaterFX } as any, input: { activePointers: 3 },

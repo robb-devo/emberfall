@@ -27,6 +27,7 @@ import { paintGround, HD, STRUCT } from '../gfx/ground';
 import { buildStructures, OH, ensureTallGrass } from '../gfx/structures';
 import { DioramaFX } from '../fx/diorama';
 import { WaterFX } from '../fx/water';
+import { World3D, tag3 } from '../fx/world3d';
 
 /** round 4 movement tuning: top speed (px/s), ease rates, feet collision half-box, follower spacing, camera lift */
 const SPEED = 100, ACCEL = 16, DECEL = 24, HBX = 5, HBY = 4, FOLLOW_GAP = 15, CAM_DY = 36;
@@ -43,7 +44,7 @@ export class WorldScene extends Phaser.Scene {
   symbols: Symbol[] = []; history: { x: number; y: number; dir: number }[] = []; busy = false; ui!: UIScene; script!: ScriptRunner;
   layer!: Phaser.Tilemaps.TilemapLayer; waterTiles: [number, number, number, number][] = []; dark?: Phaser.GameObjects.RenderTexture; lightImgs: { x: number; y: number; r: number; img?: Phaser.GameObjects.Image; flick: number }[] = [];
   eraser!: Phaser.GameObjects.Image; heroLight = 0; extraSolid = new Set<string>(); initData: any; offInput?: () => void; aura?: Phaser.GameObjects.Container; fxObjs: Record<string, Phaser.GameObjects.GameObject> = {};
-  fx?: any; hdOn = false; hdg?: ReturnType<typeof paintGround>; water?: Phaser.GameObjects.Image; hdStruct = false; trees: Phaser.GameObjects.Image[] = []; nightWindows: [number, number][] = []; tall = new Map<string, Phaser.GameObjects.Image>();
+  fx?: any; w3?: World3D; hdOn = false; hdg?: ReturnType<typeof paintGround>; water?: Phaser.GameObjects.Image; hdStruct = false; trees: Phaser.GameObjects.Image[] = []; nightWindows: [number, number][] = []; tall = new Map<string, Phaser.GameObjects.Image>();
   constructor() { super('World'); }
   init(d: any) { this.initData = d; }
   create() {
@@ -53,6 +54,9 @@ export class WorldScene extends Phaser.Scene {
     if (!this.scene.isActive('Overlay')) this.scene.launch('Overlay');
     if (!this.scene.isActive('UI')) this.scene.launch('UI'); this.ui = this.scene.get('UI') as UIScene; this.scene.bringToTop('UI');
     if (!this.script) this.script = new ScriptRunner(this);
+    // round 4: real 3D diorama (Three.js mirror of this scene's display list); Phaser keeps logic + UI
+    this.w3 = undefined;
+    if (this.game.renderer.type === Phaser.WEBGL && localStorage.getItem('ember_3d') !== '0') { try { this.w3 = World3D.get(this.game, W, H); this.w3.attach(this); } catch (e) { console.warn('3D off', e); this.w3 = undefined; } }
     this.buildTiles();
     this.buildEntities();
     this.buildLighting();
@@ -63,7 +67,7 @@ export class WorldScene extends Phaser.Scene {
     const vw = W / ZOOM, vh = H / ZOOM;
     cam.setBounds(mw < vw ? (mw - vw) / 2 : 0, mh < vh ? (mh - vh) / 2 : 0, Math.max(mw, vw), Math.max(mh, vh));
     this.camX = this.hero.spr.x; this.camY = this.hero.spr.y - CAM_DY; this.look = { x: 0, y: 0 }; cam.centerOn(this.camX, this.camY);
-    cam.setBackgroundColor(this.def.outdoor ? '#1b2a1a' : '#05040a');
+    cam.setBackgroundColor(this.def.outdoor ? '#1b2a1a' : '#05040a'); if (this.w3) cam.setAlpha(0); // alpha 0 (not invisible): Phaser skips drawing but keeps updating fades/shakes
     const preset = this.def.id === 'spire' ? 'sky' : this.def.outdoor ? (this.isNight() ? 'night' : 'outdoor') : (this.def.dark ?? 0) > 0.5 ? 'dungeon' : 'indoor';
     this.fx = diorama(cam, preset);
     if (d.wiped) { const ov: any = this.scene.get('Overlay'); this.time.delayedCall(60, () => ov?.reveal?.(380)); } else if (!d.noFade) cam.fadeIn(450);
@@ -111,14 +115,15 @@ export class WorldScene extends Phaser.Scene {
       const g = paintGround(this, this.def.id, this.grid, propChars, this.def.outdoor); this.hdg = g;
       this.add.image(0, 0, g.key).setOrigin(0).setScale(1 / HD).setDepth(-2);
       if (g.waterKey) {
-        this.water = this.add.image(0, 0, g.waterKey).setOrigin(0).setScale(1 / HD).setDepth(-1);
+        this.water = this.add.image(0, 0, g.waterKey).setOrigin(0).setScale(1 / HD).setDepth(-1); (this.water as any).__water = true;
         if (DioramaFX.quality > 0 && this.game.renderer instanceof Phaser.Renderer.WebGL.WebGLRenderer) { this.water.setPostPipeline(WaterFX); const wf = this.water.getPostPipeline(WaterFX) as any; const n = this.isNight() || !this.def.outdoor; if (wf) { wf.night = n ? 1 : 0; wf.sky = n ? 0x203060 : 0xd8ecff; } }
       }
       this.hdStruct = true;
-      const st = buildStructures(this, this.def.id, this.grid, this.isNight(), g.key, !!g.fresh, !this.def.outdoor);
+      const st = buildStructures(this, this.def.id, this.grid, this.isNight(), g.key, !!g.fresh, !this.def.outdoor, !!this.w3);
       for (const hs of st.houses) {
-        this.add.image(hs.x0 * TS - OH / HD, (hs.y1 + 1) * TS, hs.key).setOrigin(0, 1).setScale(1 / HD).setDepth(10 + (hs.y1 + 1) * TS - 1);
-        if (hs.chimney) this.add.particles(hs.x0 * TS - OH / HD + hs.chimney[0] / HD, (hs.y1 + 1) * TS - this.textures.get(hs.key).source[0].height / HD + 1, 'light', { lifespan: 3600, speedY: { min: -9, max: -5 }, speedX: { min: 2, max: 6 }, scale: { start: 0.03, end: 0.16 }, alpha: { start: 0.35, end: 0 }, tint: this.isNight() ? 0x8890b0 : 0xe8e4f0, frequency: 260 }).setDepth(7100);
+        const him = this.add.image(hs.x0 * TS - OH / HD, (hs.y1 + 1) * TS, hs.key).setOrigin(0, 1).setScale(1 / HD).setDepth(10 + (hs.y1 + 1) * TS - 1);
+        const h3 = this.w3 ? (tag3(him, 'skip'), this.w3.addHouse(hs, this.textures.get(hs.key))) : undefined;
+        if (hs.chimney) { const pe = this.add.particles(hs.x0 * TS - OH / HD + hs.chimney[0] / HD, (hs.y1 + 1) * TS - this.textures.get(hs.key).source[0].height / HD + 1, 'light', { lifespan: 3600, speedY: { min: -9, max: -5 }, speedX: { min: 2, max: 6 }, scale: { start: 0.03, end: 0.16 }, alpha: { start: 0.35, end: 0 }, tint: this.isNight() ? 0x8890b0 : 0xe8e4f0, frequency: 260 }).setDepth(7100); if (h3) tag3(pe, 'fx', h3.ridgeZ - 2, h3.ridgeY + 16); }
         if (this.isNight()) for (const [wx, wy] of hs.windows) { const X = hs.x0 * TS - OH / HD + wx / HD, Y = (hs.y1 + 1) * TS - this.textures.get(hs.key).source[0].height / HD + wy / HD; (this.def.lights = this.def.lights || []); this.nightWindows.push([X, Y]); }
       }
       for (const t of st.trees) {
@@ -310,7 +315,11 @@ export class WorldScene extends Phaser.Scene {
     return { c, a };
   }
   drawLighting() {
-    if (!this.dark) return; const { c, a } = this.darkness();
+    if (!this.dark) return;
+    if (this.w3) { // 3D mode: the light map lives in World3D; only the additive glow sprites are driven here
+      this.dark.setVisible(false); const { a } = this.darkness(); const t = this.time.now / 1000;
+      for (const l of this.lightImgs) { const f = 1 + Math.sin(t * 7 + l.flick) * 0.05 + Math.sin(t * 13.3 + l.flick) * 0.04; l.img?.setAlpha(a <= 0.01 ? 0 : Math.min(0.4, a * 0.6) * f).setScale(l.r * 0.28 * f); }
+      return; } const { c, a } = this.darkness();
     this.dark.clear(); if (a <= 0.01) { this.dark.setVisible(false); this.lightImgs.forEach(l => l.img?.setAlpha(0)); return; }
     this.dark.setVisible(true);
     // colour light map, multiplied over the scene: ambient tint + additive coloured point lights (with flicker)
@@ -333,7 +342,7 @@ export class WorldScene extends Phaser.Scene {
   /** Foreground silhouettes (OT2 framing): dark, out-of-focus foliage hugging the bottom corners, with stronger parallax than the world. */
   buildForeground() {
     this.fgSil = [];
-    if (!this.def.outdoor || DioramaFX.quality === 0 || !this.textures.exists('hdtrees') || this.def.id === 'spire') return;
+    if (this.w3 || !this.def.outdoor || DioramaFX.quality === 0 || !this.textures.exists('hdtrees') || this.def.id === 'spire') return;
     const kind = this.grid.some(r => r.includes('P')) ? 'pine' : this.grid.some(r => r.includes('5') || r.includes('6')) ? 'aut' : 'oak';
     const tint = this.isNight() ? 0x05070f : 0x0b1a10;
     const mw = this.grid[0].length * 16;
@@ -377,7 +386,7 @@ export class WorldScene extends Phaser.Scene {
     for (let y = 0; y < this.grid.length; y++) for (let x = 0; x < this.grid[0].length; x++) if (LEGEND[this.grid[y][x]]?.anim) water.push([x, y]);
     if (this.def.outdoor && !this.isNight() && this.def.id !== 'spire') {
       for (let i = 0; i < Math.ceil(mw * mh / 60000); i++) {
-        const c = this.add.image(Math.random() * mw, Math.random() * mh, 'light').setTint(0x10182a).setAlpha(0.13).setScale(1.3 + Math.random() * 0.8, 0.9 + Math.random() * 0.5).setDepth(4990);
+        const c = tag3(this.add.image(Math.random() * mw, Math.random() * mh, 'light'), 'ground').setTint(0x10182a).setAlpha(0.13).setScale(1.3 + Math.random() * 0.8, 0.9 + Math.random() * 0.5).setDepth(4990);
         const drift = () => { const sp = 6 + Math.random() * 4; this.tweens.add({ targets: c, x: mw + 220, duration: ((mw + 220 - c.x) / sp) * 1000, onComplete: () => { c.x = -220; c.y = Math.random() * mh; drift(); } }); };
         drift();
       }

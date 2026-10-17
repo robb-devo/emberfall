@@ -58,11 +58,14 @@ export class OverlayScene extends Phaser.Scene {
   shatter(): Promise<void> {
     return new Promise(done => {
       let settled = false; const res = () => { if (!settled) { settled = true; done(); } };
-      const go = (img?: HTMLImageElement) => {
+      const g3 = (this.scene.get('World') as any)?.w3?.grab?.() as HTMLCanvasElement | null;
+      const go = (img0?: HTMLImageElement) => {
+        let img: any = img0;
+        if (img0 && g3) { const c = document.createElement('canvas'); c.width = img0.width; c.height = img0.height; const x = c.getContext('2d')!; x.drawImage(g3, 0, 0, c.width, c.height); x.drawImage(img0, 0, 0); img = c; }
         // a snapshot that arrives after the fallback timeout would freeze a stale frame over the battle: skip it
         if (!img || !this.sys.isActive() || settled) { res(); return; }
         if (this.textures.exists('__snap')) this.textures.remove('__snap');
-        this.textures.addImage('__snap', img);
+        if (img instanceof HTMLCanvasElement) this.textures.addCanvas('__snap', img); else this.textures.addImage('__snap', img);
         const root = this.add.container(0, 0).setDepth(40);
         const black = this.add.rectangle(0, 0, W, H, 0x05040c, 1).setOrigin(0); root.add(black);
         const fast = DioramaFX.quality === 0, cols = fast ? 4 : 6, rows = fast ? 6 : 10, cw = W / cols, ch = H / rows;
