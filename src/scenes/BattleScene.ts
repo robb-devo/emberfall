@@ -13,7 +13,7 @@ import { ensureDoll, ensureDollHd, specOf, ADULT_FIT } from '../systems/paperdol
 import { TUTORIALS } from '../data/story';
 import { ensureBackdrop } from '../gfx/backdrop';
 
-interface Foe { def: EnemyDef; name: string; hp: number; mp: number; spr: Phaser.GameObjects.Sprite; x: number; y: number; alive: boolean; buffDef: number; buffAtk: number; poisoned: boolean; charged: boolean; stolen?: boolean; asleep?: number; chargeAct?: any }
+interface Foe { def: EnemyDef; name: string; hp: number; mp: number; spr: Phaser.GameObjects.Sprite; x: number; y: number; alive: boolean; buffDef: number; buffAtk: number; poisoned: boolean; charged: boolean; stolen?: boolean; asleep?: number; chargeAct?: any; lastCrit?: boolean }
 interface Act { who: 'p' | 'e'; idx: number; kind: 'attack' | 'skill' | 'item' | 'defend' | 'flee'; skill?: string; item?: string; target?: number; spd: number }
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 const fast = () => !!(window as any).__EMBER?.fast;
@@ -135,9 +135,48 @@ export class BattleScene extends Phaser.Scene {
     this.tweens.add({ targets: t, alpha: 0, delay: 800, duration: 300, onComplete: () => t.destroy() });
   }
   /** Adult ON: dark-red droplets with gravity on hits and kills (gore is part of the single Adult switch). */
-  gore(x: number, y: number, n: number, speed = 240) {
+  gore(x: number, y: number, n: number, speed = 240, t?: Foe) {
     if (!Mature.on) return;
-    this.add.particles(x, y, 'px', { lifespan: 900, speed: { min: speed * 0.3, max: speed }, angle: { min: 200, max: 340 }, gravityY: 700, scale: { start: 3.2, end: 1.2 }, tint: [0x8a0a12, 0xb0141c, 0x5a0408], alpha: { start: 1, end: 0.2 }, emitting: false }).setDepth(91).explode(n);
+    const tint = bloodOf(t?.def.id), glow = tint.glow;
+    this.add.particles(x, y, 'px', { lifespan: 900, speed: { min: speed * 0.3, max: speed }, angle: { min: 200, max: 340 }, gravityY: 700, scale: { start: 3.2, end: 1.2 }, tint: tint.c, alpha: { start: 1, end: 0.2 }, emitting: false, ...(glow ? { blendMode: 'ADD' } : {}) }).setDepth(91).explode(n);
+  }
+  /** Round 5 (Adult): a blood pool on the battle floor that spreads and stays until the battle ends. */
+  bloodPool(x: number, y: number, size: number, t?: Foe) {
+    if (!Mature.on) return;
+    ensureGoreTex(this); const b = bloodOf(t?.def.id);
+    const p = this.add.image(x + rand(-14, 14), y - 4, 'gore_pool').setTint(b.c[0]).setAlpha(b.glow ? 0.55 : 0.85).setDepth(1.5 + y / 1000).setScale(0.05, 0.02).setAngle(rand(-8, 8));
+    if (b.glow) p.setBlendMode(Phaser.BlendModes.ADD);
+    this.tweens.add({ targets: p, scaleX: size * rand(0.85, 1.15), scaleY: size * 0.38, duration: 1400, ease: 'Cubic.out' });
+    const shine = this.add.image(p.x - 10, p.y - 2, 'gore_pool').setTint(0xffffff).setAlpha(0).setScale(size * 0.25, size * 0.06).setDepth(p.depth + 0.001).setBlendMode(Phaser.BlendModes.ADD);
+    this.tweens.add({ targets: shine, alpha: 0.12, delay: 600, duration: 800 });
+  }
+  /** Round 5 (Adult): the killing blow tears the monster apart – sprite chunks fly, bleed and land on the floor. */
+  dismember(t: Foe, crit: boolean) {
+    const spr = t.spr, fr = spr.frame, W0 = fr.cutWidth, H0 = fr.cutHeight; const b = bloodOf(t.def.id);
+    const n = crit ? 4 : 3; const cuts: [number, number, number, number][] = [];
+    // irregular horizontal slabs (head / torso / legs), the middle one split in two on crits
+    const ys = [0, Math.round(H0 * rand(0.3, 0.42)), Math.round(H0 * rand(0.62, 0.72)), H0];
+    for (let k = 0; k < 3; k++) { const y0 = ys[k], h = ys[k + 1] - y0; if (k === 1 && n === 4) { const xm = Math.round(W0 * rand(0.4, 0.6)); cuts.push([0, y0, xm, h], [xm, y0, W0 - xm, h]); } else cuts.push([0, y0, W0, h]); }
+    const floorY = t.y + 6;
+    cuts.forEach(([cx, cy, cw, ch], i) => {
+      const c = this.add.sprite(spr.x, spr.y, spr.texture.key, fr.name).setOrigin(spr.originX, spr.originY).setScale(spr.scaleX, spr.scaleY).setFlipX(spr.flipX).setDepth(spr.depth + 0.02).setCrop(cx, cy, cw, ch).setTint(0xffd0d0);
+      const dir = (cx + cw / 2 < W0 / 2 ? -1 : 1) * (cuts.length === 3 ? (i === 1 ? 0.4 : i === 0 ? -0.6 : 0.8) : 1);
+      const vx = dir * rand(80, 200), up = rand(140, 260) * (i === 0 ? 1.3 : 1);
+      const trail = this.add.particles(0, 0, 'px', { follow: c, followOffset: { x: 0, y: -(H0 - cy - ch / 2) * spr.scaleY }, lifespan: 500, speed: 20, gravityY: 500, scale: { start: 2.4, end: 0.6 }, tint: b.c, frequency: 26, ...(b.glow ? { blendMode: 'ADD' } : {}) }).setDepth(91);
+      const land = floorY + rand(-6, 10) + (H0 - cy - ch) * spr.scaleY * 0.0;
+      this.tweens.add({ targets: c, x: c.x + vx, angle: dir * rand(90, 260), duration: 760, ease: 'Linear' });
+      this.tweens.add({ targets: c, y: c.y - up, duration: 300, ease: 'Quad.out', onComplete: () => this.tweens.add({ targets: c, y: land + (H0 - cy - ch) * spr.scaleY * 0.5, duration: 460, ease: 'Quad.in', onComplete: () => {
+        trail.stop(); this.bloodPool(c.x, land, 0.55, t); this.gore(c.x, land - 6, 8, 120, t);
+        this.tweens.add({ targets: c, alpha: 0.85, scaleY: c.scaleY * 0.9, duration: 200 });
+      } }) });
+    });
+    spr.setVisible(false);
+  }
+  /** Round 5 (Adult): red edge vignette on brutal kills */
+  bloodVignette() {
+    ensureGoreTex(this);
+    const v = this.add.image(W / 2, H / 2, 'gore_vig').setDisplaySize(W, H).setDepth(95).setAlpha(0).setTint(0xb00010);
+    this.tweens.add({ targets: v, alpha: 0.75, duration: 90, yoyo: true, hold: 260, onComplete: () => v.destroy() });
   }
   burst(x: number, y: number, tint: number[], n = 24, speed = 220, tex = 'spark') {
     this.add.particles(x, y, tex, { lifespan: 600, speed: { min: speed * 0.3, max: speed }, scale: { start: 2.2, end: 0 }, tint, blendMode: 'ADD', emitting: false }).setDepth(90).explode(n);
@@ -354,7 +393,8 @@ export class BattleScene extends Phaser.Scene {
   async damageFoe(t: Foe, dmg: number, crit: boolean, weak = false) {
     t.hp -= dmg; if (t.asleep && dmg > 0 && Math.random() < 0.5) { t.asleep = 0; this.time.delayedCall(120, () => t.spr.clearTint()); } this.hitFlash(t.spr);
     this.tweens.add({ targets: t.spr, x: t.x + 14, yoyo: true, repeat: 2, duration: 40, onComplete: () => t.spr.setX(t.x) });
-    this.burst(t.x, t.y - t.spr.displayHeight / 2, [0xffffff, 0xffe8a0], crit ? 30 : 10, crit ? 300 : 160, 'px'); this.gore(t.x, t.y - t.spr.displayHeight / 2, crit ? 26 : 12);
+    this.burst(t.x, t.y - t.spr.displayHeight / 2, [0xffffff, 0xffe8a0], crit ? 30 : 10, crit ? 300 : 160, 'px'); this.gore(t.x, t.y - t.spr.displayHeight / 2, crit ? 26 : 12, 240, t);
+    if (crit && t.hp > dmg) this.bloodPool(t.x, t.y, 0.7, t); t.lastCrit = crit;
     if (dmg > 0) this.cameras.main.shake(120, 0.005 + (crit ? 0.01 : 0));
     if (crit || weak) this.punch(t.x, t.y - t.spr.displayHeight / 2, crit ? 1.4 : 1);
     this.popNum(t.x, t.y - t.spr.displayHeight - 10, String(dmg), crit ? '#ffd070' : '#ffffff', crit);
@@ -378,8 +418,13 @@ export class BattleScene extends Phaser.Scene {
   async killFoe(t: Foe) {
     t.alive = false; t.hp = 0; Audio.sfx('die'); this.punch(t.x, t.y - t.spr.displayHeight / 2, t.def.boss ? 2 : 0.8);
     this.tweens.killTweensOf(t.spr); t.spr.setTint(0xff4060);
-    this.burst(t.x, t.y - t.spr.displayHeight / 2, [0xff6080, 0xffd070, 0xffffff], t.def.boss ? 120 : 30, t.def.boss ? 400 : 200); this.gore(t.x, t.y - t.spr.displayHeight / 2, t.def.boss ? 90 : 40, 380);
+    this.burst(t.x, t.y - t.spr.displayHeight / 2, [0xff6080, 0xffd070, 0xffffff], t.def.boss ? 120 : 30, t.def.boss ? 400 : 200); this.gore(t.x, t.y - t.spr.displayHeight / 2, t.def.boss ? 90 : 40, 380, t);
     if (t.def.boss) { this.cameras.main.shake(1500, 0.03); this.cameras.main.flash(800, 255, 200, 140); Audio.sfx('quake'); }
+    if (Mature.on) { // round 5: kills leave a pool; normal foes are torn apart, bosses collapse into a spreading pool
+      this.bloodPool(t.x, t.y, t.def.boss ? 2.2 : 1.1, t); if (t.lastCrit) this.bloodVignette();
+      if (!t.def.boss) { t.spr.clearTint(); this.dismember(t, !!t.lastCrit); }
+      else this.tweens.add({ targets: t.spr, alpha: 0, scaleX: t.spr.scaleX * 1.4, scaleY: 0, duration: 1600, ease: 'Cubic.in' });
+    } else
     this.tweens.add({ targets: t.spr, alpha: 0, scaleX: t.spr.scaleX * 1.4, scaleY: 0, duration: t.def.boss ? 1600 : 450, ease: 'Cubic.in' });
     await this.msg(`${t.name} is defeated!`, t.def.boss ? 1600 : 450);
   }
@@ -467,7 +512,7 @@ export class BattleScene extends Phaser.Scene {
     await this.msg(dmg ? `${m.name} takes ${dmg} damage!` : `${m.name} takes no damage!`, 450);
     if (m.hp <= 0) await this.downMember(i);
   }
-  async downMember(i: number) { const m = this.party[i]; this.pSpr[i].setTint(0x553355); this.tweens.add({ targets: this.pSpr[i], angle: 90, duration: 300 }); Audio.sfx('die'); await this.msg(`${m.name} falls!`, 600); this.buildCards(); }
+  async downMember(i: number) { const m = this.party[i]; this.pSpr[i].setTint(0x553355); if (Mature.on) this.bloodPool(this.pSpr[i].x - 20, this.pSpr[i].y, 0.8); this.tweens.add({ targets: this.pSpr[i], angle: 90, duration: 300 }); Audio.sfx('die'); await this.msg(`${m.name} falls!`, 600); this.buildCards(); }
   // ------------------------------------------------------------------ end
   async checkEnd() {
     if (this.over) return;
@@ -497,5 +542,30 @@ export class BattleScene extends Phaser.Scene {
     while (Input.stack.length) Input.stack.pop();
     this.cameras.main.fadeOut(fast() ? 50 : 450);
     this.time.delayedCall(fast() ? 60 : 480, () => { const cb = this.d.onEnd; this.scene.stop(); cb?.(r); });
+  }
+}
+
+/** Round 5 (Adult): material-aware blood – what pours out depends on what you killed. */
+function bloodOf(id?: string): { c: number[]; glow?: boolean } {
+  if (!id) return { c: [0x8a0a12, 0xb0141c, 0x5a0408] };
+  if (/glimmer|slime|blob/i.test(id)) return { c: [0x3a90d8, 0x60b8f0, 0x1a5a9a] };                 // goo
+  if (/jelly|lantern/i.test(id)) return { c: [0x40e0d0, 0x90fff0, 0x109090], glow: true };
+  if (/warden|golem|imp|cinder|ember/i.test(id)) return { c: [0xff7a20, 0xffc050, 0xc03010], glow: true }; // embers
+  if (/choir|acolyte|cantor|siren/i.test(id)) return { c: [0x1a1418, 0x2a2026, 0x08060a] };          // black tar
+  if (/moss|bramble|wisp|shroom|spore|thorn/i.test(id)) return { c: [0x5a8a2a, 0x8ab040, 0x2a4a10] }; // sap
+  if (/drowned|sailor|ghost/i.test(id)) return { c: [0x4a3a2a, 0x6a5040, 0x2a1a10] };                // brine-rot
+  if (/crab/i.test(id)) return { c: [0x6a8aa0, 0x9ab8c8, 0x3a5060] };
+  return { c: [0x8a0a12, 0xb0141c, 0x5a0408] };
+}
+function ensureGoreTex(sc: Phaser.Scene) {
+  if (!sc.textures.exists('gore_pool')) {
+    const c = sc.textures.createCanvas('gore_pool', 128, 128)!; const g = c.getContext();
+    g.fillStyle = '#fff'; g.beginPath(); for (let a = 0; a <= 64; a++) { const t = a / 64 * Math.PI * 2, r = 52 + Math.sin(t * 5) * 6 + Math.sin(t * 9 + 1) * 4; const x = 64 + Math.cos(t) * r, y = 64 + Math.sin(t) * r; if (a) g.lineTo(x, y); else g.moveTo(x, y); } g.fill();
+    for (let k = 0; k < 7; k++) { const t = k * 0.9, r = 60 + (k % 3) * 4; g.beginPath(); g.arc(64 + Math.cos(t) * r, 64 + Math.sin(t) * r, 4 + (k % 3) * 2, 0, Math.PI * 2); g.fill(); }
+    c.refresh();
+  }
+  if (!sc.textures.exists('gore_vig')) {
+    const c = sc.textures.createCanvas('gore_vig', 256, 256)!; const g = c.getContext();
+    const gr = g.createRadialGradient(128, 128, 60, 128, 128, 180); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(1, 'rgba(255,255,255,1)'); g.fillStyle = gr; g.fillRect(0, 0, 256, 256); c.refresh();
   }
 }

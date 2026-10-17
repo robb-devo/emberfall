@@ -10,6 +10,7 @@ import type { Look, Member } from './state';
 import { Pix } from './art';
 import { ensureDoll2 } from '../gfx/doll2';
 import { ensureDoll3, FH3 } from '../gfx/doll3';
+import { marksKey } from '../gfx/bodymarks';
 
 export const SKIN = [0xf8d9bc, 0xefc19a, 0xd69c6c, 0xa86d43, 0x74472a, 0xc9e0f0];
 export const SKIN_NAMES = ['Porcelain', 'Fair', 'Honey', 'Bronze', 'Umber', 'Starlit'];
@@ -85,7 +86,7 @@ export interface DollSpec { look: Look; equip: Record<string, string | undefined
 export function specOf(m: Member): DollSpec { return { look: m.look, equip: m.equip as any, voc: m.voc }; }
 export function dollKey(sp: DollSpec) {
   const l = sp.look; const e = sp.equip;
-  return `doll_${l.body}${l.skin}${l.hairStyle}${l.hair}${l.eyes}${l.face}${l.outfit}${l.outfit2}_${e.weapon || ''}_${e.shield || ''}_${e.head || ''}_${e.armor || ''}_${e.acc || ''}_f${l.fig || 0}${l.child ? 'c' : ''}${sp.voc && !e.armor ? (Mature.on ? 'n' : 'u') : ''}`;
+  return `doll_${l.body}${l.skin}${l.hairStyle}${l.hair}${l.eyes}${l.face}${l.outfit}${l.outfit2}_${e.weapon || ''}_${e.shield || ''}_${e.head || ''}_${e.armor || ''}_${e.acc || ''}_f${l.fig || 0}${l.child ? 'c' : ''}${marksKey(l.bodyMarks)}${sp.voc && !e.armor ? (Mature.on ? 'n' : 'u') : ''}`;
 }
 
 class Grid {

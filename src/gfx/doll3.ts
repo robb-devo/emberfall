@@ -12,12 +12,14 @@ import { ITEMS } from '../data/items';
 import { Mature } from '../systems/mature';
 import { SKIN, HAIR, EYES, OUTFIT, HAIR_STYLES, shade, type DollSpec } from '../systems/paperdoll';
 import { Canvas, weapon, shield } from './doll2';
+import { drawMarks, type MarkRegion } from './bodymarks';
 
 export const FW3 = 32, FH3 = 64;
 type Dir = 'F' | 'S' | 'B';
 type Fn = (x: number, y: number) => boolean;
 const HX = 16, HY = 9.8; // head centre
 
+const mix2 = (a: number, b: number, t: number) => { const f = (k: number) => Math.round(((a >> k) & 255) * (1 - t) + ((b >> k) & 255) * t); return (f(16) << 16) | (f(8) << 8) | f(0); };
 function inHead(x: number, y: number, rx: number, ry: number, cy = HY, cx = HX) { return ((x + 0.5 - cx) / rx) ** 2 + ((y + 0.5 - cy) / ry) ** 2 < 1; }
 
 function hairMask(style: string, d: Dir, fem: boolean): { front: Fn; back?: Fn } {
@@ -120,6 +122,20 @@ function head(cv: Canvas, d: Dir, skin: number, fem: boolean) {
   }
 }
 
+/** shade existing pixels (no new part, so no occlusion lines): dl > 0 highlight, < 0 shadow, soft falloff */
+function light(cv: Canvas, cx: number, cy: number, rx: number, ry: number, dl: number) {
+  for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++) for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++) {
+    if (x < 0 || y < 0 || x >= cv.W || y >= cv.H) continue; const i = y * cv.W + x; if (cv.col[i] < 0 || cv.flat[i]) continue;
+    const r = ((x + 0.5 - cx) / rx) ** 2 + ((y + 0.5 - cy) / ry) ** 2; if (r > 1) continue; cv.lit[i] += dl * (1 - r * 0.6);
+  }
+}
+/** darken body pixels (drawn before part index o0) that touch a later part horizontally */
+function contact(cv: Canvas, o0: number) {
+  const hit: number[] = [];
+  for (let y = 0; y < cv.H; y++) for (let x = 1; x < cv.W - 1; x++) { const i = y * cv.W + x; if (cv.col[i] < 0 || cv.ord[i] > o0 || cv.flat[i]) continue;
+    if (cv.ord[i - 1] > o0 && cv.col[i - 1] >= 0 || cv.ord[i + 1] > o0 && cv.col[i + 1] >= 0) hit.push(i); }
+  for (const i of hit) cv.lit[i] -= 0.9;
+}
 function frame(sp: DollSpec, d: Dir, step: number, cv: Canvas) {
   const L = sp.look, E = sp.equip;
   const skin = SKIN[L.skin % SKIN.length], hair = HAIR[L.hair % HAIR.length], eye = EYES[L.eyes % EYES.length];
@@ -156,52 +172,56 @@ function frame(sp: DollSpec, d: Dir, step: number, cv: Canvas) {
     if (shd) shield(cv, shd, 19.5, 31);
     // back leg + back arm
     const bk = st ? 3.5 * fwd : 0.5;
-    cv.cyl(16.6, 35, 16.6 + bk * 0.5, 48, TR - 0.3, shade(pants, 0.82)); cv.cyl(16.6 + bk * 0.5, 48, 16.6 + bk, 59, 1.7, shade(shin, 0.82));
+    cv.cyl(16.6, 35, 16.6 + bk * 0.5, 48, TR, shade(pants, 0.82)); cv.cyl(16.6 + bk * 0.5, 48, 16.6 + bk, 59, 1.7, shade(shin, 0.82));
     cv.box(Math.round(16.6 + bk) - 2, 59, 4, 3, shade(skinBody ? skin : boot, 0.85), 0, 1);
     cv.cyl(17.5, 19, 17.5 - sw * 2.4, 28, 1.6, shade(sleeve, 0.8)); cv.cyl(17.5 - sw * 2.4, 28, 17.5 - sw * 3.4, 36, 1.3, shade(fore, 0.8)); cv.ell(17.5 - sw * 3.4, 37.2, 1.2, 1.3, shade(skin, 0.85));
     // torso (side silhouette: chest forward, back straight)
     const chestF = fem ? 12.6 : sturdy ? 12.4 : 13.0;
-    if (robe) cv.poly([[13.6, 17], [19, 17], [20.6, 59], [11.6, 59]], body);
-    else cv.poly([[14, 16.5], [19, 16.5], [19.6, 24], [18.6, 30], [19.8, 35], [19.2, 37.5], [13.4, 37.5], [13.8, 32], [14.4, 29], [chestF, 23], [13.2, 19]], body);
+    if (robe) cv.poly([[13, 17], [19.6, 17], [21.8, 59], [10.4, 59]], body);
+    else cv.poly([[13.4, 16.5], [19.4, 16.5], [20.2, 24], [19.2, 30], [20.6, 35], [20, 37.5], [12.8, 37.5], [13.2, 32], [13.8, 29], [chestF - 0.6, 23], [12.6, 19]], body);
+    if (!robe) cv.ell(16.8, 18.6, 2.6, 1.8, sleeve, undefined, 0.35); // shoulder cap
     if (fem && (nude || undies)) cv.ell(13.4, 23, 1.6, 1.9, skin, undefined, 0.2); // bust profile
     if (!robe && !skinBody) { cv.box(13.6, 31, 6, 1, jerkin ? leather : trim, 0.2); }
     if (plate) { cv.ell(16.5, 18.6, 3, 2.2, shade(body, 1.1)); for (let y = 21; y < 30; y += 2) cv.box(13.6, y, 6, 1, shade(body, 1.2), 0.3); }
     if (jerkin) cv.box(14.4, 17, 1, 13, trim, 0.2);
     // front leg
     const fl = st ? -3.5 * fwd : -0.3;
-    cv.cyl(15.6, 35, 15.6 + fl * 0.5, 48, TR, pants); cv.cyl(15.6 + fl * 0.5, 48, 15.6 + fl, 59, 1.8, shin);
+    cv.cyl(15.6, 35, 15.6 + fl * 0.5, 48, TR + 0.3, pants); cv.cyl(15.6 + fl * 0.5, 48, 15.6 + fl, 59, 2, shin);
     cv.box(Math.round(15.6 + fl) - 3, 59, 5, 3, skinBody ? skin : boot, 0.1, 1); if (!skinBody) cv.box(Math.round(15.6 + fl) - 3, 59, 5, 1, shade(boot, 1.3), 0.5);
-    if (robe) cv.poly([[12.4, 32], [19.6, 32], [21, 60], [11, 60]], body, -0.1);
+    if (robe) cv.poly([[11.8, 32], [20.2, 32], [22.2, 60], [10, 60]], body, -0.1);
     if (undies) { cv.box(13.6, 33, 6, 4, uw, 0.1, 1); cv.box(13.6, 33, 6, 1, uw2, 0.3); if (fem) cv.box(13, 21, 5, 3, uw, 0.15, 1); }
     if (nude) { cv.set(13.6, 28, skinD, 0, true); cv.set(19.4, 35.4, skinD, 0, true); cv.set(19, 36.4, skinD, 0, true); // navel + buttock crease
       if (fem) cv.set(12.2, 23.4, shade(skin, 0.7), 0, true); }
     // neck + head
     cv.box(14.5, 13.5, 3.5, 4, skin, -0.1);
     head(cv, d, skin, fem); face(cv, d, L.face, eye, skin, hair, fem);
+    drawMarks(cv, L.bodyMarks, { face: [13.6, 11.6], chest: [14.4, 21], abdomen: [14.6, 28], legR: [15.6, 42] }, skin);
     paintHair(cv, hm.front, hair, d); headgear(cv, hd, d);
     // near arm + weapon
     const ex = 15.6 - sw * 2.6, hx = 15.2 - sw * 3.6, hy = 37.4;
     if (wpn) weapon(cv, wpn, Math.round(hx) - 1, Math.round(hy), d);
     cv.cyl(15.6, 19, ex, 28, 1.7, sleeve); cv.cyl(ex, 28, hx, 36, 1.4, fore); cv.ell(hx, hy, 1.3, 1.4, skin);
+    drawMarks(cv, L.bodyMarks, { armR: [(15.6 + ex) / 2, 23.6], foreR: [(ex + hx) / 2, 32.4], shoulderR: [16, 19] }, skin);
     if (acc?.type === 'amulet') cv.set(13.6, 19, acc.c1, 0.6, true);
     return;
   }
   // ---------------------------------------------------------------- front / back
   const F = d === 'F';
+  const cp = step === 0 ? (F ? 0.6 : -0.6) : 0; // contrapposto: hips shift toward the weight leg, shoulders counter-tilt
   const shY = 16.8;
   const lsx = HX - SW + 0.9, rsx = HX + SW - 0.9;                 // shoulder joints (viewer's left/right)
-  const lex = HX - SW - 0.7, rex = HX + SW + 0.7;                 // elbows
-  const lhx = Math.min(HX - SW - 0.4, HX - HW - 1.4), rhx = Math.max(HX + SW + 0.4, HX + HW + 1.4); // hands (hips flare out on women)
+  const lex = HX - SW - 1.1, rex = HX + SW + 1.1;                 // elbows
+  const lhx = Math.min(HX - SW - 0.8, HX - HW - 1.9), rhx = Math.max(HX + SW + 0.8, HX + HW + 1.9); // hands (hips flare out on women)
   const ls = F ? -sw : sw, rs = F ? sw : -sw;                       // arm swing (y offset)
-  const lhy = 37 + ls, rhy = 37 + rs;
+  const lhy = 37 + ls + cp * 0.6, rhy = 37 + rs - cp * 0.4;
   if (capeC >= 0 && F) cv.poly([[HX - SW, 18], [HX + SW, 18], [HX + SW + 2, 56], [HX - SW - 2, 56]], shade(capeC, 0.8), -0.4);
   if (hm.back && F) paintHair(cv, hm.back, hair, d);
   if (!F && wpn) weapon(cv, wpn, Math.round(rhx), Math.round(rhy), d);
   if (!F && shd) shield(cv, shd, lhx - 1, 31);
   // legs: thigh + shin, lifted foot on step frames
-  const lift = (n: number) => (step === 0 ? 0 : (step === 1) === (n === 0) ? 1.6 : 0);
+  const lift = (n: number) => (step === 0 ? (n === 0 ? 0.6 : 0) : (step === 1) === (n === 0) ? 1.6 : 0);
   for (let n = 0; n < 2; n++) {
-    const up = lift(n), x = n ? HX + LX : HX - LX, kx = x + (n ? -0.2 : 0.2), fx = x + (n ? 0.2 : -0.2);
+    const up = lift(n), x = (n ? HX + LX : HX - LX) + cp, kx = x + (n ? -0.2 : 0.2) + (n === 0 && step === 0 ? 0.5 : 0), fx = x + (n ? 0.2 - cp : -0.2 - (step === 0 ? 0.8 : 0));
     const pc = n ? shade(pants, 0.88) : pants, sc = n ? shade(shin, 0.88) : shin;
     cv.cyl(x, 35, kx, 48 - up * 0.5, TR, pc); cv.cyl(kx, 48 - up * 0.5, fx, 59.5 - up, 1.8, sc);
     cv.box(Math.round(fx) - 2, 59 - Math.round(up), 4, 3, skinBody ? (n ? shade(skin, 0.9) : skin) : boot, n ? -0.2 : 0.1, 1);
@@ -209,54 +229,93 @@ function frame(sp: DollSpec, d: Dir, step: number, cv: Canvas) {
     if (!skinBody && !robe) cv.box(Math.round(kx) - 2, 52 - Math.round(up * 0.6), 4, 1, shade(boot, 1.2), 0.3); // boot cuff
   }
   // torso
-  const torso: [number, number][] = [[HX - SW, shY], [HX + SW, shY], [HX + CW, 24], [HX + WW, 30], [HX + HW, 35], [HX + HW - 0.6, 37.5], [HX - HW + 0.6, 37.5], [HX - HW, 35], [HX - WW, 30], [HX - CW, 24]];
+  const torso: [number, number][] = [[HX - SW, shY + cp * 0.5], [HX + SW, shY - cp * 0.3], [HX + CW, 24], [HX + WW + cp * 0.4, 30], [HX + HW + cp, 35 - cp * 0.4], [HX + HW - 0.6 + cp, 37.5], [HX - HW + 0.6 + cp, 37.5], [HX - HW + cp, 35 + cp * 0.4], [HX - WW + cp * 0.4, 30], [HX - CW, 24]];
   cv.poly(torso, body);
-  if (robe) cv.poly([[HX - WW - 0.4, 29], [HX + WW + 0.4, 29], [HX + HW + 2.4, 60], [HX - HW - 2.4, 60]], body, -0.05);
+  // form shading on top of the flat torso: deltoids, chest planes, hip bones – reads as a body, not a block
+  if (!robe) {
+    light(cv, HX - SW + 1.4, shY + 1.2, 2.2, 1.6, 0.55); light(cv, HX + SW - 1.4, shY + 1.2, 2.2, 1.6, 0.2);   // deltoid highlights
+    if (F && !plate) { light(cv, HX - 2.2, 20.8, 2.4, 1.4, 0.35); if (!fem) light(cv, HX, 24.2, 4.4, 0.6, -0.55); } // chest plane + under-pec shadow
+    if (skinBody && !fem) { light(cv, HX - 0.8, 27.6, 1.4, 2.4, 0.3); }                                                  // abdomen
+    light(cv, HX - WW - 0.6 + cp, 31, 1, 4, -0.5); light(cv, HX + WW + 0.6 + cp, 31, 1, 4, -0.6);                    // flanks -> waist/hips read
+  }
+  if (robe) cv.poly([[HX - WW - 0.8, 29], [HX + WW + 0.8, 29], [HX + HW + 3.6, 60], [HX - HW - 3.6, 60]], body, -0.05);
   if (F && !robe && !plate && !skinBody) cv.poly([[HX - 1.6, shY], [HX + 1.6, shY], [HX, shY + 3.4]], (armor?.type === 'tunic' || !armor) ? skin : trim, -0.2); // collar V
   if (skinBody) {
-    // anatomy-light body shading so a bare torso reads as an adult figure
-    cv.set(HX - 2, 18, skinD, 0, true); cv.set(HX + 2, 18, skinD, 0, true); // collarbones
-    if (undies) {
-      cv.box(Math.round(HX - HW + 0.5), 33, Math.round(HW * 2 - 1), 4, uw, 0.1, 1); cv.box(Math.round(HX - HW + 0.5), 33, Math.round(HW * 2 - 1), 1, uw2, 0.3);
-      if (F && !fem) cv.box(15, 34, 2, 2, shade(uw, 0.88), 0);
-      if (fem) { if (F) { cv.ell(HX - 2.1, 22.6, 1.9, 1.6, uw, undefined, 0.2); cv.ell(HX + 2.1, 22.6, 1.9, 1.6, uw, undefined, 0.1); } else cv.box(HX - CW + 0.5, 22, CW * 2 - 1, 1.6, uw, 0.15); }
-      if (undiesItem) for (const [a, b] of [[HX - 3, 35], [HX + 2, 34], [HX, 36]]) cv.set(a, b, uw2, 0.4, true);
-    } else if (F) {
-      // Adult ON, unclothed (front): simple low-res anatomy. Non-sexual, standing/walking frames only.
-      const nip = shade(skin, 0.66), pub = shade(hair, 0.62);
-      if (fem) {
-        cv.ell(HX - 2.1, 22.6, 1.9, 1.7, skin, undefined, 0.25); cv.ell(HX + 2.1, 22.6, 1.9, 1.7, skin, undefined, 0.05);
-        cv.set(HX - 2.1, 23, nip, 0, true); cv.set(HX + 2.1, 23, nip, 0, true);
-        for (const xx of [-3, -2, -1, 1, 2, 3]) cv.set(HX + xx - (xx < 0 ? 0.1 : -0.1), 24.4, shade(skin, 0.82), 0, true); // under-bust shadow
-        cv.set(HX - WW, 29, skinD, 0, true); cv.set(HX + WW - 1, 29, skinD, 0, true); // waist
-        cv.set(HX, 29, skinD, 0, true);                                                        // navel
-        for (const [a, b] of [[15, 35], [16, 35], [17, 35], [15.5, 36], [16.5, 36]]) cv.set(a, b, pub, 0, true);
+    const cx0 = HX + cp, sh = (f: number) => shade(skin, f);
+    // ---- body definition (underwear and unclothed): collarbones, sternum, muscle planes, hips
+    if (F) {
+      for (const [a, b] of [[-1.5, 18], [-2.5, 18], [-3.5, 18.4], [1.5, 18], [2.5, 18], [3.5, 18.4]]) cv.set(HX + a, b, sh(0.82), 0, true);
+      light(cv, HX - 2.5, 17.4, 2, 0.6, 0.5); light(cv, HX + 2.5, 17.4, 2, 0.6, 0.25);
+      if (!fem) {
+        cv.set(HX, 20.4, sh(0.86), 0, true); cv.set(HX, 21.4, sh(0.86), 0, true);                            // sternum
+        for (const a of [-3.4, -2.4, -1.4, 1.4, 2.4, 3.4]) cv.set(HX + a, 24.2, sh(0.8), 0, true);              // pec line
+        for (let y = 26; y <= 31; y++) cv.set(cx0 * 0.4 + HX * 0.6, y, sh(0.86), 0, true);                   // linea alba
+        for (const yy of [27.4, 29.6]) { cv.set(HX - 1.2, yy, sh(0.88), 0, true); cv.set(HX + 1.6, yy, sh(0.88), 0, true); } // abs
+        cv.set(cx0 - 2.6, 32, sh(0.82), 0, true); cv.set(cx0 - 1.8, 33.2, sh(0.82), 0, true); cv.set(cx0 + 2.6, 32, sh(0.78), 0, true); cv.set(cx0 + 1.8, 33.2, sh(0.78), 0, true); // iliac V
       } else {
-        cv.set(HX - 3, 23.6, skinD, 0, true); cv.set(HX - 2, 24, skinD, 0, true); cv.set(HX + 1, 24, skinD, 0, true); cv.set(HX + 2, 23.6, skinD, 0, true); // pecs
-        cv.set(HX - 2.4, 22.4, nip, 0, true); cv.set(HX + 2, 22.4, nip, 0, true);
-        cv.set(HX, 29, skinD, 0, true);
-        for (const [a, b] of [[15, 34], [16, 34], [17, 34]]) cv.set(a, b, pub, 0, true);
-        cv.set(15.5, 35, shade(skin, 0.78), 0, true); cv.set(16.5, 35, shade(skin, 0.86), 0, true); cv.set(15.5, 36, shade(skin, 0.74), 0, true); cv.set(16.5, 36, shade(skin, 0.8), 0, true);
+        light(cv, cx0 - HW + 1.4, 35, 1.4, 2, 0.35); light(cv, cx0 + HW - 1.4, 35, 1.4, 2, 0.1);                // hip curve
+        cv.set(HX - WW + 0.4, 29, sh(0.8), 0, true); cv.set(HX + WW - 0.6, 29, sh(0.76), 0, true);              // waist
       }
-    } else if (nude) {
-      cv.set(HX - 2, 22, skinD, 0, true); cv.set(HX + 2, 22, skinD, 0, true); // shoulder blades
-      for (let y = 33; y < 38; y++) cv.set(HX, y, shade(skin, 0.74), 0, true); // buttock cleft
-      cv.set(HX - 2, 37.6, skinD, 0, true); cv.set(HX + 2, 37.6, skinD, 0, true);
+      cv.set(cx0 * 0.4 + HX * 0.6, 29.4, sh(0.7), 0, true);                                                     // navel
+    } else {
+      cv.set(HX - 2.4, 21.6, sh(0.84), 0, true); cv.set(HX + 2.4, 21.6, sh(0.8), 0, true); cv.set(HX - 2, 22.6, sh(0.84), 0, true); cv.set(HX + 2, 22.6, sh(0.8), 0, true); // shoulder blades
+      for (let y = 19; y < 31; y += 2) cv.set(HX, y, sh(0.86), 0, true);                                          // spine
+      if (nude) { for (let y = 33; y < 38; y++) cv.set(cx0, y, sh(0.72), 0, true); cv.set(cx0 - 2, 37.6, sh(0.8), 0, true); cv.set(cx0 + 2, 37.6, sh(0.8), 0, true); light(cv, cx0 - 2.4, 35, 1.6, 1.8, 0.35); }
+      cv.set(cx0 - 1.4, 31.6, sh(0.8), 0, true); cv.set(cx0 + 1.4, 31.6, sh(0.8), 0, true);                     // lower-back dimples
     }
+    if (undies) {
+      cv.box(Math.round(cx0 - HW + 0.5), 33, Math.round(HW * 2 - 1), 4, uw, 0.1, 1); cv.box(Math.round(cx0 - HW + 0.5), 33, Math.round(HW * 2 - 1), 1, uw2, 0.3);
+      if (F && !fem) cv.box(Math.round(cx0 - 1), 34, 2, 2, shade(uw, 0.88), 0);
+      if (fem) { if (F) { cv.ell(HX - 2.1, 22.6, 1.9, 1.6, uw, undefined, 0.2); cv.ell(HX + 2.1, 22.6, 1.9, 1.6, uw, undefined, 0.1); } else cv.box(HX - CW + 0.5, 22, CW * 2 - 1, 1.6, uw, 0.15); }
+      if (undiesItem) for (const [a, b] of [[cx0 - 3, 35], [cx0 + 2, 34], [cx0, 36]]) cv.set(a, b, uw2, 0.4, true);
+    } else if (F) {
+      // Adult ON, unclothed, front: simple low-res anatomy in a neutral standing pose (matter-of-fact, like a
+      // character-creator body; non-sexual). Only ever reached for adult party members on the doll3 set.
+      const nip = shade(mix2(skin, 0x8a3a3a, 0.35), 0.62), areola = shade(mix2(skin, 0xa05a50, 0.3), 0.82), pub = shade(hair, 0.55), pubL = shade(hair, 0.75);
+      if (fem) {
+        cv.ell(HX - 2.1, 22.6, 2, 1.8, skin, undefined, 0.3); cv.ell(HX + 2.1, 22.6, 2, 1.8, skin, undefined, 0.05);
+        cv.set(HX - 2.1, 22.4, areola, 0, true); cv.set(HX + 2.1, 22.4, areola, 0, true); cv.set(HX - 2.1, 23.2, nip, 0, true); cv.set(HX + 2.1, 23.2, nip, 0, true);
+        for (const xx of [-3, -2, -1, 1, 2, 3]) cv.set(HX + xx - (xx < 0 ? 0.1 : -0.1), 24.5, sh(0.66), 0, true); // under-bust shadow
+        for (const [a, b, c] of [[-1.5, 34, 1], [-0.5, 34, 0], [0.5, 34, 0], [1.5, 34, 1], [-1, 35, 0], [0, 35, 0], [1, 35, 0], [0, 36, 0]] as const) cv.set(cx0 + a, b, c ? pubL : pub, 0, true);
+        cv.set(cx0, 37, shade(mix2(skin, 0x9a5a50, 0.2), 0.58), 0, true); cv.set(cx0, 37.8, sh(0.7), 0, true); // vulva line
+      } else {
+        cv.set(HX - 2.4, 22.6, nip, 0, true); cv.set(HX + 2.2, 22.6, nip, 0, true);
+        for (const [a, b, c] of [[-2, 33.6, 1], [-1, 33.6, 0], [0, 33.6, 0], [1, 33.6, 0], [2, 33.6, 1], [-1.5, 34.6, 0], [1.5, 34.6, 0], [-0.5, 34.6, 0], [0.5, 34.6, 0]] as const) cv.set(cx0 + a, b, c ? pubL : pub, 0, true);
+        const gs = mix2(skin, 0x9a5a50, 0.18); // genital skin slightly warmer
+        cv.set(cx0 - 1.5, 35.6, shade(gs, 0.72), 0, true); cv.set(cx0 + 1.5, 35.6, shade(gs, 0.6), 0, true); cv.set(cx0 - 1.5, 36.6, shade(gs, 0.64), 0, true); cv.set(cx0 + 1.5, 36.6, shade(gs, 0.52), 0, true); // scrotum
+        cv.set(cx0 - 0.5, 35.6, shade(gs, 0.95), 0, true); cv.set(cx0 + 0.5, 35.6, shade(gs, 0.8), 0, true);    // shaft
+        cv.set(cx0 - 0.5, 36.6, shade(gs, 0.92), 0, true); cv.set(cx0 + 0.5, 36.6, shade(gs, 0.76), 0, true);
+        cv.set(cx0 - 0.5, 37.6, shade(gs, 0.82), 0, true); cv.set(cx0 + 0.5, 37.6, shade(gs, 0.66), 0, true);
+        cv.set(cx0 - 0.5, 38.6, shade(gs, 0.5), 0, true); cv.set(cx0 + 0.5, 38.6, shade(gs, 0.45), 0, true); // tip shadow
+        for (const yy of [35.6, 36.6, 37.6]) { cv.set(cx0 - 2.5, yy, sh(0.7), 0, true); cv.set(cx0 + 2.5, yy, sh(0.62), 0, true); }
+        cv.set(cx0 - 1.5, 37.6, sh(0.62), 0, true); cv.set(cx0 + 1.5, 37.6, sh(0.56), 0, true); cv.set(cx0, 39.6, sh(0.6), 0, true);
+      }
+    }
+    // knees and calves
+    if (d === 'F' || d === 'B') for (let n = 0; n < 2; n++) { const x = (n ? HX + LX : HX - LX) + cp + (n === 0 && step === 0 ? 0.5 : 0) + (n ? -0.2 : 0.2); light(cv, x - 0.5, 47.2, 1.2, 0.8, 0.45); cv.set(x, 49.2, sh(0.8), 0, true); light(cv, x - 0.6, 52.5, 0.9, 2, 0.3); }
   } else if (!robe) { cv.box(Math.round(HX - WW - 0.5), 31, Math.round(WW * 2 + 1), 2, jerkin ? leather : trim, 0.2); if (F) cv.box(15, 31, 2, 2, 0xf0c75e, 0.6); }
-  else { cv.box(Math.round(HX - HW - 2.4), 58, Math.round(HW * 2 + 5), 2, trim, 0.2); if (F) cv.box(15, shY, 2, 41, trim, 0.4); }
+  else { cv.box(Math.round(HX - HW - 3.6), 58, Math.round(HW * 2 + 7), 2, trim, 0.2); if (F) cv.box(15, shY, 2, 41, trim, 0.4); }
   if (jerkin && F) cv.poly([[HX - SW + 1.5, shY], [HX - SW + 3, shY], [HX + WW, 31], [HX + WW - 1.5, 31]], trim, 0.1);
   if (plate) { for (let y = 21; y < 30; y += 3) cv.box(Math.round(HX - CW + 1), y, Math.round(CW * 2 - 2), 1, shade(body, 1.25), 0.4); cv.ell(HX - SW + 0.6, 18.6, 2.8, 2.2, shade(body, 1.1)); cv.ell(HX + SW - 0.6, 18.6, 2.8, 2.2, shade(body, 1.1)); }
   if (capeC >= 0 && !F) cv.poly([[HX - SW - 0.5, 17], [HX + SW + 0.5, 17], [HX + SW + 2.5, 57], [HX - SW - 2.5, 57]], capeC, -0.1);
   if (capeC >= 0 && F) { cv.box(Math.round(HX - SW), 17, Math.round(SW * 2), 2, capeC, 0.3); cv.ell(HX, 18, 1, 1, 0xf0c75e, undefined, 0.5); }
   // arms
+  const oArm = cv.o;
   cv.cyl(lsx, 19, lex, 28 + ls * 0.4, fem ? 1.4 : 1.7, F ? sleeve : shade(sleeve, 0.9)); cv.cyl(lex, 28 + ls * 0.4, lhx, lhy - 1, fem ? 1.2 : 1.4, F ? fore : shade(fore, 0.9)); cv.ell(lhx, lhy, 1.3, 1.4, skin);
   cv.cyl(rsx, 19, rex, 28 + rs * 0.4, fem ? 1.4 : 1.7, shade(sleeve, 0.86)); cv.cyl(rex, 28 + rs * 0.4, rhx, rhy - 1, fem ? 1.2 : 1.4, shade(fore, 0.86)); cv.ell(rhx, rhy, 1.3, 1.4, shade(skin, 0.92));
+  contact(cv, oArm); // contact shadow where the arms overlap the body -> clear separation
+  cv.set(lhx - 0.4, lhy + 1.2, shade(skin, 0.74), 0, true); cv.set(rhx + 0.4, rhy + 1.2, shade(skin, 0.7), 0, true); // knuckle/finger shading
+  light(cv, lex - 0.3, 27, 0.8, 1, 0.3); light(cv, rex + 0.3, 27, 0.8, 1, 0.15);                                      // elbows
+  { const mir = (x: number) => (F ? x : 32 - x); const A: Partial<Record<MarkRegion, [number, number]>> = F
+      ? { chest: [HX - 2.4, 21], abdomen: [HX + 1.4, 28.4], shoulderL: [lsx, 19], shoulderR: [rsx, 19], armL: [(lsx + lex) / 2, 23.6], armR: [(rsx + rex) / 2, 23.6], foreL: [(lex + lhx) / 2, 32.4], foreR: [(rex + rhx) / 2, 32.4], legL: [HX - LX + cp, 42], legR: [HX + LX + cp, 42] }
+      : { back: [HX, 25], shoulderL: [mir(lsx), 19], shoulderR: [mir(rsx), 19], armL: [mir((lsx + lex) / 2), 23.6], armR: [mir((rsx + rex) / 2), 23.6], foreL: [mir((lex + lhx) / 2), 32.4], foreR: [mir((rex + rhx) / 2), 32.4], legL: [mir(HX - LX), 42], legR: [mir(HX + LX), 42] };
+    drawMarks(cv, L.bodyMarks, A, skin); }
   if (acc?.type === 'amulet' && F) { cv.set(15, 19, 0xd8d8e0, 0.4, true); cv.set(17, 19, 0xd8d8e0, 0.4, true); cv.ell(16, 21, 1, 1.1, acc.c1, undefined, 0.5); }
   // neck + head
   cv.box(fem ? 14.6 : 14, 13.5, fem ? 3 : 4, 4, skin, -0.1);
   head(cv, d, skin, fem);
   if (F) face(cv, d, L.face, eye, skin, hair, fem);
+  if (F) drawMarks(cv, L.bodyMarks, { face: [HX + 2, 11.4] }, skin);
   paintHair(cv, hm.front, hair, d); headgear(cv, hd, d);
   if (F) { if (wpn) weapon(cv, wpn, Math.round(lhx - 0.5), Math.round(lhy), d); if (shd) shield(cv, shd, rhx + 1, 31); }
 }

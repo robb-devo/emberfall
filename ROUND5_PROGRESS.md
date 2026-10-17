@@ -17,3 +17,12 @@ Hard limits: no sexual content/scenes, no sexual violence, nothing sexual with m
       Nude (Adult ON + party member + no body armour): front = simple low-res anatomy; side/back = minimal shading. Underwear/joke undies layer on top.
       Tools: tests/tools/r5sheet.mjs <out> <adult> <clothed|bare|undies|npc> [scale] (raw sheet dump).
 - [x] Portraits: adult faces (narrower face, jaw, almond eyes, nose, no blush) for everyone but children (tests/tools/portraits.mjs incl. a child).
+- STEERING (18:24 + 18:26): polish doll3 (shape, arm separation, contrapposto, wider robe/side), full-body detail (collarbones, sternum, pecs/abs, hips, knees, elbows, hands),
+  recognisable low-res anatomy when Adult ON + unclothed (adult doll3 only), body-overlay marks system.
+  NOTE: the "teen-looking" far-right portrait in r5-05 is Pip, a CHILD NPC (look.child) – intentionally kept as a child.
+- [x] doll3 polish: light()/contact() helpers (shading without occlusion seams, contact shadow under arms), contrapposto idle, wider robes/side silhouette.
+- [x] Anatomy (front, Adult ON, unclothed, adult party only): breasts with areola+nipple, pubic hair, simple genitals (m/f). Back: spine, blades, cleft. Neutral pose only.
+- [x] src/gfx/bodymarks.ts: Look.bodyMarks [{type: scar|wound|bandage|tattoo|dirt|blood, region, variant}], drawn only on bare-skin pixels (clothes/underwear/armour cover them);
+      MARK_PRESETS (Duellist, Sailor Ink, Pit Fighter, Survivor) as creator row "Marks"; NPC examples: Pell (face scar), Brannoc + Old Salt (ink), Garrick (scar).
+      Tool tests/tools/r5cells.mjs <out> detail|marks. Shots: progress/r5-06-body-detail-front.png, r5-07-body-marks.png
+- [x] Battle gore (Adult): material-aware blood (goo/embers/tar/sap/brine), spreading blood pools on crits/kills/party KOs, dismemberment of normal foes on the killing blow (sprite slabs fly, bleed, land), red vignette on crit kills.

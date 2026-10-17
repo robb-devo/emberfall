@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { MARK_PRESETS } from '../gfx/bodymarks';
 import { txt, panel, W, H, DY, COL, SERIF } from '../ui/widgets';
 import { Input, Focus, Action } from '../ui/input';
 import { Audio } from '../systems/audio';
@@ -51,6 +52,7 @@ export class CreateScene extends Phaser.Scene implements Focus {
       { key: 'eyes', label: 'Eye Colour', opts: EYE_NAMES, get: () => this.look.eyes, set: v => (this.look.eyes = v) },
       { key: 'hairStyle', label: 'Hairstyle', opts: HAIR_STYLES, get: () => this.look.hairStyle, set: v => (this.look.hairStyle = v) },
       { key: 'hair', label: 'Hair Colour', opts: HAIR_NAMES, get: () => this.look.hair, set: v => (this.look.hair = v) },
+      { key: 'marks', label: 'Marks', opts: MARK_PRESETS.map(p => p.name), get: () => Math.max(0, MARK_PRESETS.findIndex(p => JSON.stringify(p.marks) === JSON.stringify(this.look.bodyMarks || []))), set: v => (this.look.bodyMarks = MARK_PRESETS[v].marks.map(m => ({ ...m }))) },
       { key: 'outfit', label: 'Outfit', opts: OUTFIT_NAMES, get: () => this.look.outfit, set: v => (this.look.outfit = v) },
       { key: 'outfit2', label: 'Trim', opts: OUTFIT_NAMES, get: () => this.look.outfit2, set: v => (this.look.outfit2 = v) },
       { key: 'random', label: '✦ Randomise', get: () => 0, set: () => {} },
