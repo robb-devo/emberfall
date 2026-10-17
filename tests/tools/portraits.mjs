@@ -17,5 +17,5 @@ const url = await h.E(() => {
   keys.forEach((k, i) => x.drawImage(mod.get(k).getSourceImage(), i * 240, 0));
   return c.toDataURL();
 });
-const fs = await import('fs'); fs.writeFileSync('/tmp/portraits.png', Buffer.from(url.split(',')[1], 'base64'));
+const fs = await import('fs'); fs.writeFileSync(process.argv[2] || '/tmp/portraits.png', Buffer.from(url.split(',')[1], 'base64'));
 console.log('errors', h.errs.slice(0, 5)); await h.b.close();

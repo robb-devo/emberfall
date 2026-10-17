@@ -8,7 +8,7 @@ await h.E(() => { const ui = window.__EMBER.world.ui; ui.choice = async () => (w
 let bad = 0;
 const run = async (script, picks, flags = {}) => {
   await h.E(([s, p, f]) => { window.__picks = p; Object.assign(window.__EMBER.Game.s.flags, f); window.__EMBER.world.runScript(s); }, [script, picks, flags]);
-  await h.wait(300); for (let i = 0; i < 6; i++) { const r = await h.advance(120); if (r === 'battle') { await h.wait(2500); await h.E(() => { const b = window.__EMBER.scene('Battle'); b.foes.forEach(f => f.hp = 1); }); await h.fight(600); continue; } if (r === 'idle') break; }
+  await h.wait(300); for (let i = 0; i < 12; i++) { const r = await h.advance(120); if (r === 'battle') { await h.wait(2500); await h.E(() => { const b = window.__EMBER.scene('Battle'); b.foes.forEach(f => f.hp = 1); }); await h.fight(600); continue; } if (r === 'idle') break; }
 };
 const check = async (label, fn) => { const ok = await h.E(fn); console.log(ok ? '✓' : '✗', label); if (!ok) bad++; };
 const G = 'window.__EMBER.Game';
