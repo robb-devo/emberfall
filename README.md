@@ -8,6 +8,16 @@ Android with Capacitor.
 > betrayed the Spire. Now you've fallen to the mortal world without your powers. A cave is
 > burning, a village is afraid, and the old elder knows more than he admits.
 
+## New in v0.4
+- **Real 3D diorama:** a Three.js renderer mirrors the Phaser world. Houses, walls and trees have volume, cast sun shadows and occlude properly.
+  The camera is a tilted perspective one, and an x-ray silhouette shows the party behind buildings. Settings → Fast mode still skips the post effects.
+- **Analog movement:** a floating joystick with a dead-zone, eased acceleration and braking, wall sliding, corner nudging, breadcrumb followers and a look-ahead camera.
+- **Item detail panel** in Items and in shops: an icon, lore, what the item does, and per-member stat comparisons with ▲/▼ arrows.
+- **Underwear layer** when no body armour is worn, plus joke underwear (Heart Boxers, Slime Briefs). Creator option: Figure.
+- **Settings → Adult** (18+, off by default) is the single switch for mature content. Right now it covers bare (featureless) party bodies and battle blood. Ideas for more are in `docs/ADULT_IDEAS.md`.
+- **Story:** Chapter I rewritten with a clear hook. Chapter II polished to the same voice.
+- **Fix:** Enter now works on the chapter-end screen.
+
 ## Play
 * **Android:** install `app-debug.apk` from the [Releases](../../releases) page.
 * **Browser:** `npm i && npm run dev`, then open on your phone (portrait).
