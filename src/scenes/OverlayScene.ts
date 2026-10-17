@@ -56,9 +56,11 @@ export class OverlayScene extends Phaser.Scene {
   /** Freeze-frame the current screen and shatter it into spinning shards (battle start). Resolves once the
    *  frozen frame covers the screen, so the caller can swap scenes underneath. */
   shatter(): Promise<void> {
-    return new Promise(res => {
+    return new Promise(done => {
+      let settled = false; const res = () => { if (!settled) { settled = true; done(); } };
       const go = (img?: HTMLImageElement) => {
-        if (!img || !this.sys.isActive()) { res(); return; }
+        // a snapshot that arrives after the fallback timeout would freeze a stale frame over the battle: skip it
+        if (!img || !this.sys.isActive() || settled) { res(); return; }
         if (this.textures.exists('__snap')) this.textures.remove('__snap');
         this.textures.addImage('__snap', img);
         const root = this.add.container(0, 0).setDepth(40);
@@ -76,9 +78,10 @@ export class OverlayScene extends Phaser.Scene {
         shards.forEach((im, i) => {
           const dx = im.x - W / 2, dy = im.y - H / 2, d = Math.hypot(dx, dy) || 1, delay = 120 + d * 0.35 + Math.random() * 60;
           this.tweens.add({ targets: im, x: im.x + dx / d * (500 + Math.random() * 400), y: im.y + dy / d * (500 + Math.random() * 400) + 300, angle: (Math.random() - 0.5) * 540, scaleX: im.scaleX * 0.4, scaleY: im.scaleY * 0.4, alpha: 0.2, delay, duration: 620, ease: 'Cubic.in' });
-          if (i === 0) void 0;
         });
-        this.tweens.add({ targets: black, alpha: 0, delay: 520, duration: 420, onComplete: () => { root.destroy(); if (this.textures.exists('__snap')) this.textures.remove('__snap'); } });
+        const cleanup = () => { if (!root.active) return; this.tweens.killTweensOf(shards); root.destroy(); if (this.textures.exists('__snap')) this.textures.remove('__snap'); };
+        this.tweens.add({ targets: black, alpha: 0, delay: 520, duration: 420 });
+        this.time.delayedCall(1300, cleanup); // after the last shard has flown off
       };
       try { this.game.renderer.snapshot(i => go(i as HTMLImageElement)); } catch { res(); }
       this.time.delayedCall(600, () => res());

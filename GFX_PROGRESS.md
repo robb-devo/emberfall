@@ -35,7 +35,8 @@ Regression tests: run against a *built* copy so Vite HMR reloads don't break the
 
 ## Next
 - [ ] Full regression run on the built test server, fix regressions. (data/maps/battle-smoke/save PASS; save diag test made frame-atomic; _gull.mjs removed; playthrough 1+2 running)
-- [ ] Final critical polish pass (characters, monsters, title).
+- [x] Final critical polish pass: battle contact shadows were hidden under the backdrop (depth fix), shadow width follows monster scale; shatter transition can't freeze a late snapshot and always cleans up.
+  NOTE: headless swiftshader under load runs ~2-4 fps and Phaser clamps delta to 16.7ms, so game time crawls (shards linger in shots) - not a real bug.
 - [ ] APK + release v0.3.0.
 
 ## Scope update (user, 11:16)

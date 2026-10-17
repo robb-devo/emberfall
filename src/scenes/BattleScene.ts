@@ -27,15 +27,15 @@ export class BattleScene extends Phaser.Scene {
     this.buffs = this.party.map(() => ({ atk: 1, def: 1, defending: false, turns: 0 }));
     Audio.play(d.music || (this.boss ? 'boss' : 'battle'), true);
     this.cameras.main.fadeIn(300); diorama(this.cameras.main, 'battle', ({ bg_boss: { warm: 0xff7040, bloom: 1.3 }, bg_hollow: { warm: 0xc0a0ff }, bg_road: { warm: 0xffb060, bloom: 1.15 }, bg_coast: { warm: 0xfff0d0 }, bg_grotto: { warm: 0x60e0e0, bloom: 1.25 }, bg_choir: { warm: 0xff5a8a, bloom: 1.3 } } as any)[this.d.bg] ?? {});
-    this.add.rectangle(0, 0, W, H, 0x07060f).setOrigin(0);
+    this.add.rectangle(0, 0, W, H, 0x07060f).setOrigin(0).setDepth(-20);
     // cinematic backdrop: far layer blurred for depth of field, slow camera drift
     const bbKey = ensureBackdrop(this, d.bg || 'bg_fields');
-    const bg = this.add.image(W / 2, 0, bbKey || d.bg || 'bg_fields').setOrigin(0.5, 0); const K = this.K = (820 + DY) / 800; const bs = (bbKey ? 2 : 936 / bg.width) * K; bg.setScale(bs); this.bgImg = bg;
+    const bg = this.add.image(W / 2, 0, bbKey || d.bg || 'bg_fields').setOrigin(0.5, 0); const K = this.K = (820 + DY) / 800; const bs = (bbKey ? 2 : 936 / bg.width) * K; bg.setScale(bs).setDepth(-10); this.bgImg = bg; // backdrop below the contact shadows (-0.5)
     const webgl = this.game.renderer.type === Phaser.WEBGL;
     if (webgl && DioramaFX.quality > 0 && !bbKey) bg.preFX?.addBlur(1, 1.2, 1.2, 1);
     this.tweens.add({ targets: bg, scale: bs * 1.02, x: W / 2 - 12, yoyo: true, repeat: -1, duration: 7000, ease: 'Sine.inOut' });
     const gc = ({ bg_fields: 0x3f7f3a, bg_hollow: 0x3a3048, bg_boss: 0x3a2430, bg_road: 0x8a6a30, bg_coast: 0xc8b07a, bg_grotto: 0x245050, bg_choir: 0x34243a } as any)[d.bg || 'bg_fields'] ?? 0x3f7f3a;
-    const ground = this.add.graphics(); if (!bbKey) ground.fillGradientStyle(gc, gc, 0x07060f, 0x07060f, 0, 0, 1, 1); if (!bbKey) { ground.fillRect(0, 540 * K, W, 60 * K); ground.fillGradientStyle(gc, gc, 0x07060f, 0x07060f, 1, 1, 1, 1); ground.fillRect(0, 600 * K, W, 220 * K); }
+    const ground = this.add.graphics().setDepth(-9); if (!bbKey) ground.fillGradientStyle(gc, gc, 0x07060f, 0x07060f, 0, 0, 1, 1); if (!bbKey) { ground.fillRect(0, 540 * K, W, 60 * K); ground.fillGradientStyle(gc, gc, 0x07060f, 0x07060f, 1, 1, 1, 1); ground.fillRect(0, 600 * K, W, 220 * K); }
     if (!bbKey) for (let i = 0; i < 60; i++) { ground.fillStyle(Phaser.Display.Color.ValueToColor(gc).darken(20).color, 0.8); ground.fillRect(Math.random() * W, (600 + Math.random() * 180) * K, 8 + Math.random() * 12, 4); }
     // volumetric light shafts + floating motes + foreground blur silhouettes
     const outdoor = ['bg_fields', 'bg_road', 'bg_coast'].includes(d.bg || 'bg_fields');
@@ -62,7 +62,7 @@ export class BattleScene extends Phaser.Scene {
       const [x, y0] = def.boss ? [hasBoss && n > 1 ? 240 : 230, n > 1 ? 650 : 690] : hasBoss ? ([[80, 590], [400, 745], [70, 760]][minion % 3] as number[]) : L[i % L.length]; const y = Math.round(y0 * K);
       if (def.boss || n === 1) this.add.image(x, y - 160, 'light').setTint(def.boss ? 0xff5020 : 0xffe0b0).setScale(def.boss ? 3.4 : 2).setAlpha(def.boss ? 0.35 : 0.18).setBlendMode(Phaser.BlendModes.ADD);
       const hd4 = this.textures.exists(def.sprite + '_hd4'); const spr = this.add.sprite(x, y + (hd4 ? 2 : 0), hd4 ? def.sprite + '_hd4' : def.sprite + '_hd').setOrigin(0.5, 1).setScale((def.boss ? 2.7 : 2.6) * (def.scale ?? 1) * (hd4 ? 0.5 : 1)).setDepth(y / 100);
-      this.add.image(x, y - 4, 'shadow').setScale(def.boss ? 16 : 8, 4.5).setDepth(-0.5).setAlpha(0.8);
+      this.add.image(x, y - 4, 'shadow').setScale((def.boss ? 16 : 8) * (def.scale ?? 1), 4.5).setDepth(-0.5).setAlpha(1);
       this.tweens.add({ targets: spr, scaleY: spr.scaleY * 1.04, yoyo: true, repeat: -1, duration: 700 + i * 90, ease: 'Sine.inOut' });
       spr.setAlpha(0).setY(y + 30); this.tweens.add({ targets: spr, alpha: 1, y, duration: 400, delay: i * 120, ease: 'Back.out' });
       this.foes.push({ def, name: def.name, hp: def.hp, mp: def.mp, spr, x, y, alive: true, buffDef: 1, buffAtk: 1, poisoned: false, charged: false });
