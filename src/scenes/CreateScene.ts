@@ -3,7 +3,7 @@ import { txt, panel, W, H, COL, SERIF } from '../ui/widgets';
 import { Input, Focus, Action } from '../ui/input';
 import { Audio } from '../systems/audio';
 import { Game, newMember, Look, stats, Member } from '../systems/state';
-import { ensureDoll, SKIN_NAMES, HAIR_NAMES, EYE_NAMES, OUTFIT_NAMES, HAIR_STYLES, FACES, BODIES, randomLook } from '../systems/paperdoll';
+import { ensureDoll, ensureDollHd, SKIN_NAMES, HAIR_NAMES, EYE_NAMES, OUTFIT_NAMES, HAIR_STYLES, FACES, BODIES, randomLook } from '../systems/paperdoll';
 import { VOCATIONS, STARTING_VOCS } from '../data/vocations';
 
 const STARTER: Record<string, Record<string, string>> = {
@@ -36,7 +36,7 @@ export class CreateScene extends Phaser.Scene implements Focus {
     const ped = this.add.graphics(); ped.fillStyle(0x3a2a6a, 1); ped.fillEllipse(W / 2, 470, 260, 60); ped.fillStyle(0x6a5aa0, 1); ped.fillEllipse(W / 2, 462, 230, 44);
     this.add.image(W / 2, 330, 'light').setTint(0xffd890).setScale(3.2).setAlpha(0.3).setBlendMode(Phaser.BlendModes.ADD);
     this.add.particles(0, 0, 'dot', { x: { min: W / 2 - 120, max: W / 2 + 120 }, y: 470, lifespan: 2000, speedY: { min: -40, max: -90 }, scale: { start: 1, end: 0 }, alpha: { start: 0.8, end: 0 }, tint: [0xffe8a0, 0x9ad0ff], blendMode: 'ADD', frequency: 120 });
-    this.doll = this.add.sprite(W / 2, 470, '__DEFAULT').setOrigin(0.5, 1).setScale(13);
+    this.doll = this.add.sprite(W / 2, 470, '__DEFAULT').setOrigin(0.5, 1).setScale(6.5);
     const rot = (d: number) => { this.dirIdx = (this.dirIdx + d + 4) % 4; this.refreshDoll(); Audio.sfx('cursor'); };
     const la = txt(this, W / 2 - 230, 330, '⟲', 54, COL.goldS).setOrigin(0.5).setInteractive(); la.on('pointerdown', () => rot(1));
     const ra = txt(this, W / 2 + 230, 330, '⟳', 54, COL.goldS).setOrigin(0.5).setInteractive(); ra.on('pointerdown', () => rot(-1));
@@ -91,7 +91,7 @@ export class CreateScene extends Phaser.Scene implements Focus {
   }
   /** Starting vocations, plus those unlocked at the Chapel of Alltrades. */
   vocList() { return Object.keys(VOCATIONS).filter(k => STARTING_VOCS.includes(k) || (this.mode === 'companion' && Game.s?.flags?.vocationsOpen)); }
-  refreshDoll() { const key = ensureDoll(this, { look: { ...this.look }, equip: STARTER[this.voc] }); this.doll.setTexture(key, [0, 3, 9, 6][this.dirIdx]); }
+  refreshDoll() { const key = ensureDollHd(this, { look: { ...this.look }, equip: STARTER[this.voc] }); this.doll.setTexture(key, [0, 3, 9, 6][this.dirIdx]); }
   change(d: number) {
     const r = this.rows[this.sel]; if (!r.opts) return; const n = r.opts.length; r.set((r.get() + d + n) % n); Audio.sfx('cursor');
     this.buildRows(); this.refreshDoll();

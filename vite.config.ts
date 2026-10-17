@@ -1,2 +1,3 @@
 import { defineConfig } from 'vite';
-export default defineConfig({ base: './', build: { chunkSizeWarningLimit: 2000, target: 'es2020' } });
+import pkg from './package.json';
+export default defineConfig({ base: './', define: { __APP_VERSION__: JSON.stringify(pkg.version) }, build: { chunkSizeWarningLimit: 2000, target: 'es2020' } });

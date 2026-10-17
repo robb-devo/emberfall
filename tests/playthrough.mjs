@@ -3,7 +3,7 @@
 import { open } from './lib.mjs';
 import fs from 'fs';
 const URL = process.argv[2] || 'http://localhost:5173/';
-const SS = URL_('./screenshots/');
+const SS = URL_(process.env.SS || './screenshots/');
 function URL_(p) { fs.mkdirSync(p, { recursive: true }); return p; }
 const h = await open(URL);
 const log = (...a) => console.log(`[${new Date().toISOString().slice(11, 19)}]`, ...a);
@@ -36,6 +36,7 @@ async function grind(level, map) {
 // ---- Title
 await h.wait(1500); await shot('01-title-splash');
 await h.key('Enter'); await h.wait(900); await shot('01-title');
+await h.key('Enter'); await h.wait(700); // New Game → Adventure Log picker (first empty log preselected)
 await h.key('Enter'); await h.wait(1300);
 // ---- Creation: customise a bit
 await h.key('ArrowDown'); await h.key('ArrowRight', 1); // vocation -> mage? (Warrior->Mage)
@@ -126,5 +127,9 @@ await h.key('ArrowDown', 1, 400);
 for (let i = 0; i < 200; i++) { const r = await h.E(() => !!window.__EMBER.ended); if (r) break; await h.key('Enter', 1, 300); if (i === 12) await shot('18-finale'); }
 await h.wait(7000); await shot('19-end');
 assert(await h.E(() => !!window.__EMBER.ended), 'reached the end');
+// ---- Continue straight into Chapter II
+await h.key('Enter', 1, 2500);
+for (let i = 0; i < 40; i++) { const st = await h.hero(); if (st && st.map === 'elder') break; await h.wait(300); }
+s = await state(); assert(s.map === 'elder' && s.flags.ch2Started, 'chapter II dawn after the end card'); await shot('20-ch2-dawn');
 log('PLAYTHROUGH COMPLETE', await state(), 'errors:', h.errs);
 await h.b.close();

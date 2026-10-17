@@ -338,7 +338,7 @@ function saltmere() {
   b.set(10, 10, 'T'); b.set(28, 13, 'T'); b.set(2, 15, 'T'); b.set(36, 20, 'T'); b.set(28, 21, 'T');
   // harbour props: barrels & crates by the shops, flower boxes, lamp posts along the sea wall, a market stall
   b.set(11, 6, '>'); b.set(19, 6, '>'); b.set(2, 6, '>'); b.set(20, 6, 'f'); b.set(11, 9, 'f'); b.set(29, 9, 'f'); b.set(36, 15, 'f');
-  for (const x of [11, 15, 29, 33, 37]) b.set(x, 22, '/');
+  // (mooring posts live in the water at row 28; the promenade is kept clear)
   b.set(14, 21, '>'); b.set(15, 21, '>'); b.set(23, 21, '$'); b.set(7, 16, '$'); b.set(2, 12, 'T'); b.set(38, 9, 'T'); b.set(27, 9, 'T');
   b.set(12, 8, 'S');
   return b.done();

@@ -7,6 +7,7 @@
 import Phaser from 'phaser';
 import { ITEMS } from '../data/items';
 import type { Look, Member } from './state';
+import { Pix } from './art';
 
 export const SKIN = [0xf8d9bc, 0xefc19a, 0xd69c6c, 0xa86d43, 0x74472a, 0xc9e0f0];
 export const SKIN_NAMES = ['Porcelain', 'Fair', 'Honey', 'Bronze', 'Umber', 'Starlit'];
@@ -249,6 +250,24 @@ export function ensureDoll(scene: Phaser.Scene, sp: DollSpec): string {
     ctx.putImageData(img, s * FW, d * FH);
     tex.add(d * 3 + s, 0, s * FW, d * FH, FW, FH);
   }
+  tex.refresh();
+  return key;
+}
+/** 2× EPX + rim-lit version of the doll sheet (same frame layout) for battle and menu close-ups. */
+export function ensureDollHd(scene: Phaser.Scene, sp: DollSpec): string {
+  const key = dollKey(sp) + '_hd';
+  if (scene.textures.exists(key)) return key;
+  const W2 = FW * 2, H2 = FH * 2;
+  const tex = scene.textures.createCanvas(key, W2 * 3, H2 * 4)!; const ctx = tex.getContext();
+  const img = ctx.createImageData(W2 * 3, H2 * 4);
+  const dirs: Dir[] = ['F', 'S', 'S', 'B'];
+  for (let d = 0; d < 4; d++) for (let s = 0; s < 3; s++) {
+    let g = drawFrame(sp, dirs[d], s); if (d === 2) g = g.flipH();
+    const p = new Pix(FW, FH); p.d = Array.from(g.px, (c: number) => (c < 0 ? -1 : c));
+    p.hdInto(img.data, W2 * 3, s * W2, d * H2);
+  }
+  ctx.putImageData(img, 0, 0);
+  for (let d = 0; d < 4; d++) for (let s = 0; s < 3; s++) tex.add(d * 3 + s, 0, s * W2, d * H2, W2, H2);
   tex.refresh();
   return key;
 }

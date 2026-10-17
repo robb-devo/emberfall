@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { txt, W, H, SERIF, COL } from '../ui/widgets';
 import { Audio } from '../systems/audio';
 import { Game } from '../systems/state';
-import { ensureDoll, specOf } from '../systems/paperdoll';
+import { ensureDoll, ensureDollHd, specOf } from '../systems/paperdoll';
 
 const fast = () => !!(window as any).__EMBER?.fast;
 export class EndScene extends Phaser.Scene {
@@ -17,7 +17,7 @@ export class EndScene extends Phaser.Scene {
     for (let i = 0; i < 120; i++) { const s = this.add.image(Math.random() * W, Math.random() * H, 'px').setAlpha(Math.random()); this.tweens.add({ targets: s, alpha: 0.1, yoyo: true, repeat: -1, duration: 600 + Math.random() * 2000 }); }
     this.time.addEvent({ delay: 500, loop: true, callback: () => { const x = Math.random() * W; const st = this.add.image(x, -10, 'star').setScale(1 + Math.random()).setTint(0xffe8a0).setBlendMode(Phaser.BlendModes.ADD); this.tweens.add({ targets: st, x: x - 300, y: H * 0.7, alpha: 0, duration: 2500, onComplete: () => st.destroy() }); } });
     const party = Game.s.party;
-    party.forEach((m, i) => { const x = W / 2 + (i - (party.length - 1) / 2) * 140; this.add.sprite(x, 1100, ensureDoll(this, specOf(m)), 0).setOrigin(0.5, 1).setScale(7); });
+    party.forEach((m, i) => { const x = W / 2 + (i - (party.length - 1) / 2) * 140; this.add.sprite(x, 1100, ensureDollHd(this, specOf(m)), 0).setOrigin(0.5, 1).setScale(3.5); });
     const lines: [string, number, string][] = [
       [this.chapter === 1 ? 'END OF CHAPTER I' : 'END OF CHAPTER II', 52, '#ffd890'], [this.chapter === 1 ? 'The Fallen Star' : 'The Drowned Choir', 34, '#e8d8ff'], ['', 20, ''],
       [`${Game.hero.name}  ·  Level ${Game.hero.level}`, 30, COL.text], [`Play time ${Math.floor(Game.s.playTime / 60)} min  ·  ${Game.s.gold} gold`, 26, COL.dim], ['', 20, ''],

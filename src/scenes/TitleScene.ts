@@ -54,9 +54,9 @@ export class TitleScene extends Phaser.Scene {
     logo.setScale(1.4).setAlpha(0); this.tweens.add({ targets: logo, scale: 1, alpha: 1, duration: 1400, ease: 'Expo.out' });
     const glow = this.add.image(W / 2, 410, 'light').setTint(0xff8040).setScale(6, 1.6).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.3).setDepth(-1);
     this.tweens.add({ targets: glow, alpha: 0.55, yoyo: true, repeat: -1, duration: 1800 });
-    const sub = txt(this, W / 2, 505, 'C H A P T E R   I  ·  T H E   F A L L E N   S T A R', 22, '#e8d8ff').setOrigin(0.5).setAlpha(0);
+    const sub = txt(this, W / 2, 505, 'A   T A L E   O F   F A L L E N   S T A R S', 22, '#e8d8ff').setOrigin(0.5).setAlpha(0);
     this.tweens.add({ targets: sub, alpha: 1, delay: 900, duration: 900 });
-    this.add.text(W / 2, H - 30, 'v0.1 · an original JRPG · made with Grok Bot', { fontFamily: 'sans-serif', fontSize: '18px', color: '#8a80a8' }).setOrigin(0.5);
+    this.add.text(W / 2, H - 30, `v${__APP_VERSION__} · an original JRPG · made with Grok Bot`, { fontFamily: 'sans-serif', fontSize: '18px', color: '#8a80a8' }).setOrigin(0.5);
 
     const tap = txt(this, W / 2, 700, 'TAP TO BEGIN', 36, COL.accent).setOrigin(0.5);
     this.tweens.add({ targets: tap, alpha: 0.25, yoyo: true, repeat: -1, duration: 700 });
@@ -107,6 +107,8 @@ export class TitleScene extends Phaser.Scene {
         return { label: `Log ${i + 1}  ${inf.name}`, sub: `Lv${inf.level} · ${names[inf.chapter - 1] || ''} · ${tm}${inf.fromBackup ? ' ⚠' : ''}` };
       });
       const m = new ListMenu(this, 30, 560, W - 60, [...items, { label: 'Back' }], { title, itemH: 84, fontSize: 30 }).setDepth(50);
+      { const infos = Array.from({ length: SLOTS_N }, (_, i) => Game.slotInfo(i)); const empty = infos.findIndex(x => !x); const latest = Game.latestSlot();
+        m.idx = loading ? Math.max(0, latest) : empty >= 0 ? empty : Math.max(0, latest); m.refresh(); }
       m.onSelect = i => { m.close(); res(i === SLOTS_N ? -1 : i); }; m.onCancel = () => { m.close(); res(-1); };
     });
   }

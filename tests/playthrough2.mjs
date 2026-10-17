@@ -4,14 +4,15 @@ import { open } from './lib.mjs';
 import fs from 'fs';
 const URL = process.argv[2] || 'http://localhost:5173/';
 const SS = './screenshots/ch2/'; fs.mkdirSync(SS, { recursive: true });
-const h = await open(URL);
+const h = await open(URL); await h.E(() => { window.__EMBER.fast = true; });
 const t0 = Date.now(); const log = (...a) => console.log(`[${((Date.now() - t0) / 1000).toFixed(0).padStart(4)}s]`, ...a);
 const shot = async n => { await h.shot(SS + n + '.png'); log('screenshot', n); };
 const assert = (c, m) => { if (!c) { console.error('ASSERT FAILED:', m, h.errs); process.exit(1); } };
 const state = () => h.E(() => { const G = window.__EMBER.Game.s; return { lv: G.party.map(m => m.level).join('/'), party: G.party.map(m => m.id), gold: G.gold, map: G.map, flags: G.flags, inv: G.inv, quests: G.quests }; });
 const topMenu = () => h.E(() => { const st = window.__EMBER.Input.stack; const t = st[st.length - 1]; return t && t.items ? { title: t.title || '', n: t.items.length, labels: t.items.map(i => i.label) } : null; });
 /** advance dialog; Escape out of any vocation menu (handled explicitly elsewhere) */
-async function adv(n = 300) { for (let i = 0; i < n; i++) { const r = await h.advance(1); if (r !== 'timeout') return r; const m = await topMenu(); if (m && /vocation/i.test(m.title)) await h.key('Escape', 1, 250); } return 'timeout'; }
+async function adv(n = 300) { let last = '', rep = 0; for (let i = 0; i < n; i++) { const r = await h.advance(1); if (r !== 'timeout') return r; const m = await topMenu(); const key = m ? m.title + '|' + m.labels.join() : ''; rep = key && key === last ? rep + 1 : 0; last = key;
+  if (m && (/vocation|would you like|Buy|Sell/i.test(m.title) || m.labels.includes('Leave') || rep > 3)) { await h.key('Escape', 1, 250); rep = 0; } } return 'timeout'; }
 async function go(x, y, adj = false) {
   let r;
   for (let i = 0; i < 20; i++) {
@@ -24,7 +25,7 @@ async function go(x, y, adj = false) {
 }
 let battles = 0;
 async function afterBattle() { battles++; const s = await state(); if (s.map === 'hearth' || s.flags.__lost) log('  !! party wiped'); if (battles % 4 === 0) log(`  battles ${battles} lv ${s.lv} gold ${s.gold}`); }
-async function talk(x, y) { await go(x, y, true); await h.E(([x, y]) => { const w = window.__EMBER.world; const dx = x - w.hero.tx, dy = y - w.hero.ty; w.hero.dir = dx < 0 ? 1 : dx > 0 ? 2 : dy < 0 ? 3 : 0; w.setFrame(w.hero); }, [x, y]); await h.key('Enter', 1, 300); return adv(); }
+async function talk(x, y) { for (let k = 0; k < 4; k++) { await go(x, y, true); const p = await h.hero(); if (Math.abs(p.x - x) + Math.abs(p.y - y) === 1) break; } await h.E(([x, y]) => { const w = window.__EMBER.world; const dx = x - w.hero.tx, dy = y - w.hero.ty; w.hero.dir = dx < 0 ? 1 : dx > 0 ? 2 : dy < 0 ? 3 : 0; w.setFrame(w.hero); }, [x, y]); await h.key('Enter', 1, 300); return adv(); }
 async function grind(lv, map) {
   for (let n = 0; n < 50; n++) {
     const s = await state(); if (+s.lv.split('/')[0] >= lv) return; if (s.map !== map) return;
@@ -87,7 +88,7 @@ for (let attempt = 0; attempt < 5 && !won; attempt++) {
   await h.face(3); await h.key('Enter', 1, 300);
   for (let i = 0; i < 60; i++) { if ((await h.scenes()).includes('Battle')) break; await h.key('Enter', 1, 250); }
   await h.wait(2200); await shot('09-cantor');
-  await h.E(() => { window.__EMBER.fast = true; }); const r = await h.fightSmart(6000); await h.E(() => { window.__EMBER.fast = false; });
+  const r = await h.fightSmart(6000);
   s = await state(); won = !!s.flags.grottoDone; log('boss attempt', attempt, r, 'won', won, 'lv', s.lv);
   if (!won) { await adv(40); s = await state(); await grind(+s.lv.split('/')[0] + 2, s.map); }
 }

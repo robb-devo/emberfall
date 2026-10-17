@@ -251,6 +251,30 @@ export class WorldScene extends Phaser.Scene {
       this.add.particles(0, 0, 'px', { x: { min: 0, max: mw }, y: { min: 0, max: mh }, lifespan: 3200, speedY: { min: -12, max: -4 }, speedX: { min: -2, max: 2 }, scale: { start: 0.5, end: 1.1 }, alpha: { start: 0.7, end: 0 }, tint: [0xa0f0ff, 0x60f0d0], blendMode: 'ADD', frequency: 90 }).setDepth(8003);
       this.add.particles(0, 0, 'light', { x: { min: 0, max: mw }, y: { min: 0, max: mh }, lifespan: 5000, scale: { start: 0.05, end: 0.25 }, alpha: { start: 0.0, end: 0.25, ease: (t: number) => Math.sin(t * Math.PI) }, tint: [0x40e0d0, 0x60a0ff], blendMode: 'ADD', frequency: 400 }).setDepth(8003);
     }
+    // ---- HD-2D atmosphere: drifting cloud shadows, sun shafts and water glints
+    const water: [number, number][] = [];
+    for (let y = 0; y < this.grid.length; y++) for (let x = 0; x < this.grid[0].length; x++) if (LEGEND[this.grid[y][x]]?.anim) water.push([x, y]);
+    if (this.def.outdoor && !this.isNight() && this.def.id !== 'spire') {
+      for (let i = 0; i < Math.ceil(mw * mh / 60000); i++) {
+        const c = this.add.image(Math.random() * mw, Math.random() * mh, 'light').setTint(0x10182a).setAlpha(0.13).setScale(1.3 + Math.random() * 0.8, 0.9 + Math.random() * 0.5).setDepth(4990);
+        const drift = () => { const sp = 6 + Math.random() * 4; this.tweens.add({ targets: c, x: mw + 220, duration: ((mw + 220 - c.x) / sp) * 1000, onComplete: () => { c.x = -220; c.y = Math.random() * mh; drift(); } }); };
+        drift();
+      }
+      for (let i = 0; i < 3; i++) {
+        const r = this.add.image(0, 0, 'light').setTint(0xfff0c0).setBlendMode(Phaser.BlendModes.ADD).setScale(0.16, 1.7).setRotation(-0.45).setAlpha(0).setScrollFactor(0).setDepth(8090);
+        r.setPosition(300 + i * 55, 540 + i * 12); // screen-space (camera zoom 4 around the centre)
+        this.tweens.add({ targets: r, alpha: 0.07 + i * 0.015, yoyo: true, repeat: -1, duration: 4200 + i * 1300, delay: i * 900, ease: 'Sine.inOut' });
+      }
+    }
+    if (water.length) {
+      const glintC = this.isNight() ? [0x9ab0ff] : [0xffffff, 0xfff0c0, 0xc0f0ff];
+      this.time.addEvent({ delay: Math.max(40, 2400 / Math.min(60, water.length)), loop: true, callback: () => {
+        const [x, y] = water[Math.floor(Math.random() * water.length)]; const cam = this.cameras.main.worldView;
+        const px = x * TS + 2 + Math.random() * 12, py = y * TS + 2 + Math.random() * 12; if (!cam.contains(px, py)) return;
+        const g = this.add.image(px, py, 'px').setTint(glintC[Math.floor(Math.random() * glintC.length)]).setBlendMode(Phaser.BlendModes.ADD).setScale(2, 1).setAlpha(0).setDepth(2);
+        this.tweens.add({ targets: g, alpha: 0.9, scaleX: 3, yoyo: true, duration: 380, onComplete: () => g.destroy() });
+      } });
+    }
   }
   // ------------------------------------------------------------------ movement
   solidAt(x: number, y: number, ignoreActor?: Actor) {

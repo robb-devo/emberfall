@@ -7,7 +7,7 @@ import { Game, stats, Member, skillsOf, gainXp } from '../systems/state';
 import { ENEMIES, EnemyDef } from '../data/enemies';
 import { SKILLS, Skill } from '../data/skills';
 import { ITEMS } from '../data/items';
-import { ensureDoll, specOf } from '../systems/paperdoll';
+import { ensureDoll, ensureDollHd, specOf } from '../systems/paperdoll';
 import { TUTORIALS } from '../data/story';
 
 interface Foe { def: EnemyDef; name: string; hp: number; mp: number; spr: Phaser.GameObjects.Sprite; x: number; y: number; alive: boolean; buffDef: number; buffAtk: number; poisoned: boolean; charged: boolean; stolen?: boolean; asleep?: number; chargeAct?: any }
@@ -69,7 +69,7 @@ export class BattleScene extends Phaser.Scene {
     const pn = this.party.length;
     this.party.forEach((m, i) => {
       const x = pn === 1 ? 590 : 540 + i * 44, y = pn === 1 ? 640 : 500 + i * 85;
-      const spr = this.add.sprite(x, y, ensureDoll(this, specOf(m)), 3).setOrigin(0.5, 1).setScale(7).setDepth(y / 100);
+      const spr = this.add.sprite(x, y, ensureDollHd(this, specOf(m)), 3).setOrigin(0.5, 1).setScale(3.5).setDepth(y / 100);
       spr.setData('hx', x);
       this.tweens.add({ targets: spr, scaleY: 7.14, yoyo: true, repeat: -1, duration: 900 + i * 120, ease: 'Sine.inOut' });
       this.add.image(x, y - 4, 'shadow').setScale(6, 3).setDepth(-0.4);
@@ -138,6 +138,7 @@ export class BattleScene extends Phaser.Scene {
     const ids = [...new Set(f.map(x => x.def.id))];
     const parts = ids.map(id => { const c = f.filter(x => x.def.id === id).length; const d = ENEMIES[id]; if (c > 1) return `${c} ${d.name}s`; return this.boss && d.boss ? d.name : art(d.name); });
     if (this.boss) { const bi = ids.findIndex(id => ENEMIES[id].boss); if (bi > 0) parts.unshift(parts.splice(bi, 1)[0]); }
+    for (let i = 1; i < parts.length; i++) parts[i] = parts[i].replace(/^An? /, m => m.toLowerCase());
     return parts.length < 3 ? parts.join(' and ') : parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1];
   }
   async commandPhase(): Promise<Act[]> {

@@ -207,6 +207,13 @@ export class Pix {
   }
   /** EPX/Scale2x upscale + rim light + ambient occlusion: the large battle version of a monster. */
   toHd(scene: Phaser.Scene, key: string) {
+    const W2 = this.w * 2, H2 = this.h * 2;
+    const t = scene.textures.createCanvas(key, W2, H2)!; const ctx = t.getContext(); const img = ctx.createImageData(W2, H2);
+    this.hdInto(img.data, W2, 0, 0);
+    ctx.putImageData(img, 0, 0); t.refresh();
+  }
+  /** Write the EPX + rim-lit 2× version into an RGBA buffer of width `stride` at (ox, oy). */
+  hdInto(data: Uint8ClampedArray, stride: number, ox: number, oy: number) {
     const w = this.w, h = this.h, W2 = w * 2, H2 = h * 2, o = new Array(W2 * H2).fill(-1);
     const g = (x: number, y: number) => (x < 0 || y < 0 || x >= w || y >= h) ? -1 : this.d[y * w + x];
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
@@ -217,7 +224,6 @@ export class Pix {
       o[(y * 2) * W2 + x * 2] = e1; o[(y * 2) * W2 + x * 2 + 1] = e2; o[(y * 2 + 1) * W2 + x * 2] = e3; o[(y * 2 + 1) * W2 + x * 2 + 1] = e4;
     }
     const lum = (c: number) => ((c >> 16 & 255) * 3 + (c >> 8 & 255) * 6 + (c & 255)) / 10;
-    const t = scene.textures.createCanvas(key, W2, H2)!; const ctx = t.getContext(); const img = ctx.createImageData(W2, H2);
     for (let y = 0; y < H2; y++) for (let x = 0; x < W2; x++) {
       let c = o[y * W2 + x]; if (c < 0) continue;
       if (lum(c) > 40) {
@@ -230,9 +236,8 @@ export class Pix {
         if (((x + y) & 1) && f < 0.86) f -= 0.05;         // dithered shadow
         c = shade(c, f);
       }
-      const i = (y * W2 + x) * 4; img.data[i] = c >> 16 & 255; img.data[i + 1] = c >> 8 & 255; img.data[i + 2] = c & 255; img.data[i + 3] = 255;
+      const i = ((oy + y) * stride + ox + x) * 4; data[i] = c >> 16 & 255; data[i + 1] = c >> 8 & 255; data[i + 2] = c & 255; data[i + 3] = 255;
     }
-    ctx.putImageData(img, 0, 0); t.refresh();
   }
 }
 
