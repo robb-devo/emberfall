@@ -100,7 +100,8 @@ for (let attempt = 0; attempt < 4 && !won; attempt++) {
   await h.E(() => { window.__EMBER.fast = true; });
   log('boss fight', await h.fightSmart());
   await h.E(() => { window.__EMBER.fast = false; });
-  s = await state(); won = !!s.flags.lairDone;
+  // the flag is set only after the world's post-battle wait (game time; slow headless box): poll instead of racing it
+  for (let k = 0; k < 40; k++) { s = await state(); if (s.flags.lairDone) break; await h.wait(500); } won = !!s.flags.lairDone;
   log('boss won?', won, 'lvl', s.lvl);
   if (!won) { await h.advance(30); await grind(s.lvl + 1, (await state()).map); }
 }

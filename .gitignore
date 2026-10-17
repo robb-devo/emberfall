@@ -7,3 +7,4 @@ android/local.properties
 progress
 screenshots/**/FAIL.png
 screenshots/**/stuck-*.png
+screenshots/boss-*/

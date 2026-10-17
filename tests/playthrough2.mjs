@@ -103,6 +103,8 @@ log('cave', await go(4, 22)); await adv(40); s = await state(); await assert(s.m
 log('ghost', await talk(9, 15)); s = await state(); log('lookout', s.quests.lookout);
 log('deeper', await go(18, 3)); await adv(40); s = await state(); await assert(s.map === 'grotto2', 'in sanctum: ' + s.map);
 log('save crystal', await go(15, 28, true)); await h.face(0);
+// actually save, so a wipe respawns here (not back in Hollowmere)
+await h.key('Enter', 1, 400); for (let i = 0; i < 10 && !(await topMenu()); i++) await h.key('Enter', 1, 300); await h.key('Enter', 1, 600); await h.advance(20); log('savePoint', JSON.stringify(await h.E(() => window.__EMBER.Game.s.savePoint)));
 await shot('08-sanctum');
 // ---- Boss: Cantor Mordane
 let won = false;
@@ -113,7 +115,8 @@ for (let attempt = 0; attempt < 5 && !won; attempt++) {
   for (let i = 0; i < 60; i++) { if ((await h.scenes()).includes('Battle')) break; await h.key('Enter', 1, 250); }
   await h.wait(2200); await shot('09-cantor');
   const r = await h.fightSmart(6000);
-  s = await state(); won = !!s.flags.grottoDone; log('boss attempt', attempt, r, 'won', won, 'lv', s.lv);
+  for (let k = 0; k < 40; k++) { s = await state(); if (s.flags.grottoDone) break; await h.wait(500); } won = !!s.flags.grottoDone; // poll: flag lands after the post-battle wait
+  log('boss attempt', attempt, r, 'won', won, 'lv', s.lv);
   if (!won) { await adv(40); s = await state(); await grind(+s.lv.split('/')[0] + 2, s.map); }
 }
 await assert(won, 'beat Cantor Mordane');
