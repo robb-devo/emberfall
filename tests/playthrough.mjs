@@ -125,7 +125,7 @@ await shot('16-party');
 // ---- Finale
 log(await go(6, 10)); await h.wait(500);
 log(await go(14, 21)); await shot('17-village-night');
-await h.key('ArrowDown', 1, 400);
+log(await go(14, 22)); // analog movement: walk onto the finale trigger
 for (let i = 0; i < 200; i++) { const r = await h.E(() => !!window.__EMBER.ended); if (r) break; await h.key('Enter', 1, 300); if (i === 12) await shot('18-finale'); }
 await h.wait(7000); await shot('19-end');
 assert(await h.E(() => !!window.__EMBER.ended), 'reached the end');

@@ -31,15 +31,15 @@ await E(() => { const w = window.__EMBER.world; w.scene.restart({ map: 'village'
 const p0 = await E(() => [window.__EMBER.world.hero.tx, window.__EMBER.world.hero.ty]);
 // press both keys in one task so they land on the same frame (two CDP key events can straddle a frame)
 await E(() => ['ArrowDown', 'ArrowRight'].forEach(code => window.dispatchEvent(new KeyboardEvent('keydown', { code, key: code }))));
-await h.p.waitForFunction(([x, y]) => { const w = window.__EMBER.world; return w.hero.tx !== x || w.hero.ty !== y; }, p0, { timeout: 3000 }).catch(() => {});
+await h.p.waitForFunction(([x, y]) => { const w = window.__EMBER.world; return w.hero.tx !== x || w.hero.ty !== y; }, p0, { timeout: 12000 }).catch(() => {});
 await E(() => ['ArrowDown', 'ArrowRight'].forEach(code => window.dispatchEvent(new KeyboardEvent('keyup', { code, key: code })))); await h.wait(400);
 const p1 = await E(() => [window.__EMBER.world.hero.tx, window.__EMBER.world.hero.ty]);
 ok(p1[0] > p0[0] && p1[1] > p0[1], `diagonal step ${p0} -> ${p1}`);
 // --- manual save + backup + corruption recovery
 await E(() => { window.__EMBER.Game.s.gold = 4242; window.__EMBER.Game.markDirty('test'); }); await h.wait(1500);
 ok(await E(() => !!localStorage.getItem('emberfall.slot0.bak')), 'previous record kept as backup');
-await E(() => localStorage.setItem('emberfall.slot0', '{"v":2,"sum":"x","data":"{broken'));
-ok(await E(() => { const r = window.__EMBER.Game.read(0); return !!r && r.fromBackup; }), 'corrupt record -> falls back to backup');
+// corrupt + read in one task so a background autosave can't repair the slot in between
+ok(await E(() => { localStorage.setItem('emberfall.slot0', '{"v":2,"sum":"x","data":"{broken'); const r = window.__EMBER.Game.read(0); return !!r && r.fromBackup; }), 'corrupt record -> falls back to backup');
 // never overwrite with a corrupt state
 const before = await E(() => localStorage.getItem('emberfall.slot0.bak'));
 const refused = await E(() => { const G = window.__EMBER.Game; const keep = G.s.party; G.s.party = []; const r = G.save('bad'); G.s.party = keep; return r; });

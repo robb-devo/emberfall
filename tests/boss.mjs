@@ -92,7 +92,8 @@ if (BOSS === 'warden') {
   // ---- Night finale
   log(await h.walkTo(6, 10)); await h.wait(500);
   log(await h.walkTo(14, 21)); await shot('05-village-night');
-  await h.key('ArrowDown', 1, 400);
+  // analog movement: a key tap no longer steps a whole tile, so walk onto the trigger
+  log(await h.walkTo(14, 22));
   for (let i = 0; i < 200; i++) { if (await h.E(() => !!window.__EMBER.ended)) break; await h.key('Enter', 1, 300); if (i === 12) await shot('06-finale'); }
   await h.wait(6000); await shot('07-end-ch1');
   await assert(await h.E(() => !!window.__EMBER.ended), 'reached the Chapter I end card');
