@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { MAPS, LEGEND, MapDef, NpcDef } from '../data/maps';
-import { T } from '../systems/art';
+import { T, T2 } from '../systems/art';
 import { Game, stats } from '../systems/state';
 import { ensureDoll, specOf, FH } from '../systems/paperdoll';
 import { Audio } from '../systems/audio';
@@ -13,21 +13,25 @@ import type { UIScene } from './UIScene';
 import { diorama } from '../fx/diorama';
 
 const TS = 16; const DX = [0, -1, 1, 0], DY = [1, 0, 0, -1]; // dir: 0 down 1 left 2 right 3 up
+const OCT: [number, number][] = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
+/** 4-way sprite facing for any step vector (diagonals face sideways, like DQ). */
+const dirOf = (dx: number, dy: number) => (dx < 0 ? 1 : dx > 0 ? 2 : dy < 0 ? 3 : 0);
 export interface Actor { id: string; spr: Phaser.GameObjects.Sprite; shadow: Phaser.GameObjects.Image; tx: number; ty: number; dir: number; moving: boolean; doll: boolean; def?: NpcDef; step: number; hidden?: boolean }
 interface Symbol { spr: Phaser.GameObjects.Sprite; shadow: Phaser.GameObjects.Image; tx: number; ty: number; type: string; moving: boolean; next: number; alive: boolean }
 
 export class WorldScene extends Phaser.Scene {
   def!: MapDef; grid!: string[]; hero!: Actor; followers: Actor[] = []; npcs: Actor[] = []; chests: { id: string; x: number; y: number; spr: Phaser.GameObjects.Sprite; item?: string; gold?: number }[] = [];
   symbols: Symbol[] = []; history: { x: number; y: number; dir: number }[] = []; busy = false; ui!: UIScene; script!: ScriptRunner;
-  layer!: Phaser.Tilemaps.TilemapLayer; waterTiles: [number, number][] = []; dark?: Phaser.GameObjects.RenderTexture; lightImgs: { x: number; y: number; r: number; img?: Phaser.GameObjects.Image; flick: number }[] = [];
+  layer!: Phaser.Tilemaps.TilemapLayer; waterTiles: [number, number, number, number][] = []; dark?: Phaser.GameObjects.RenderTexture; lightImgs: { x: number; y: number; r: number; img?: Phaser.GameObjects.Image; flick: number }[] = [];
   eraser!: Phaser.GameObjects.Image; heroLight = 0; extraSolid = new Set<string>(); initData: any; offInput?: () => void; aura?: Phaser.GameObjects.Container; fxObjs: Record<string, Phaser.GameObjects.GameObject> = {};
   fx?: any;
   constructor() { super('World'); }
   init(d: any) { this.initData = d; }
   create() {
     const d = this.initData; this.def = MAPS[d.map]; this.grid = this.def.grid;
-    this.followers = []; this.npcs = []; this.chests = []; this.symbols = []; this.history = []; this.lightImgs = []; this.extraSolid.clear(); this.waterTiles = []; this.busy = false; this.fxObjs = {};
+    this.nightK = 1; this.followers = []; this.npcs = []; this.chests = []; this.symbols = []; this.history = []; this.lightImgs = []; this.extraSolid.clear(); this.waterTiles = []; this.busy = false; this.fxObjs = {};
     Game.s.map = d.map; Game.s.x = d.x; Game.s.y = d.y; Game.s.dir = d.dir ?? 0;
+    if (!this.scene.isActive('Overlay')) this.scene.launch('Overlay');
     if (!this.scene.isActive('UI')) this.scene.launch('UI'); this.ui = this.scene.get('UI') as UIScene; this.scene.bringToTop('UI');
     if (!this.script) this.script = new ScriptRunner(this);
     this.buildTiles();
@@ -40,11 +44,13 @@ export class WorldScene extends Phaser.Scene {
     cam.setBounds(mw < vw ? (mw - vw) / 2 : 0, mh < vh ? (mh - vh) / 2 : 0, Math.max(mw, vw), Math.max(mh, vh));
     cam.startFollow(this.hero.spr, true, 0.18, 0.18, 0, 36);
     cam.setBackgroundColor(this.def.outdoor ? '#1b2a1a' : '#05040a');
-    const preset = this.def.id === 'spire' ? 'sky' : this.def.outdoor ? (Game.flag('night') ? 'night' : 'outdoor') : (this.def.dark ?? 0) > 0.5 ? 'dungeon' : 'indoor';
+    const preset = this.def.id === 'spire' ? 'sky' : this.def.outdoor ? (this.isNight() ? 'night' : 'outdoor') : (this.def.dark ?? 0) > 0.5 ? 'dungeon' : 'indoor';
     this.fx = diorama(cam, preset);
     if (!d.noFade) cam.fadeIn(450);
     if (this.def.music && !d.script) Audio.play(this.def.music === 'village' && Game.flag('night') ? 'hearth' : this.def.music);
     this.offInput = Input.on(a => this.onAction(a));
+    Input.backFallback = () => { if (this.scene.isActive() && this.canAutosave()) this.ui.openMenu(); };
+    if (this.def.id !== 'spire') Game.markDirty('map:' + this.def.id);
     this.events.once('shutdown', () => { this.offInput?.(); });
     this.time.addEvent({ delay: 550, loop: true, callback: () => this.animWater() });
     this.time.addEvent({ delay: 2200, loop: true, callback: () => this.wanderNpcs() });
@@ -61,31 +67,36 @@ export class WorldScene extends Phaser.Scene {
     for (let y = 0; y < h; y++) { ground.push([]); over.push(Array(w).fill(-1)); }
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       const L = LEGEND[this.grid[y][x]] || LEGEND['.']; ground[y][x] = L.t;
-      if (L.anim) this.waterTiles.push([x, y]);
+      if (L.anim) this.waterTiles.push([x, y, L.t, L.anim]);
       if (L.over !== undefined && y > 0) over[y - 1][x] = L.over;
     }
     const m = this.make.tilemap({ data: ground, tileWidth: TS, tileHeight: TS });
     const ts = m.addTilesetImage('tiles', 'tiles', TS, TS, 0, 0)!;
     this.layer = m.createLayer(0, ts, 0, 0)!.setDepth(0);
-    // edge decoration layers (path fringes & shorelines)
-    const isPath = (c?: string) => c === ':' ; const isGrass = (c?: string) => c === '.' || c === ',' || c === '*' || c === '"' || c === 'T' || c === 'P' || c === 'b';
-    const isWater = (c?: string) => c === '~';
-    const sides: [number, number, number, number][] = [[0, -1, T.edgeN, T.shoreN], [0, 1, T.edgeS, T.shoreS], [-1, 0, T.edgeW, T.shoreW], [1, 0, T.edgeE, T.shoreE]];
-    for (const [dx, dy, et, st] of sides) {
+    // edge decoration layers (path fringes, shorelines, sea foam, leaf litter)
+    const grassy = new Set(['.', ',', '*', '"', 'T', 'P', 'b']); const autumn = new Set(['5', '6', '&', '@', 'A', '$', '8', '9']); const sandy = new Set(['1', '2', 'z']);
+    const rules: { me: (c: string) => boolean; nb: (c?: string) => boolean; tiles: number[] }[] = [
+      { me: c => c === ':', nb: c => !!c && grassy.has(c), tiles: [T.edgeN, T.edgeS, T.edgeW, T.edgeE] },
+      { me: c => c === '~', nb: c => !!c && grassy.has(c), tiles: [T.shoreN, T.shoreS, T.shoreW, T.shoreE] },
+      { me: c => c === '4', nb: c => !!c && sandy.has(c), tiles: [T2.foamN, T2.foamS, T2.foamW, T2.foamE] },
+      { me: c => c === '7', nb: c => !!c && autumn.has(c), tiles: [T2.lfN, T2.lfS, T2.lfW, T2.lfE] },
+    ];
+    const sides: [number, number][] = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+    sides.forEach(([dx, dy], si) => {
       const data: number[][] = []; let any = false;
-      for (let y = 0; y < h; y++) { data.push([]); for (let x = 0; x < w; x++) { const c = this.grid[y][x], n = this.grid[y + dy]?.[x + dx]; let v = -1; if (isPath(c) && isGrass(n)) v = et; else if (isWater(c) && isGrass(n)) v = st; if (v >= 0) any = true; data[y].push(v); } }
-      if (!any) continue;
+      for (let y = 0; y < h; y++) { data.push([]); for (let x = 0; x < w; x++) { const c = this.grid[y][x], n = this.grid[y + dy]?.[x + dx]; let v = -1; for (const r of rules) if (r.me(c) && r.nb(n)) { v = r.tiles[si]; break; } if (v >= 0) any = true; data[y].push(v); } }
+      if (!any) return;
       const me = this.make.tilemap({ data, tileWidth: TS, tileHeight: TS }); const tse = me.addTilesetImage('tiles', 'tiles', TS, TS, 0, 0)!; me.createLayer(0, tse, 0, 0)!.setDepth(0.5);
-    }
+    });
     const m2 = this.make.tilemap({ data: over, tileWidth: TS, tileHeight: TS });
     const ts2 = m2.addTilesetImage('tiles', 'tiles', TS, TS, 0, 0)!;
     m2.createLayer(0, ts2, 0, 0)!.setDepth(5000);
   }
-  animWater() { const f = Math.floor(this.time.now / 550) % 2; for (const [x, y] of this.waterTiles) this.layer.putTileAt(f ? T.water2 : T.water, x, y); }
+  animWater() { const f = Math.floor(this.time.now / 550) % 2; for (const [x, y, a, b] of this.waterTiles) this.layer.putTileAt(f ? b : a, x, y); }
   makeActor(id: string, tex: string, x: number, y: number, dir: number, doll = true): Actor {
     const shadow = this.add.image(x * TS + 8, y * TS + 15, 'shadow').setDepth(1);
     const spr = this.add.sprite(x * TS + 8, y * TS + 16, tex, doll ? dir * 3 : undefined).setOrigin(0.5, 1);
-    if (!doll) spr.setScale(tex === 'm_warden' ? 0.75 : 0.6);
+    if (!doll) spr.setScale(tex === 'm_warden' || tex === 'm_cantor' ? 0.75 : tex.startsWith('npc_') ? 1 : spr.width > 32 ? 0.42 : 0.6);
     const a: Actor = { id, spr, shadow, tx: x, ty: y, dir, moving: false, doll, step: 0 };
     this.depthOf(a); return a;
   }
@@ -103,12 +114,13 @@ export class WorldScene extends Phaser.Scene {
       const tex = n.sprite || ensureDoll(this, { look: n.look!, equip: n.equip || {} });
       const a = this.makeActor(n.id, tex, n.x, n.y, n.dir ?? 0, !n.sprite); a.def = n;
       if (n.hidden && !Game.flag('show_' + n.id)) { a.hidden = true; a.spr.setVisible(false); a.shadow.setVisible(false); }
-      if (n.sprite) { this.tweens.add({ targets: a.spr, scaleY: a.spr.scaleY * 1.04, yoyo: true, repeat: -1, duration: 900, ease: 'Sine.inOut' }); const gl = this.add.image(a.spr.x, a.spr.y - 20, 'light').setTint(0xff5010).setBlendMode(Phaser.BlendModes.ADD).setScale(1.2).setAlpha(0.35).setDepth(a.spr.depth - 1); this.tweens.add({ targets: gl, alpha: 0.15, yoyo: true, repeat: -1, duration: 700 }); this.fxObjs['bossGlow'] = gl; }
+      if (n.sprite && !n.noGlow) { this.tweens.add({ targets: a.spr, scaleY: a.spr.scaleY * 1.04, yoyo: true, repeat: -1, duration: 900, ease: 'Sine.inOut' }); const gl = this.add.image(a.spr.x, a.spr.y - 20, 'light').setTint(0xff5010).setBlendMode(Phaser.BlendModes.ADD).setScale(1.2).setAlpha(0.35).setDepth(a.spr.depth - 1); this.tweens.add({ targets: gl, alpha: 0.15, yoyo: true, repeat: -1, duration: 700 }); this.fxObjs['bossGlow'] = gl; }
       this.npcs.push(a);
     }
     // Inactive roster waiting in the Hearth
-    if (this.def.id === 'hearth') Game.s.roster.forEach((m, i) => {
-      const spots = [[6, 6], [10, 6], [9, 8], [3, 6], [11, 9], [5, 5]]; const [x, y] = spots[i % spots.length];
+    const spots = this.def.id === 'hearth' ? [[6, 6], [10, 6], [9, 8], [3, 6], [11, 9], [5, 5]] : this.def.rosterSpots;
+    if (spots?.length) Game.s.roster.forEach((m, i) => {
+      const [x, y] = spots[i % spots.length];
       const a = this.makeActor('r' + i, ensureDoll(this, specOf(m)), x, y, i % 4); a.def = { id: 'r' + i, name: m.name, x, y, script: 'roster' } as any; this.npcs.push(a);
     });
     // chests
@@ -134,6 +146,18 @@ export class WorldScene extends Phaser.Scene {
       this.tweens.add({ targets: hs, angle: 360, duration: 8000, repeat: -1 }); this.tweens.add({ targets: [hs, hg], scale: '*=1.12', yoyo: true, repeat: -1, duration: 1200 });
       this.fxObjs.heart = hs; this.fxObjs.heartGlow = hg;
     }
+    // map-specific set pieces
+    if (this.def.id === 'saltmere') {
+      const lh = this.add.image(36 * TS + 8, 5 * TS - 2, 'lighthouse').setOrigin(0.5, 1).setDepth(10 + 5 * TS);
+      this.add.image(lh.x, lh.y - 1, 'shadow').setScale(1.6, 1.4).setDepth(1);
+      if (Game.flag('relit')) {
+        const core = this.add.image(lh.x, lh.y - 49, 'light').setScale(0.5).setTint(0xfff4c0).setBlendMode(Phaser.BlendModes.ADD).setDepth(9600);
+        this.tweens.add({ targets: core, scale: 0.65, yoyo: true, repeat: -1, duration: 1400, ease: 'Sine.inOut' });
+        const beam = this.add.image(lh.x, lh.y - 49, 'light').setOrigin(0, 0.5).setScale(5, 0.3).setTint(0xfff0b0).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.35).setDepth(9601);
+        this.tweens.add({ targets: beam, angle: 360, duration: 7000, repeat: -1 });
+        (this.def.lights = this.def.lights || []);
+      }
+    }
     // roaming monsters
     if (this.def.encounters && !this.initData.noMonsters) this.spawnSymbols();
     this.updateFollowers(true);
@@ -146,15 +170,15 @@ export class WorldScene extends Phaser.Scene {
       if (Math.abs(x - this.hero.tx) + Math.abs(y - this.hero.ty) < 7) continue;
       if (enc.table === 'fields' && y < 5) continue; cand.push([x, y]);
     }
-    const tall = cand.filter(([x, y]) => this.grid[y][x] === '"');
+    const tall = cand.filter(([x, y]) => this.grid[y][x] === '"' || this.grid[y][x] === '&');
     let s = 77 + Game.s.steps; const r = () => ((s = (s * 16807 + 11) % 2147483647) / 2147483647);
     for (let i = 0; i < enc.count; i++) {
       const pool = tall.length && r() < 0.7 ? tall : cand; const [x, y] = pool[Math.floor(r() * pool.length)];
       const tot = table.reduce((a, e) => a + e.w, 0); let k = r() * tot; let g = table[0]; for (const e of table) { k -= e.w; if (k <= 0) { g = e; break; } }
       const type = g.group[0];
-      const spr = this.add.sprite(x * TS + 8, y * TS + 15, ENEMIES[type].sprite).setOrigin(0.5, 1).setScale(0.5);
+      const spr = this.add.sprite(x * TS + 8, y * TS + 15, ENEMIES[type].sprite).setOrigin(0.5, 1); const sc = spr.width > 32 ? 0.4 : 0.5; spr.setScale(sc);
       const shadow = this.add.image(x * TS + 8, y * TS + 14, 'shadow');
-      this.tweens.add({ targets: spr, scaleY: 0.44, scaleX: 0.55, yoyo: true, repeat: -1, duration: 380 + r() * 200, ease: 'Sine.inOut' });
+      this.tweens.add({ targets: spr, scaleY: sc * 0.88, scaleX: sc * 1.1, yoyo: true, repeat: -1, duration: 380 + r() * 200, ease: 'Sine.inOut' });
       const sym: Symbol = { spr, shadow, tx: x, ty: y, type, moving: false, next: this.time.now + 1000 + r() * 1500, alive: true };
       spr.setDepth(10 + spr.y); this.symbols.push(sym);
     }
@@ -175,14 +199,19 @@ export class WorldScene extends Phaser.Scene {
         lights.push({ x, y, c: 0xff8a3a, r: 2.6 });
       }
     }
+    // glowing coral lights itself (sea caves)
+    { let k = 0; for (let y = 0; y < this.grid.length; y++) for (let x = 0; x < this.grid[0].length; x++) if (this.grid[y][x] === 'j' && (k++ % 2) === 0) lights.push({ x, y, c: k % 4 ? 0x50f0d0 : 0xff80c0, r: 2.2 }); }
     for (const l of lights) {
       const img = this.add.image(l.x * TS + 8, l.y * TS + 8, 'light').setTint(l.c).setBlendMode(Phaser.BlendModes.ADD).setDepth(8001).setScale(l.r * 0.28).setAlpha(0.5);
       this.lightImgs.push({ x: l.x * TS + 8, y: l.y * TS + 8, r: l.r, img, flick: Math.random() * 10 });
     }
   }
+  nightK = 1;
+  /** Story night: the global 'night' flag, or a per-map condition (e.g. Saltmere after the abduction). */
+  isNight() { return !!Game.flag('night') || (!!this.def.night && evalCond(this.def.night)); }
   darkness(): { c: number; a: number } {
     if (!this.def.outdoor) return { c: 0x05030c, a: this.def.dark ?? 0 };
-    if (Game.flag('night')) return { c: 0x06062a, a: 0.72 };
+    if (this.isNight()) return { c: 0x06062a, a: 0.72 * this.nightK };
     // day-night cycle: 8 real minutes
     const t = ((Game.s.playTime + 60) % 480) / 480; // 0..1
     const n = (Math.cos(t * Math.PI * 2) * -0.5 + 0.5); // 0 day -> 1 night at t=.5
@@ -209,6 +238,19 @@ export class WorldScene extends Phaser.Scene {
     if (amb === 'fireflies') this.add.particles(0, 0, 'px', { x: { min: 0, max: mw }, y: { min: 0, max: mh }, lifespan: 4000, speed: { min: 2, max: 8 }, scale: { start: 0.9, end: 0 }, alpha: { start: 0, end: 1, ease: 'Sine.inOut' }, tint: [0xd8ff80, 0xffe080], frequency: 140, blendMode: 'ADD' }).setDepth(8100);
     if (amb === 'embers') this.add.particles(0, 0, 'px', { x: { min: 0, max: mw }, y: { min: 0, max: mh }, lifespan: 3000, speedY: { min: -14, max: -4 }, speedX: { min: -3, max: 3 }, scale: { start: 1, end: 0 }, tint: [0xff8040, 0xffc060, 0xff4020], frequency: 70, blendMode: 'ADD' }).setDepth(8100);
     if (amb === 'stars') this.add.particles(0, 0, 'px', { x: { min: -40, max: mw + 40 }, y: { min: -40, max: mh + 40 }, lifespan: 2500, scale: { start: 0, end: 1.2, ease: 'Sine.inOut' }, alpha: { start: 1, end: 0 }, tint: [0xffffff, 0xb0c0ff, 0xffe8a0], frequency: 40, blendMode: 'ADD' }).setDepth(-1);
+    if (amb === 'leaves') {
+      this.add.particles(0, 0, 'px', { x: { min: -20, max: mw }, y: { min: -10, max: mh }, lifespan: 7000, speedX: { min: 6, max: 18 }, speedY: { min: 5, max: 12 }, scale: { start: 1.4, end: 0.8 }, rotate: { min: 0, max: 360 }, alpha: { start: 0, end: 1, ease: (t: number) => Math.sin(t * Math.PI) }, tint: [0xe06a2a, 0xf0a030, 0xc8402a, 0xffd060], frequency: 180 }).setDepth(5002);
+      this.add.particles(0, 0, 'px', { x: { min: 0, max: mw }, y: { min: 0, max: mh }, lifespan: 3000, speed: { min: 1, max: 4 }, scale: { start: 0.7, end: 0 }, alpha: { start: 0.9, end: 0 }, tint: [0xfff0b0], blendMode: 'ADD', frequency: 260 }).setDepth(5002);
+    }
+    if (amb === 'gulls') {
+      this.add.particles(0, 0, 'px', { x: { min: 0, max: mw }, y: { min: mh * 0.7, max: mh }, lifespan: 1600, speedX: { min: -4, max: 4 }, scale: { start: 0.8, end: 0 }, alpha: { start: 0.8, end: 0 }, tint: [0xffffff, 0xd0f0ff], blendMode: 'ADD', frequency: 120 }).setDepth(5002);
+      const gull = () => { const y = 10 + Math.random() * mh * 0.6, dir = Math.random() < 0.5 ? 1 : -1; const g = this.add.text(dir > 0 ? -10 : mw + 10, y, 'v', { fontSize: '7px', color: '#f8f8ff', fontFamily: 'monospace' }).setDepth(5003).setAlpha(0.9); this.tweens.add({ targets: g, x: dir > 0 ? mw + 10 : -10, y: y + (Math.random() - 0.5) * 40, duration: 9000 + Math.random() * 6000, onComplete: () => g.destroy() }); this.tweens.add({ targets: g, scaleY: 0.4, yoyo: true, repeat: -1, duration: 260 }); };
+      this.time.addEvent({ delay: 2600, loop: true, callback: gull }); gull();
+    }
+    if (amb === 'bubbles') {
+      this.add.particles(0, 0, 'px', { x: { min: 0, max: mw }, y: { min: 0, max: mh }, lifespan: 3200, speedY: { min: -12, max: -4 }, speedX: { min: -2, max: 2 }, scale: { start: 0.5, end: 1.1 }, alpha: { start: 0.7, end: 0 }, tint: [0xa0f0ff, 0x60f0d0], blendMode: 'ADD', frequency: 90 }).setDepth(8003);
+      this.add.particles(0, 0, 'light', { x: { min: 0, max: mw }, y: { min: 0, max: mh }, lifespan: 5000, scale: { start: 0.05, end: 0.25 }, alpha: { start: 0.0, end: 0.25, ease: (t: number) => Math.sin(t * Math.PI) }, tint: [0x40e0d0, 0x60a0ff], blendMode: 'ADD', frequency: 400 }).setDepth(8003);
+    }
   }
   // ------------------------------------------------------------------ movement
   solidAt(x: number, y: number, ignoreActor?: Actor) {
@@ -220,25 +262,47 @@ export class WorldScene extends Phaser.Scene {
     return false;
   }
   warpAt(x: number, y: number) { return this.def.warps.find(w => w.x === x && w.y === y); }
+  /** Safe moment to write a save: exploring freely, nothing pending. */
+  canAutosave() {
+    return !!this.hero && !this.busy && !Input.busy && !this.ui?.modal && !this.hero.moving && !this.script?.running && !this.scene.isPaused() && !this.scene.manager.isActive('Battle') && this.def.id !== 'spire' && !!Game.s;
+  }
+  autosave(force = false) {
+    if (!this.canAutosave()) return false;
+    const ok = Game.save('auto:' + (Game.dirty || 'tick')); Game.dirty = ''; Game.lastAuto = this.time.now;
+    const ov: any = this.scene.get('Overlay'); if (force || !ok) ov?.flashSaved?.(ok); else ov?.flashSaved?.(true);
+    return ok;
+  }
   update(time: number, dt: number) {
+    if (Game.dirty && time - Game.lastAuto > 900 && this.canAutosave()) this.autosave();
+    else if (!Game.dirty && time - Game.lastAuto > 60000 && this.canAutosave()) { Game.markDirty('periodic'); }
     this.drawLighting();
     if (this.aura) this.aura.setPosition(this.hero.spr.x, this.hero.spr.y);
     this.updateSymbols(time);
     if (this.busy || Input.busy || this.hero.moving || this.ui.modal) return;
     const d = Input.dir();
-    if (Math.abs(d.x) < 0.3 && Math.abs(d.y) < 0.3) { if (this.hero.step) { this.hero.step = 0; this.setFrame(this.hero); } return; }
-    const dir = Math.abs(d.x) > Math.abs(d.y) ? (d.x < 0 ? 1 : 2) : d.y < 0 ? 3 : 0;
-    this.tryStep(dir);
+    if (Math.hypot(d.x, d.y) < 0.3) { if (this.hero.step) { this.hero.step = 0; this.setFrame(this.hero); } return; }
+    // 8-directional: snap the stick to the nearest of 8 octants
+    const oct = (Math.round(Math.atan2(d.y, d.x) / (Math.PI / 4)) + 8) % 8;
+    const [vx, vy] = OCT[oct];
+    this.tryStep(vx, vy);
   }
   setFrame(a: Actor) { if (a.doll) a.spr.setFrame(a.dir * 3 + (a.step ? (a.step % 2 ? 1 : 2) : 0)); }
-  async tryStep(dir: number) {
-    const h = this.hero; h.dir = dir; this.setFrame(h);
-    const nx = h.tx + DX[dir], ny = h.ty + DY[dir];
+  /** Step the hero by (dx,dy) — orthogonal or diagonal. Diagonals never cut corners; blocked diagonals slide along walls. */
+  async tryStep(dx: number, dy = 0) {
+    const h = this.hero;
+    const free = (x: number, y: number) => !this.solidAt(x, y) && !this.warpAt(x, y);
+    if (dx && dy && !(free(h.tx + dx, h.ty + dy) && free(h.tx + dx, h.ty) && free(h.tx, h.ty + dy))) {
+      const hx = !this.solidAt(h.tx + dx, h.ty) || !!this.warpAt(h.tx + dx, h.ty), vy = !this.solidAt(h.tx, h.ty + dy) || !!this.warpAt(h.tx, h.ty + dy);
+      const horizFirst = Math.abs(Input.dir().x) >= Math.abs(Input.dir().y);
+      if (horizFirst ? hx : !vy && hx) dy = 0; else if (vy) dx = 0; else { h.dir = dirOf(dx, dy); this.setFrame(h); return; }
+    }
+    const dir = dirOf(dx, dy); h.dir = dir; this.setFrame(h);
+    const nx = h.tx + dx, ny = h.ty + dy;
     const w = this.warpAt(nx, ny);
     if (this.solidAt(nx, ny)) { if (!w) return; }
     if (w && w.cond && !evalCond(w.cond)) { if (w.blockScript) { this.runScript(w.blockScript); } return; }
     this.history.unshift({ x: h.tx, y: h.ty, dir }); this.history.length = 8;
-    const p = this.walk(h, dir, 150);
+    const p = this.walkTo(h, nx, ny, dx && dy ? 205 : 150);
     this.updateFollowers(false);
     await p; Game.s.steps++; Game.s.x = h.tx; Game.s.y = h.ty; Game.s.dir = h.dir;
     const ch = this.grid[h.ty]?.[h.tx];
@@ -249,8 +313,9 @@ export class WorldScene extends Phaser.Scene {
     if (wp) { this.doWarp(wp.to, wp.tx, wp.ty, wp.dir ?? h.dir); return; }
     this.checkTriggers(); this.checkSymbolContact(false);
   }
-  walk(a: Actor, dir: number, ms: number): Promise<void> {
-    a.dir = dir; a.moving = true; const nx = a.tx + DX[dir], ny = a.ty + DY[dir]; a.tx = nx; a.ty = ny;
+  walk(a: Actor, dir: number, ms: number): Promise<void> { a.dir = dir; return this.walkTo(a, a.tx + DX[dir], a.ty + DY[dir], ms, dir); }
+  walkTo(a: Actor, nx: number, ny: number, ms: number, dir = dirOf(nx - a.tx, ny - a.ty)): Promise<void> {
+    a.dir = dir; a.moving = true; a.tx = nx; a.ty = ny;
     a.step = (a.step % 4) + 1; this.setFrame(a);
     if (a === this.hero && Game.s.steps % 2 === 0) Audio.sfx('step');
     return new Promise(res => this.tweens.add({ targets: a.spr, x: nx * TS + 8, y: ny * TS + 16, duration: ms, onUpdate: () => this.depthOf(a), onComplete: () => { a.moving = false; res(); } }));
@@ -258,9 +323,9 @@ export class WorldScene extends Phaser.Scene {
   updateFollowers(instant: boolean) {
     this.followers.forEach((f, i) => {
       const p = this.history[i]; if (!p) return;
-      const dir = p.x < f.tx ? 1 : p.x > f.tx ? 2 : p.y < f.ty ? 3 : p.y > f.ty ? 0 : f.dir;
       if (instant || (p.x === f.tx && p.y === f.ty)) { f.tx = p.x; f.ty = p.y; f.spr.setPosition(p.x * TS + 8, p.y * TS + 16); f.dir = this.hero.dir; this.setFrame(f); this.depthOf(f); return; }
-      this.walk(f, dir, 150);
+      const dx = p.x - f.tx, dy = p.y - f.ty;
+      this.walkTo(f, p.x, p.y, dx && dy ? 205 : 150);
     });
   }
   async doWarp(to: string, x: number, y: number, dir: number) {
@@ -314,7 +379,7 @@ export class WorldScene extends Phaser.Scene {
       this.scene.launch('Battle', { group, bg: o.bg || this.def.bg || 'bg_fields', music: o.music, boss: o.boss, noFlee: o.noFlee, first: o.first, onEnd: async (r: string) => {
         this.scene.resume(); this.tweens.killTweensOf(cam); this.ui.scene.setVisible(true); cam.setZoom(4); cam.setRotation(0); cam.resetFX(); cam.fadeIn(350);
         if (r === 'lose') { await this.defeat(); res(r); return; }
-        Audio.play(Game.flag('night') && this.def.id === 'village' ? 'hearth' : this.def.music); this.ui.refreshHud();
+        Audio.play(Game.flag('night') && this.def.id === 'village' ? 'hearth' : this.def.music); this.ui.refreshHud(); Game.markDirty('battle');
         await this.wait(300); this.busy = this.script.running; res(r);
       } });
     });
@@ -371,10 +436,10 @@ export class WorldScene extends Phaser.Scene {
     await this.ui.narr(msg);
     if (!Game.flag('tut_chest')) { Game.set('tut_chest'); await this.ui.tutorial('chest'); }
     if (c.item && ITEMS[c.item].kind === 'equip' && !Game.flag('tut_equip')) { Game.set('tut_equip'); await this.ui.tutorial('equip'); }
-    this.ui.refreshHud(); this.busy = false;
+    this.ui.refreshHud(); this.busy = false; Game.markDirty('chest');
   }
   async runScript(name: string) {
-    this.busy = true; await this.script.run(name); this.busy = false; this.refreshNpcs();
+    this.busy = true; await this.script.run(name); this.busy = false; this.refreshNpcs(); Game.markDirty('script:' + name);
   }
   refreshNpcs() {
     // spawn/despawn NPCs whose conditions changed

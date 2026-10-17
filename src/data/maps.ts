@@ -14,17 +14,26 @@ export const LEGEND: Record<string, { t: number; solid?: boolean; over?: number;
   'O': { t: 39, solid: true }, 'X': { t: 40, solid: true }, 't': { t: 48, solid: true }, 'H': { t: 49, solid: true },
   'd': { t: 21 }, 'e': { t: 22 }, 'M': { t: 24, solid: true }, 'm': { t: 23, solid: true }, 'a': { t: 25, solid: true }, 'l': { t: 26, solid: true },
   'v': { t: 32 }, '^': { t: 33 }, 'q': { t: 45 }, 's': { t: 43 }, 'y': { t: 42, solid: true }, ' ': { t: 41, solid: true },
+  // ---- Chapter II tiles (see art2.ts)
+  '1': { t: 64 }, '2': { t: 65 }, '3': { t: 66 }, '4': { t: 67, solid: true, anim: 68 }, 'A': { t: 69, solid: true, over: 70 }, '5': { t: 71 }, '6': { t: 72 }, '7': { t: 73 },
+  '8': { t: 74, solid: true }, '9': { t: 75, solid: true }, '&': { t: 95, enc: true }, '$': { t: 105, solid: true }, '@': { t: 110 }, 'z': { t: 111, solid: true },
+  'Z': { t: 76 }, 'N': { t: 77, solid: true }, 'Q': { t: 78, solid: true }, 'G': { t: 79 }, 'V': { t: 80, solid: true }, 'Y': { t: 81, solid: true },
+  'E': { t: 82 }, 'j': { t: 106 }, 'I': { t: 83, solid: true }, 'J': { t: 84, solid: true }, '0': { t: 85, solid: true, anim: 86 }, ';': { t: 112 },
+  '!': { t: 87 }, '?': { t: 88, solid: true }, '+': { t: 89, solid: true }, '-': { t: 90, solid: true },
+  '/': { t: 91, solid: true }, '<': { t: 92, solid: true }, '>': { t: 93, solid: true }, '%': { t: 94, solid: true }, 'n': { t: 104, solid: true },
+  'i': { t: 107 }, 'p': { t: 108 }, 'f': { t: 109, solid: true },
 };
 
-export interface NpcDef { id: string; name: string; x: number; y: number; dir?: number; look?: Look; equip?: Record<string, string>; sprite?: string; script: string; wander?: boolean; hidden?: boolean; cond?: string; notCond?: string; counter?: boolean }
+export interface NpcDef { id: string; name: string; x: number; y: number; dir?: number; look?: Look; equip?: Record<string, string>; sprite?: string; script: string; wander?: boolean; hidden?: boolean; cond?: string; notCond?: string; counter?: boolean; noGlow?: boolean }
 export interface WarpDef { x: number; y: number; to: string; tx: number; ty: number; dir?: number; cond?: string; blockScript?: string }
 export interface ChestDef { id: string; x: number; y: number; item?: string; gold?: number }
 export interface TriggerDef { x: number; y: number; w?: number; h?: number; script: string; once?: string; cond?: string }
 export interface MapDef {
-  id: string; name: string; music: string; grid: string[]; outdoor: boolean; dark?: number; ambient?: 'fireflies' | 'embers' | 'stars' | 'dust' | 'petals';
+  id: string; name: string; music: string; grid: string[]; outdoor: boolean; dark?: number; ambient?: 'fireflies' | 'embers' | 'stars' | 'dust' | 'petals' | 'leaves' | 'gulls' | 'bubbles';
   npcs: NpcDef[]; warps: WarpDef[]; chests: ChestDef[]; triggers: TriggerDef[]; saves: { x: number; y: number }[];
   encounters?: { table: string; count: number; area?: [number, number, number, number] }; bg?: string; lights?: { x: number; y: number; c: number; r: number }[];
   signs?: { x: number; y: number; text: string }[]; torches?: boolean;
+  /** where inactive roster members wait (maps with a Party Ledger) */ rosterSpots?: [number, number][]; night?: string;
 }
 
 class B {
@@ -52,7 +61,15 @@ class B {
     for (let y = cy - ry; y <= cy + ry; y++) for (let x = cx - rx; x <= cx + rx; x++) { const d = ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2; if (d < 0.75 + r() * 0.4) this.set(x, y, c); } return this;
   }
   /** dungeon: convert wall tops directly above floor into wall faces for a 3/4 look */
-  faces() { for (let y = 0; y < this.h - 1; y++) for (let x = 0; x < this.w; x++) if (this.g[y][x] === 'm' && !LEGEND[this.g[y + 1][x]]?.solid) this.g[y][x] = 'M'; return this; }
+  faces(top = 'm', face = 'M') { for (let y = 0; y < this.h - 1; y++) for (let x = 0; x < this.w; x++) if (this.g[y][x] === top && !LEGEND[this.g[y + 1][x]]?.solid) this.g[y][x] = face; return this; }
+  /** stone house: slate roof rows, eave, wall row with door & windows */
+  shouse(x: number, y: number, w: number, door: number, roofRows = 2) {
+    this.rect(x, y, w, roofRows, 'V'); this.hline(x, x + w - 1, y + roofRows, 'Y');
+    for (let i = 0; i < w; i++) this.set(x + i, y + roofRows + 1, i % 2 ? 'Q' : 'N');
+    this.set(x + door, y + roofRows + 1, 'G'); return this;
+  }
+  /** carve a 2-wide path along a polyline */
+  trail(path: [number, number][], c: string, wide = 2) { for (let i = 0; i + 1 < path.length; i++) { const [x0, y0] = path[i], [x1, y1] = path[i + 1]; if (x0 === x1) { for (let k = 0; k < wide; k++) this.vline(x0 + k, y0, y1, c); } else { for (let k = 0; k < wide; k++) this.hline(x0, x1 + (k ? 1 : 0), y0 + k, c); } } return this; }
   done() { return this.g.map(r => r.join('')); }
 }
 
@@ -87,8 +104,8 @@ function village() {
   b.scatter('*', 18, 2, 6, 24, 20, '.', 23); b.scatter('*', 14, 2, 6, 24, 20, ',', 29);
   b.set(8, 11, 'b'); b.set(9, 11, 'b'); b.set(23, 11, 'b'); b.set(3, 13, 'T'); b.set(24, 15, 'T'); b.set(10, 25, 'T'); b.set(20, 26, 'T'); b.set(3, 25, 'T');
   b.set(13, 18, 'S');
-  // east bank
-  b.set(29, 6, '.'); b.set(29, 24, '.');
+  // east bank + Emberwood Road exit (Chapter II)
+  b.set(29, 6, '.'); b.set(29, 24, '.'); b.hline(29, 31, 15, ':'); b.hline(29, 31, 16, ':'); b.set(27, 16, '='); b.set(28, 16, '=');
   // south exit gap
   b.set(14, 28, ':'); b.set(15, 28, ':'); b.set(14, 29, ':'); b.set(15, 29, ':');
   b.set(9, 7, 'b'); b.set(17, 6, 'b'); b.set(25, 7, 'b');
@@ -200,11 +217,12 @@ export const MAPS: Record<string, MapDef> = {
     ],
     warps: [
       { x: 6, y: 5, to: 'hearth', tx: 6, ty: 9, dir: 3 }, { x: 21, y: 5, to: 'shop', tx: 6, ty: 8, dir: 3 }, { x: 5, y: 20, to: 'elder', tx: 4, ty: 7, dir: 3 },
+      { x: 31, y: 15, to: 'road', tx: 1, ty: 14, dir: 2, cond: 'chapter1Done', blockScript: 'eastBlock' }, { x: 31, y: 16, to: 'road', tx: 1, ty: 15, dir: 2, cond: 'chapter1Done', blockScript: 'eastBlock' },
       { x: 14, y: 29, to: 'fields', tx: 17, ty: 1, dir: 0, cond: 'metElder', blockScript: 'guardBlock' }, { x: 15, y: 29, to: 'fields', tx: 18, ty: 1, dir: 0, cond: 'metElder', blockScript: 'guardBlock' },
     ],
     chests: [{ id: 'v_chest1', x: 29, y: 4, item: 'pot' }, { id: 'v_chest2', x: 2, y: 27, gold: 25 }, { id: 'v_chest3', x: 25, y: 22, item: 'herb' }],
     triggers: [{ x: 14, y: 22, w: 2, h: 2, script: 'finale', once: 'finaleSeen', cond: 'finaleReady' }], saves: [{ x: 15, y: 12 }],
-    signs: [{ x: 13, y: 18, text: 'HOLLOWMERE\n↑ Wayfarer\'s Hearth  ·  Bramble & Brass Goods\n↓ Whisperwind Vale' }],
+    signs: [{ x: 13, y: 18, text: 'HOLLOWMERE\n↑ Wayfarer\'s Hearth  ·  Bramble & Brass Goods\n↓ Whisperwind Vale   → Emberwood Road' }],
     lights: [{ x: 11, y: 10, c: 0xffc070, r: 2.2 }, { x: 19, y: 10, c: 0xffc070, r: 2.2 }, { x: 11, y: 15, c: 0xffc070, r: 2.2 }, { x: 19, y: 15, c: 0xffc070, r: 2.2 }, { x: 15, y: 12, c: 0x9ad0ff, r: 2.4 },
       { x: 3, y: 5, c: 0xffd070, r: 2 }, { x: 9, y: 5, c: 0xffd070, r: 2 }, { x: 19, y: 5, c: 0xffd070, r: 2 }, { x: 23, y: 5, c: 0xffd070, r: 2 }, { x: 4, y: 20, c: 0xffd070, r: 2 }] },
   hearth: { id: 'hearth', name: "Wayfarer's Hearth", music: 'hearth', grid: hearth(), outdoor: false, dark: 0.1,
@@ -250,3 +268,270 @@ export const MAPS: Record<string, MapDef> = {
     warps: [{ x: 8, y: 19, to: 'hollow', tx: 14, ty: 3, dir: 0 }], chests: [], triggers: [{ x: 6, y: 11, w: 5, h: 1, script: 'bossApproach', once: 'bossApproach' }], saves: [],
     lights: [{ x: 4, y: 6, c: 0xff6a20, r: 3 }, { x: 12, y: 6, c: 0xff6a20, r: 3 }, { x: 3, y: 11, c: 0xff6a20, r: 2 }, { x: 13, y: 12, c: 0xff6a20, r: 2 }, { x: 8, y: 9, c: 0xffb060, r: 4 }] },
 };
+
+// ================================================================ CHAPTER II — THE DROWNED CHOIR
+// ---------------------------------------------------------------- EMBERWOOD ROAD (autumn forest)
+function road() {
+  const b = new B(48, 30, 'A');
+  // meadows and clearings carved out of the dense autumn wood
+  const meadow = (cx: number, cy: number, rx: number, ry: number, sd: number) => b.blob(cx, cy, rx, ry, '5', sd);
+  meadow(5, 15, 5, 4, 51); meadow(14, 18, 7, 4, 52); meadow(22, 15, 4, 6, 53); meadow(28, 12, 6, 3, 54); meadow(34, 15, 4, 5, 55); meadow(42, 18, 6, 4, 56);
+  meadow(22, 5, 8, 4, 57); meadow(6, 8, 5, 4, 58); meadow(43, 25, 4, 3, 59); meadow(30, 8, 3, 2, 60); meadow(3, 22, 3, 3, 61);
+  b.scatter('6', 260, 0, 0, 48, 30, '5', 62);
+  // main trail west -> east (leaf path)
+  b.trail([[0, 14], [9, 14], [9, 19], [21, 19], [21, 12], [33, 12], [33, 18], [46, 18], [47, 18]], '7');
+  // watchtower ruins (north clearing): broken walls, cobbles, the peddler's camp
+  b.rect(17, 2, 11, 6, 'Z'); b.scatter('5', 14, 17, 2, 11, 6, 'Z', 63);
+  b.hline(17, 21, 1, 'N'); b.hline(25, 27, 1, 'N'); b.set(19, 1, 'Q'); b.vline(16, 1, 4, 'N'); b.vline(28, 1, 3, 'N'); b.set(28, 4, 'z'); b.set(16, 5, 'z');
+  b.set(18, 3, '9'); b.set(26, 6, '>'); b.set(27, 6, '>'); b.set(18, 6, 'f'); b.set(27, 2, 'f');
+  b.trail([[22, 8], [22, 12]], '7');
+  // mushroom grove (north-west) where Turnip wandered
+  b.scatter('8', 10, 2, 5, 9, 7, '5', 64); b.scatter('8', 4, 2, 5, 9, 7, '6', 65);
+  b.trail([[5, 11], [5, 14]], '7', 1); b.trail([[6, 11], [6, 12]], '7', 1);
+  // brook with a log bridge
+  b.vline(38, 0, 29, '~'); b.vline(39, 0, 29, '~'); b.rect(38, 18, 2, 2, '=');
+  // south-west hollow with a hidden chest
+  b.trail([[3, 17], [3, 22]], '5', 2);
+  // autumn tall grass (encounter zones), flowers, rocks, logs, bushes
+  b.blob(14, 16, 3, 2, '&', 66); b.blob(28, 14, 3, 1, '&', 67); b.blob(43, 21, 3, 2, '&', 68); b.blob(31, 8, 2, 1, '&', 69); b.blob(25, 16, 2, 2, '&', 70); b.blob(44, 15, 2, 1, '&', 71);
+  b.scatter('@', 30, 1, 1, 46, 28, '5', 72); b.scatter('$', 26, 1, 1, 46, 28, '6', 73); b.scatter('z', 10, 1, 1, 46, 28, '5', 74); b.scatter('9', 6, 1, 1, 46, 28, '6', 75);
+  b.set(3, 12, 'S'); b.set(44, 16, 'S');
+  b.frame(0, 0, 48, 30, 'A');
+  b.rect(0, 14, 2, 2, '7'); b.rect(46, 18, 2, 2, '7');
+  return b.done();
+}
+// ---------------------------------------------------------------- SALTMERE (harbour town)
+function saltmere() {
+  const b = new B(40, 34, '.');
+  b.scatter(',', 160, 0, 0, 40, 34, '.', 81);
+  b.frame(0, 0, 40, 34, 'T'); b.rect(0, 0, 40, 2, 'T'); b.scatter('.', 20, 1, 1, 38, 2, 'T', 82);
+  // beach + sea
+  b.rect(0, 23, 40, 4, '1'); b.scatter('2', 50, 0, 23, 40, 4, '1', 83); b.rect(0, 27, 40, 7, '4');
+  for (let x = 0; x < 40; x++) if ((x * 7) % 5 === 0) b.set(x, 27, '4');
+  b.vline(0, 0, 33, 'T'); b.vline(39, 0, 22, 'T');
+  // cobbled streets
+  b.rect(2, 7, 36, 2, 'Z'); b.rect(13, 9, 13, 8, 'Z'); b.rect(18, 17, 3, 6, 'Z'); b.rect(30, 9, 2, 8, 'Z'); b.rect(30, 16, 8, 2, 'Z'); b.rect(5, 9, 2, 5, 'Z'); b.rect(5, 14, 8, 2, 'Z');
+  b.rect(0, 9, 2, 2, 'Z'); b.rect(0, 7, 2, 2, 'Z');
+  // buildings
+  b.shouse(2, 2, 9, 4); // The Gull & Anchor (door 6,5)
+  b.shouse(12, 2, 7, 3); // Tideshop (door 15,5)
+  // chapel of Alltrades: tall slate roof, stained glass
+  b.rect(21, 1, 10, 3, 'V'); b.hline(21, 30, 4, 'Y'); b.hline(21, 30, 5, 'N'); b.set(23, 5, '-'); b.set(28, 5, '-'); b.set(25, 5, 'G'); b.set(26, 5, 'G'); b.set(24, 5, 'N'); b.set(27, 5, 'N');
+  b.shouse(31, 10, 7, 3); // Mayor's manor (door 34,13)
+  b.rect(31, 9, 7, 1, 'V');
+  b.shouse(8, 17, 6, 2); // fisher cottage (door 10,20)
+  b.shouse(24, 17, 5, 2); // net-maker's house (door 26,20)
+  // town square: fountain-well, lamp posts, benches
+  b.set(19, 12, 'W'); b.set(13, 9, 'L'); b.set(25, 9, 'L'); b.set(13, 16, 'L'); b.set(25, 16, 'L'); b.set(16, 15, 'b'); b.set(22, 15, 'b');
+  // lighthouse on the east cliff
+  b.rect(33, 2, 6, 6, 'Z'); b.rect(35, 2, 3, 3, 'Z'); b.set(36, 4, '%'); b.set(35, 4, 'z'); b.set(37, 4, 'z'); b.vline(32, 5, 8, 'Z');
+  // docks
+  b.rect(19, 23, 2, 9, '3'); b.rect(15, 29, 10, 2, '3'); b.set(15, 28, '/'); b.set(24, 28, '/'); b.set(18, 31, '<'); b.set(22, 31, '<'); b.set(25, 31, '<');
+  b.set(21, 23, '>'); b.set(17, 24, 'n'); b.set(23, 24, 'n'); b.set(30, 24, 'n'); b.set(12, 25, '<');
+  // the sea cave in the western cliffs
+  b.rect(1, 18, 7, 5, 'I'); b.hline(1, 7, 22, 'J'); b.set(4, 22, 'i'); b.set(3, 23, '1'); b.set(4, 23, '1'); b.set(5, 23, '1');
+  b.vline(4, 16, 21, 'I');
+  // tide pools & rocks on the beach
+  b.set(33, 25, '0'); b.set(34, 25, '0'); b.set(8, 25, '0'); b.set(29, 26, 'z'); b.set(11, 23, 'z');
+  // gardens & flowers
+  b.scatter('*', 30, 2, 9, 36, 13, '.', 84); b.scatter('*', 10, 2, 9, 36, 13, ',', 85);
+  b.set(10, 10, 'T'); b.set(28, 13, 'T'); b.set(2, 15, 'T'); b.set(36, 20, 'T'); b.set(28, 21, 'T');
+  // harbour props: barrels & crates by the shops, flower boxes, lamp posts along the sea wall, a market stall
+  b.set(11, 6, '>'); b.set(19, 6, '>'); b.set(2, 6, '>'); b.set(20, 6, 'f'); b.set(11, 9, 'f'); b.set(29, 9, 'f'); b.set(36, 15, 'f');
+  for (const x of [11, 15, 29, 33, 37]) b.set(x, 22, '/');
+  b.set(14, 21, '>'); b.set(15, 21, '>'); b.set(23, 21, '$'); b.set(7, 16, '$'); b.set(2, 12, 'T'); b.set(38, 9, 'T'); b.set(27, 9, 'T');
+  b.set(12, 8, 'S');
+  return b.done();
+}
+function gull() {
+  const b = new B(15, 12, '_');
+  b.rect(0, 0, 15, 2, '|'); b.vline(0, 0, 11, '|'); b.vline(14, 0, 11, '|'); b.hline(0, 14, 11, '|');
+  b.set(7, 1, 'H'); b.set(1, 1, 'K'); b.set(13, 1, 'K'); b.set(4, 1, 'O'); b.set(10, 1, 'X');
+  b.hline(1, 4, 4, 'k'); b.vline(4, 2, 4, 'k'); // innkeeper
+  b.hline(10, 13, 4, 'k'); b.vline(10, 2, 4, 'k'); // ledger
+  b.rect(6, 3, 3, 1, 'g'); // stage
+  b.set(2, 7, 't'); b.set(5, 8, 't'); b.set(9, 8, 't'); b.set(12, 7, 't'); b.set(1, 9, 'B'); b.set(1, 10, 'B'); b.set(13, 9, 'O');
+  b.rect(7, 9, 1, 2, 'g'); b.set(7, 11, 'D');
+  return b.done();
+}
+function tideshop() {
+  const b = new B(13, 10, '_');
+  b.rect(0, 0, 13, 2, '|'); b.vline(0, 0, 9, '|'); b.vline(12, 0, 9, '|'); b.hline(0, 12, 9, '|');
+  b.hline(1, 3, 3, 'k'); b.hline(5, 7, 3, 'k'); b.hline(9, 11, 3, 'k');
+  b.set(1, 1, 'X'); b.set(4, 1, 'K'); b.set(8, 1, 'X'); b.set(11, 1, 'O'); b.set(1, 6, '>'); b.set(11, 6, '>'); b.set(11, 7, 'O');
+  b.rect(5, 6, 3, 2, 'g'); b.set(6, 9, 'D');
+  return b.done();
+}
+function chapel() {
+  const b = new B(14, 14, '!');
+  b.rect(0, 0, 14, 2, 'N'); b.vline(0, 0, 13, 'N'); b.vline(13, 0, 13, 'N'); b.hline(0, 13, 13, 'N');
+  b.set(3, 1, '-'); b.set(6, 1, '-'); b.set(7, 1, '-'); b.set(10, 1, '-');
+  b.hline(5, 8, 3, '+'); // altar
+  for (const y of [6, 8, 10]) { b.hline(2, 5, y, '?'); b.hline(8, 11, y, '?'); }
+  b.set(1, 3, 'f'); b.set(12, 3, 'f'); b.set(1, 11, 'f'); b.set(12, 11, 'f');
+  b.vline(6, 4, 12, 'g'); b.vline(7, 4, 12, 'g');
+  b.set(6, 13, 'D'); b.set(7, 13, 'D');
+  return b.done();
+}
+function manor() {
+  const b = new B(12, 10, '_');
+  b.rect(0, 0, 12, 2, '|'); b.vline(0, 0, 9, '|'); b.vline(11, 0, 9, '|'); b.hline(0, 11, 9, '|');
+  b.set(2, 1, 'K'); b.set(3, 1, 'K'); b.set(6, 1, 'H'); b.set(9, 1, 'X'); b.set(10, 2, 'B'); b.set(10, 3, 'B');
+  b.hline(3, 7, 4, 't'); b.set(1, 7, 'O'); b.set(10, 7, 'O');
+  b.rect(5, 6, 2, 3, 'g'); b.set(5, 9, 'D');
+  return b.done();
+}
+function cottage() {
+  const b = new B(10, 8, '_');
+  b.rect(0, 0, 10, 2, '|'); b.vline(0, 0, 7, '|'); b.vline(9, 0, 7, '|'); b.hline(0, 9, 7, '|');
+  b.set(1, 1, 'K'); b.set(7, 1, 'H'); b.set(8, 2, 'B'); b.set(8, 3, 'B'); b.set(4, 3, 't'); b.set(1, 5, 'O');
+  b.set(4, 7, 'D');
+  return b.done();
+}
+// ---------------------------------------------------------------- THE WEEPING GROTTO (sea cave)
+function grotto1() {
+  const b = new B(34, 36, 'I');
+  b.rect(14, 29, 7, 6, ';');           // landing (south)
+  b.rect(16, 22, 3, 7, ';');           // passage
+  b.blob(10, 18, 8, 5, ';', 91);       // tide-pool cavern (west)
+  b.blob(25, 16, 7, 6, ';', 92);       // coral hall (east)
+  b.rect(16, 15, 4, 4, ';');           // junction
+  b.rect(17, 7, 3, 8, ';');            // north passage
+  b.blob(18, 5, 7, 3, ';', 93);        // stair hall
+  b.rect(27, 24, 4, 7, ';'); b.rect(19, 27, 8, 2, ';'); // side loop to a treasure nook
+  b.blob(5, 9, 3, 3, ';', 94); b.rect(5, 12, 2, 3, ';');  // hidden west nook
+  // water & pools
+  b.blob(9, 19, 4, 2, '0', 95); b.blob(26, 18, 2, 1, '0', 96); b.set(15, 32, '0'); b.set(20, 31, '0');
+  // coral & glow
+  b.scatter('E', 26, 0, 0, 34, 36, ';', 97); b.scatter('j', 12, 0, 0, 34, 36, ';', 98);
+  b.set(17, 34, 'p'); b.set(18, 34, 'p'); b.set(18, 3, 'i'); b.set(19, 3, 'i');
+  b.faces('I', 'J');
+  return b.done();
+}
+function grotto2() {
+  const b = new B(28, 34, 'I');
+  b.rect(12, 28, 5, 5, '!'); b.set(13, 32, 'p'); b.set(14, 32, 'p');   // arrival (from B1 stairs)
+  b.rect(13, 22, 3, 6, ';');
+  b.rect(4, 17, 20, 5, ';');           // flooded nave
+  b.rect(4, 10, 4, 7, ';'); b.rect(20, 10, 4, 7, ';'); // side aisles
+  b.rect(8, 10, 12, 2, ';');
+  b.rect(11, 3, 7, 7, '!');            // sanctum
+  b.set(13, 4, '+'); b.set(14, 4, '+'); b.set(15, 4, '+');
+  b.set(11, 3, '-'); b.set(17, 3, '-'); b.set(12, 3, 'f'); b.set(16, 3, 'f');
+  for (const y of [6, 8]) { b.set(11, y, '?'); b.set(12, y, '?'); b.set(16, y, '?'); b.set(17, y, '?'); }
+  b.scatter('E', 14, 0, 0, 28, 34, ';', 101); b.scatter('j', 8, 0, 0, 28, 34, ';', 102);
+  b.blob(6, 19, 2, 1, '0', 103); b.blob(21, 19, 2, 1, '0', 104);
+  b.set(5, 12, 'f'); b.set(22, 12, 'f');
+  b.faces('I', 'J');
+  return b.done();
+}
+
+const C2 = {
+  maren: L(0, 0, 4, 4, 1, 1, 6, 4), ione: L(0, 1, 2, 8, 2, 1, 8, 6), hallam: L(1, 1, 0, 1, 3, 2, 4, 3), pell: L(1, 3, 1, 1, 3, 0, 7, 3),
+  marla: L(1, 2, 3, 2, 1, 0, 1, 6), delphine: L(0, 4, 3, 0, 5, 1, 1, 3), sailor: L(1, 3, 0, 0, 0, 3, 1, 6), fisherwife: L(0, 2, 4, 1, 2, 1, 8, 6),
+  acolyte: L(1, 1, 0, 4, 4, 3, 5, 5), girl: L(0, 0, 3, 3, 1, 0, 0, 6), oldsalt: L(1, 2, 0, 4, 3, 2, 1, 5), smith2: L(1, 4, 1, 0, 0, 3, 5, 1),
+};
+export const NPC_LOOKS2 = C2;
+const choir = { armor: 'robe', head: 'pointyhat' };
+Object.assign(MAPS, {
+  road: { id: 'road', name: 'Emberwood Road', music: 'forest', grid: road(), outdoor: true, ambient: 'leaves', bg: 'bg_road',
+    encounters: { table: 'road', count: 12 },
+    npcs: [
+      { id: 'pell', name: 'Pell the Peddler', x: 24, y: 5, dir: 0, look: C2.pell, equip: { head: 'bandana', acc: 'cape', armor: 'leather' }, script: 'pell' },
+      { id: 'mule', name: 'Turnip', x: 6, y: 7, dir: 1, sprite: 'npc_mule', noGlow: true, script: 'muleFound', notCond: 'muleFound' },
+      { id: 'muleHome', name: 'Turnip', x: 26, y: 4, dir: 1, sprite: 'npc_mule', noGlow: true, script: 'muleHome', cond: 'muleFound' },
+      { id: 'pilgrim', name: 'Ashen Pilgrim', x: 33, y: 14, dir: 1, look: C2.acolyte, equip: choir, script: 'pilgrimRoad', notCond: 'ioneTaken' },
+    ],
+    warps: [{ x: 0, y: 14, to: 'village', tx: 30, ty: 15, dir: 1 }, { x: 0, y: 15, to: 'village', tx: 30, ty: 16, dir: 1 },
+      { x: 47, y: 18, to: 'saltmere', tx: 1, ty: 7, dir: 2 }, { x: 47, y: 19, to: 'saltmere', tx: 1, ty: 8, dir: 2 }],
+    chests: [{ id: 'r_c1', x: 5, y: 4, item: 'hiHerb' }, { id: 'r_c2', x: 26, y: 3, item: 'hood' }, { id: 'r_c3', x: 45, y: 26, gold: 120 }, { id: 'r_c4', x: 30, y: 9, item: 'ether' }, { id: 'r_c5', x: 2, y: 22, item: 'shortbow' }],
+    triggers: [{ x: 1, y: 14, w: 2, h: 2, script: 'roadIntro', once: 'roadIntro' }],
+    saves: [{ x: 22, y: 4 }],
+    signs: [{ x: 3, y: 12, text: 'EMBERWOOD ROAD\n← Hollowmere   → Saltmere\n↑ Old Watchtower' }, { x: 44, y: 16, text: '→ SALTMERE\n"Where the light never sleeps."\n(Someone has scratched out "never".)' }],
+    lights: [{ x: 18, y: 7, c: 0xffc070, r: 2 }, { x: 27, y: 7, c: 0xffc070, r: 2 }] },
+  saltmere: { id: 'saltmere', name: 'Saltmere', music: 'harbor', grid: saltmere(), outdoor: true, ambient: 'gulls', night: 'ioneTaken&!relit',
+    npcs: [
+      { id: 'preacher', name: 'Choir Preacher', x: 19, y: 10, dir: 0, look: C2.acolyte, equip: choir, script: 'preacher', notCond: 'ioneTaken' },
+      { id: 'pil1', name: 'Ashen Pilgrim', x: 17, y: 11, dir: 2, look: C2.acolyte, equip: { armor: 'robe' }, script: 'pilgrim', notCond: 'ioneTaken' },
+      { id: 'pil2', name: 'Ashen Pilgrim', x: 21, y: 11, dir: 1, look: C2.acolyte, equip: { armor: 'robe' }, script: 'pilgrim', notCond: 'ioneTaken' },
+      { id: 'oldsalt', name: 'Old Salt Nab', x: 20, y: 25, dir: 0, look: C2.oldsalt, equip: { head: 'bandana' }, script: 'oldsalt' },
+      { id: 'girl', name: 'Coralie', x: 15, y: 14, look: C2.girl, script: 'coralie', wander: true },
+      { id: 'guardS', name: 'Harbour Watch', x: 32, y: 6, dir: 0, look: NPC_LOOKS.guard, equip: { weapon: 'spear', head: 'knightHelm', armor: 'chain' }, script: 'lightGuard' },
+      { id: 'fwife', name: 'Fishwife Brenna', x: 27, y: 22, dir: 3, look: C2.fisherwife, script: 'brenna' },
+      { id: 'caveGuard', name: 'Harbour Watch', x: 4, y: 24, dir: 3, look: NPC_LOOKS.guard, equip: { weapon: 'spear', head: 'knightHelm', armor: 'chain' }, script: 'caveGuard', notCond: 'ioneTaken' },
+      // abduction night (cutscene actors)
+      { id: 'mordaneN', name: 'Cantor Mordane', x: 19, y: 18, dir: 3, look: C2.acolyte, equip: { armor: 'robe', head: 'pointyhat', weapon: 'wand', acc: 'cape' }, script: 'none', hidden: true },
+      { id: 'acoN1', name: 'Choir Acolyte', x: 18, y: 19, dir: 3, look: C2.acolyte, equip: choir, script: 'none', hidden: true },
+      { id: 'acoN2', name: 'Choir Acolyte', x: 20, y: 19, dir: 3, look: C2.acolyte, equip: choir, script: 'none', hidden: true },
+      { id: 'ioneN', name: 'Ione', x: 19, y: 19, dir: 3, look: C2.ione, equip: { weapon: 'coralLute', armor: 'silkRobe' }, script: 'none', hidden: true },
+      { id: 'hallamN', name: 'Mayor Hallam', x: 34, y: 14, dir: 1, look: C2.hallam, equip: { acc: 'cape', armor: 'sailorCoat' }, script: 'none', hidden: true },
+      // after the rescue
+      { id: 'hallamL', name: 'Mayor Hallam', x: 33, y: 8, dir: 2, look: C2.hallam, equip: { acc: 'cape', armor: 'sailorCoat' }, script: 'hallam', hidden: true },
+      { id: 'ioneL', name: 'Ione', x: 35, y: 5, dir: 3, look: C2.ione, equip: { weapon: 'coralLute', armor: 'silkRobe' }, script: 'none', hidden: true },
+    ],
+    warps: [{ x: 0, y: 7, to: 'road', tx: 46, ty: 18, dir: 1 }, { x: 0, y: 8, to: 'road', tx: 46, ty: 19, dir: 1 },
+      { x: 6, y: 5, to: 'gull', tx: 7, ty: 10, dir: 3 }, { x: 15, y: 5, to: 'tideshop', tx: 6, ty: 8, dir: 3 }, { x: 25, y: 5, to: 'chapel', tx: 6, ty: 12, dir: 3 }, { x: 26, y: 5, to: 'chapel', tx: 7, ty: 12, dir: 3 },
+      { x: 34, y: 13, to: 'manor', tx: 5, ty: 8, dir: 3 }, { x: 10, y: 20, to: 'cottage', tx: 4, ty: 6, dir: 3 }, { x: 26, y: 20, to: 'nethouse', tx: 4, ty: 6, dir: 3 },
+      { x: 4, y: 22, to: 'grotto1', tx: 17, ty: 33, dir: 3, cond: 'ioneTaken', blockScript: 'caveSealed' }],
+    chests: [{ id: 's_c1', x: 38, y: 21, item: 'pearl' }, { id: 's_c2', x: 1, y: 16, gold: 150 }, { id: 's_c3', x: 13, y: 26, item: 'hiHerb' }],
+    triggers: [{ x: 1, y: 7, w: 2, h: 2, script: 'saltIntro', once: 'saltIntro' }, { x: 33, y: 6, w: 6, h: 2, script: 'relight', once: 'relit', cond: 'grottoDone' }],
+    saves: [{ x: 22, y: 13 }],
+    signs: [{ x: 12, y: 8, text: 'SALTMERE\n← Emberwood Road   ↑ Chapel of Alltrades\nGull & Anchor Inn · Tideshop · Mayor\'s Manor →' }],
+    lights: [{ x: 13, y: 9, c: 0xffc070, r: 2.2 }, { x: 25, y: 9, c: 0xffc070, r: 2.2 }, { x: 13, y: 16, c: 0xffc070, r: 2.2 }, { x: 25, y: 16, c: 0xffc070, r: 2.2 },
+      { x: 4, y: 5, c: 0xffd070, r: 2 }, { x: 8, y: 5, c: 0xffd070, r: 2 }, { x: 23, y: 5, c: 0xff80c0, r: 2.4 }, { x: 28, y: 5, c: 0x80c0ff, r: 2.4 }, { x: 36, y: 2, c: 0xfff0c0, r: 2.5 }],
+    rosterSpots: [] },
+  gull: { id: 'gull', name: 'The Gull & Anchor', music: 'tavern', grid: gull(), outdoor: false, dark: 0.12,
+    npcs: [
+      { id: 'marla', name: 'Marla', x: 2, y: 3, dir: 0, look: C2.marla, equip: { armor: 'sailorCoat' }, script: 'innSalt', counter: true },
+      { id: 'delphine', name: 'Delphine', x: 12, y: 3, dir: 0, look: C2.delphine, equip: { head: 'featherCap', acc: 'pearlRing' }, script: 'delphine', counter: true },
+      { id: 'ione', name: 'Ione', x: 7, y: 2, dir: 0, look: C2.ione, equip: { weapon: 'coralLute', armor: 'silkRobe' }, script: 'ioneInn', cond: 'metMaren', notCond: 'ioneTaken' },
+      { id: 'sailor', name: 'Sailor Quill', x: 5, y: 7, dir: 1, look: C2.sailor, equip: { head: 'bandana', armor: 'sailorCoat' }, script: 'sailor' },
+      { id: 'drunk', name: 'Snoring Fisherman', x: 12, y: 8, dir: 1, look: NPC_LOOKS.fisher, script: 'snorer' },
+    ],
+    warps: [{ x: 7, y: 11, to: 'saltmere', tx: 6, ty: 6, dir: 0 }],
+    chests: [{ id: 'g_c1', x: 13, y: 10, item: 'ether' }], triggers: [], saves: [],
+    lights: [{ x: 7, y: 1, c: 0xff9a40, r: 5 }, { x: 7, y: 3, c: 0xffe0a0, r: 3 }, { x: 5, y: 8, c: 0xffd070, r: 2 }, { x: 9, y: 8, c: 0xffd070, r: 2 }],
+    rosterSpots: [[3, 9], [11, 6], [6, 6], [10, 9], [3, 6], [12, 10]] },
+  tideshop: { id: 'tideshop', name: 'Tideshop', music: 'tavern', grid: tideshop(), outdoor: false, dark: 0.1,
+    npcs: [
+      { id: 'tsmith', name: 'Brannoc', x: 2, y: 2, dir: 0, look: C2.smith2, equip: { armor: 'chain', weapon: 'warhammer' }, script: 'tideWeapons', counter: true },
+      { id: 'tarmor', name: 'Wenna', x: 6, y: 2, dir: 0, look: NPC_LOOKS.armorer, equip: { head: 'knightHelm', armor: 'sailorCoat' }, script: 'tideArmor', counter: true },
+      { id: 'titems', name: 'Old Marrow', x: 10, y: 2, dir: 0, look: NPC_LOOKS.grocer, equip: { head: 'bandana' }, script: 'tideItems', counter: true },
+    ],
+    warps: [{ x: 6, y: 9, to: 'saltmere', tx: 15, ty: 6, dir: 0 }], chests: [], triggers: [], saves: [], lights: [{ x: 6, y: 4, c: 0xffd070, r: 5 }] },
+  chapel: { id: 'chapel', name: 'Chapel of Alltrades', music: 'chapel', grid: chapel(), outdoor: false, dark: 0.25, ambient: 'dust',
+    npcs: [
+      { id: 'maren', name: 'Abbess Maren', x: 6, y: 4, dir: 0, look: C2.maren, equip: { armor: 'robe', head: 'circlet', weapon: 'stick', acc: 'cape' }, script: 'maren' },
+      { id: 'novice', name: 'Novice Tam', x: 10, y: 4, dir: 1, look: NPC_LOOKS.kid, equip: { armor: 'robe' }, script: 'novice' },
+    ],
+    warps: [{ x: 6, y: 13, to: 'saltmere', tx: 25, ty: 6, dir: 0 }, { x: 7, y: 13, to: 'saltmere', tx: 26, ty: 6, dir: 0 }],
+    chests: [], triggers: [], saves: [{ x: 2, y: 4 }],
+    lights: [{ x: 3, y: 1, c: 0xff80c0, r: 3 }, { x: 6, y: 1, c: 0x80c0ff, r: 3 }, { x: 7, y: 1, c: 0xffe080, r: 3 }, { x: 10, y: 1, c: 0x80ffc0, r: 3 }, { x: 6, y: 3, c: 0xfff0c0, r: 4 }] },
+  manor: { id: 'manor', name: "Mayor Hallam's Manor", music: 'tavern', grid: manor(), outdoor: false, dark: 0.15,
+    npcs: [{ id: 'hallam', name: 'Mayor Hallam', x: 5, y: 3, dir: 0, look: C2.hallam, equip: { acc: 'cape', armor: 'sailorCoat' }, script: 'hallam' }],
+    warps: [{ x: 5, y: 9, to: 'saltmere', tx: 34, ty: 14, dir: 0 }], chests: [{ id: 'm_c1', x: 9, y: 2, item: 'pearlRing' }], triggers: [], saves: [], lights: [{ x: 6, y: 1, c: 0xff9a40, r: 4 }] },
+  cottage: { id: 'cottage', name: 'Fisher Cottage', music: 'tavern', grid: cottage(), outdoor: false, dark: 0.15,
+    npcs: [{ id: 'nan', name: 'Granny Pearl', x: 3, y: 2, dir: 0, look: NPC_LOOKS.granny, equip: { acc: 'cape' }, script: 'nanPearl' }],
+    warps: [{ x: 4, y: 7, to: 'saltmere', tx: 10, ty: 21, dir: 0 }], chests: [{ id: 'c_c1', x: 8, y: 5, item: 'antidote' }], triggers: [], saves: [], lights: [{ x: 7, y: 1, c: 0xff9a40, r: 4 }] },
+  nethouse: { id: 'nethouse', name: "Net-Maker's House", music: 'tavern', grid: cottage(), outdoor: false, dark: 0.15,
+    npcs: [{ id: 'ilo', name: 'Net-Maker Ilo', x: 2, y: 3, dir: 0, look: NPC_LOOKS.farmer, equip: { head: 'bandana' }, script: 'ilo' }, { id: 'ilokid', name: 'Little Wren', x: 6, y: 5, look: NPC_LOOKS.kid, script: 'wren', wander: true }],
+    warps: [{ x: 4, y: 7, to: 'saltmere', tx: 26, ty: 21, dir: 0 }], chests: [{ id: 'n_c1', x: 8, y: 5, item: 'shellBuckler' }], triggers: [], saves: [], lights: [{ x: 7, y: 1, c: 0xff9a40, r: 4 }] },
+  grotto1: { id: 'grotto1', name: 'The Weeping Grotto', music: 'grotto', grid: grotto1(), outdoor: false, dark: 0.52, ambient: 'bubbles', bg: 'bg_grotto',
+    encounters: { table: 'grotto', count: 11 },
+    npcs: [{ id: 'ghost', name: 'Drowned Lookout', x: 9, y: 15, dir: 0, look: C2.sailor, equip: { head: 'bandana', armor: 'sailorCoat' }, script: 'ghost' }],
+    warps: [{ x: 17, y: 34, to: 'saltmere', tx: 4, ty: 23, dir: 0 }, { x: 18, y: 34, to: 'saltmere', tx: 4, ty: 23, dir: 0 }, { x: 18, y: 3, to: 'grotto2', tx: 13, ty: 31, dir: 3 }, { x: 19, y: 3, to: 'grotto2', tx: 14, ty: 31, dir: 3 }],
+    chests: [{ id: 'g1_c1', x: 4, y: 8, item: 'towerShield' }, { id: 'g1_c2', x: 30, y: 25, item: 'seaStaff' }, { id: 'g1_c3', x: 30, y: 14, gold: 200 }, { id: 'g1_c4', x: 3, y: 18, item: 'pearl' }, { id: 'g1_c5', x: 25, y: 5, item: 'hiHerb' }],
+    triggers: [{ x: 14, y: 29, w: 7, h: 1, script: 'grottoIntro', once: 'grottoIntro' }], saves: [],
+    lights: [{ x: 17, y: 32, c: 0xa0e0ff, r: 4 }, { x: 9, y: 19, c: 0x60f0d0, r: 4 }, { x: 25, y: 17, c: 0xff80c0, r: 4 }, { x: 18, y: 5, c: 0x60f0d0, r: 4 }, { x: 5, y: 9, c: 0xffe080, r: 3 }, { x: 29, y: 27, c: 0x60f0d0, r: 3 }] },
+  grotto2: { id: 'grotto2', name: 'Sanctum of the Drowned Choir', music: 'grotto', grid: grotto2(), outdoor: false, dark: 0.58, ambient: 'bubbles', bg: 'bg_choir', torches: true,
+    encounters: { table: 'sanctum', count: 7, area: [3, 9, 22, 14] },
+    npcs: [
+      { id: 'cantor', name: 'Cantor Mordane', x: 14, y: 6, dir: 0, sprite: 'm_cantor', script: 'cantorBoss', notCond: 'grottoDone' },
+      { id: 'ioneB', name: 'Ione', x: 14, y: 4, dir: 0, look: C2.ione, equip: { armor: 'silkRobe' }, script: 'none', notCond: 'grottoDone' },
+    ],
+    warps: [{ x: 13, y: 32, to: 'grotto1', tx: 18, ty: 4, dir: 0 }, { x: 14, y: 32, to: 'grotto1', tx: 19, ty: 4, dir: 0 }],
+    chests: [{ id: 'g2_c1', x: 4, y: 10, item: 'chain' }, { id: 'g2_c2', x: 23, y: 10, item: 'silkRobe' }, { id: 'g2_c3', x: 5, y: 21, item: 'ether' }],
+    triggers: [{ x: 12, y: 27, w: 5, h: 1, script: 'sanctumIntro', once: 'sanctumIntro' }, { x: 11, y: 9, w: 7, h: 1, script: 'cantorApproach', once: 'cantorApproach', cond: '!grottoDone' }],
+    saves: [{ x: 15, y: 29 }],
+    lights: [{ x: 14, y: 4, c: 0xff6080, r: 5 }, { x: 11, y: 3, c: 0xff80c0, r: 2 }, { x: 17, y: 3, c: 0x80c0ff, r: 2 }, { x: 6, y: 19, c: 0x60f0d0, r: 3 }, { x: 21, y: 19, c: 0x60f0d0, r: 3 }] },
+} as Record<string, MapDef>);

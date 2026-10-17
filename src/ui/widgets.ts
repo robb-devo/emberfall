@@ -28,8 +28,11 @@ export class ListMenu extends Phaser.GameObjects.Container implements Focus {
   items: MenuItem[]; idx = 0; top = 0; rows: Phaser.GameObjects.Container[] = []; cursor: Phaser.GameObjects.Text; bg: Phaser.GameObjects.Graphics;
   onSelect?: (i: number, it: MenuItem) => void; onCancel?: () => void; onChange?: (i: number, it: MenuItem) => void;
   cols: number; itemH: number; visible_: number; w: number; h: number; active = true; fontSize: number;
-  constructor(s: Phaser.Scene, x: number, y: number, w: number, items: MenuItem[], o: { cols?: number; itemH?: number; rows?: number; title?: string; fontSize?: number; noPanel?: boolean } = {}) {
-    super(s, x, y);
+  backOverride?: boolean; title = '';
+  /** Unified Back button shows whenever the menu can be cancelled (override with o.back). */
+  get canBack() { return this.active && (this.backOverride ?? !!this.onCancel); }
+  constructor(s: Phaser.Scene, x: number, y: number, w: number, items: MenuItem[], o: { cols?: number; itemH?: number; rows?: number; title?: string; fontSize?: number; noPanel?: boolean; back?: boolean } = {}) {
+    super(s, x, y); this.backOverride = o.back; this.title = o.title || '';
     this.items = items; this.cols = o.cols || 1; this.itemH = o.itemH || 76; this.fontSize = o.fontSize || 32;
     this.visible_ = Math.min(o.rows || 8, Math.ceil(items.length / this.cols)); this.w = w;
     const titleH = o.title ? 56 : 0;
@@ -156,7 +159,7 @@ export function card(s: Phaser.Scene, title: string, body: string, icon?: string
     c.setScale(0.8).setAlpha(0); s.tweens.add({ targets: c, scale: 1, alpha: 1, duration: 220, ease: 'Back.out' });
     c.x = (W - W * 0.8) / 2; c.y = (H - H * 0.8) / 2; s.tweens.add({ targets: c, x: 0, y: 0, duration: 220, ease: 'Back.out' });
     Audio.sfx('chest');
-    const f: Focus = { onAction: a => { if (a === 'ok' || a === 'cancel') done(); } };
+    const f: Focus = { canBack: true, onAction: a => { if (a === 'ok' || a === 'cancel') done(); } };
     let closed = false;
     const done = () => { if (closed) return; closed = true; Input.pop(f); Audio.sfx('confirm'); s.tweens.add({ targets: c, alpha: 0, duration: 150, onComplete: () => { c.destroy(); res(); } }); };
     s.time.delayedCall(250, () => { Input.push(f); dim.on('pointerdown', done); });

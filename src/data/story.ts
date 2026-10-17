@@ -218,3 +218,10 @@ export const SCRIPTS: Record<string, Cmd[]> = {
     { set: 'chapter1Done' }, { end: 'chapter' },
   ],
 };
+
+// ---- Chapter II merge (see story2.ts)
+import { SCRIPTS2, QUESTS2, QUESTS3, TUTORIALS2 } from './story2';
+Object.assign(QUESTS, QUESTS2, QUESTS3); Object.assign(TUTORIALS, TUTORIALS2);
+const elderCh1 = SCRIPTS.elder;
+Object.assign(SCRIPTS, SCRIPTS2);
+SCRIPTS.elder = [{ if: 'chapter1Done&!ch2Started', then: [{ call: 'ch2Dawn' }], else: [{ if: 'ch2Started', then: [{ call: 'elderCh2' }], else: elderCh1 }] }];

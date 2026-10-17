@@ -4,11 +4,12 @@ import { Input, Focus, Action } from '../ui/input';
 import { Audio } from '../systems/audio';
 import { Game, newMember, Look, stats, Member } from '../systems/state';
 import { ensureDoll, SKIN_NAMES, HAIR_NAMES, EYE_NAMES, OUTFIT_NAMES, HAIR_STYLES, FACES, BODIES, randomLook } from '../systems/paperdoll';
-import { VOCATIONS } from '../data/vocations';
+import { VOCATIONS, STARTING_VOCS } from '../data/vocations';
 
 const STARTER: Record<string, Record<string, string>> = {
   warrior: { weapon: 'shortsword', armor: 'tunic', shield: 'pot' }, mage: { weapon: 'stick', armor: 'tunic' },
   priest: { weapon: 'stick', armor: 'tunic' }, thief: { weapon: 'dagger', armor: 'tunic', head: 'bandana' },
+  paladin: { weapon: 'shortsword', armor: 'leather', shield: 'buckler' }, ranger: { weapon: 'shortbow', armor: 'tunic', head: 'hood' }, bard: { weapon: 'lute', armor: 'tunic', head: 'featherCap' },
 };
 export { STARTER };
 const NAMES = ['Aster', 'Rook', 'Juniper', 'Cass', 'Bryn', 'Orrin', 'Wren', 'Sable', 'Tamsin', 'Kael', 'Ivo', 'Lark', 'Nell', 'Dorian', 'Fia', 'Quill', 'Marlo', 'Seren'];
@@ -20,7 +21,9 @@ export class CreateScene extends Phaser.Scene implements Focus {
   look!: Look; voc = 'warrior'; name = 'Aster'; sel = 0; rows: Row[] = []; rowObjs: Phaser.GameObjects.Container[] = [];
   doll!: Phaser.GameObjects.Sprite; dirIdx = 0; info!: Phaser.GameObjects.Text; nameEntry?: NameEntry; statsT!: Phaser.GameObjects.Text;
   constructor() { super('Create'); }
-  init(d: { mode: 'hero' | 'companion'; onDone?: (m: Member | null) => void }) { this.mode = d.mode; this.onDone = d.onDone; this.sel = 0; }
+  slot = 0;
+  get canBack() { return !this.nameEntry; }
+  init(d: { mode: 'hero' | 'companion'; onDone?: (m: Member | null) => void; slot?: number }) { this.mode = d.mode; this.onDone = d.onDone; this.sel = 0; this.slot = d.slot ?? Game.slot; this.nameEntry = undefined; }
   create() {
     this.cameras.main.fadeIn(400);
     if (this.mode === 'hero') Audio.play('hearth');
@@ -40,7 +43,7 @@ export class CreateScene extends Phaser.Scene implements Focus {
     this.time.addEvent({ delay: 220, loop: true, callback: () => { const f = [0, 1, 0, 2][Math.floor(this.time.now / 220) % 4]; const dirs = [0, 1, 3, 2]; this.doll.setFrame(dirs[this.dirIdx] * 3 + f); } });
     this.rows = [
       { key: 'name', label: 'Name', get: () => 0, set: () => {} },
-      { key: 'voc', label: 'Vocation', opts: Object.values(VOCATIONS).map(v => v.name), get: () => Object.keys(VOCATIONS).indexOf(this.voc), set: v => (this.voc = Object.keys(VOCATIONS)[v]) },
+      { key: 'voc', label: 'Vocation', opts: this.vocList().map(k => VOCATIONS[k].name), get: () => Math.max(0, this.vocList().indexOf(this.voc)), set: v => (this.voc = this.vocList()[v]) },
       { key: 'body', label: 'Build', opts: BODIES, get: () => this.look.body, set: v => (this.look.body = v) },
       { key: 'skin', label: 'Skin', opts: SKIN_NAMES, get: () => this.look.skin, set: v => (this.look.skin = v) },
       { key: 'face', label: 'Eyes', opts: FACES, get: () => this.look.face, set: v => (this.look.face = v) },
@@ -57,7 +60,6 @@ export class CreateScene extends Phaser.Scene implements Focus {
     this.statsT = txt(this, 50, 650, '', 24, COL.goldS, { lineSpacing: 6 });
     this.add.existing(panel(this, 20, 760, W - 40, 500));
     this.buildRows(); this.refreshDoll(); Input.push(this);
-    if (this.mode === 'companion') { const back = txt(this, 40, 40, '✕', 44, COL.goldS).setOrigin(0, 0.5).setInteractive(); back.on('pointerdown', () => this.onAction('cancel')); }
     this.events.once('shutdown', () => Input.pop(this));
   }
   buildRows() {
@@ -87,6 +89,8 @@ export class CreateScene extends Phaser.Scene implements Focus {
     const m = newMember('x', this.name, this.voc, this.look); m.equip = STARTER[this.voc] as any; const s = stats(m);
     this.statsT.setText(`HP ${s.hp}   MP ${s.mp}   ATK ${s.atk}   DEF ${s.def}   AGI ${s.agi}   MAG ${s.mag}`);
   }
+  /** Starting vocations, plus those unlocked at the Chapel of Alltrades. */
+  vocList() { return Object.keys(VOCATIONS).filter(k => STARTING_VOCS.includes(k) || (this.mode === 'companion' && Game.s?.flags?.vocationsOpen)); }
   refreshDoll() { const key = ensureDoll(this, { look: { ...this.look }, equip: STARTER[this.voc] }); this.doll.setTexture(key, [0, 3, 9, 6][this.dirIdx]); }
   change(d: number) {
     const r = this.rows[this.sel]; if (!r.opts) return; const n = r.opts.length; r.set((r.get() + d + n) % n); Audio.sfx('cursor');
@@ -99,6 +103,7 @@ export class CreateScene extends Phaser.Scene implements Focus {
     if (a === 'down') { this.sel = (this.sel + 1) % this.rows.length; Audio.sfx('cursor'); this.buildRows(); }
     if (a === 'left') this.change(-1); if (a === 'right') this.change(1);
     if (a === 'cancel' && this.mode === 'companion') { this.finish(null); }
+    if (a === 'cancel' && this.mode === 'hero') { Input.pop(this); Audio.sfx('cancel'); this.cameras.main.fadeOut(300); this.time.delayedCall(320, () => this.scene.start('Title')); return; }
     if (a === 'ok') {
       const r = this.rows[this.sel];
       if (r.key === 'name') { Audio.sfx('confirm'); this.nameEntry = new NameEntry(this, this.name, n => { this.nameEntry = undefined; if (n) this.name = n; this.buildRows(); }); }
@@ -106,7 +111,7 @@ export class CreateScene extends Phaser.Scene implements Focus {
       else if (r.key === 'done') {
         Audio.sfx('join');
         if (this.mode === 'hero') {
-          Game.newGame(this.name, this.voc, { ...this.look }); Game.hero.equip = { ...STARTER[this.voc] } as any;
+          Input.pop(this); Game.newGame(this.name, this.voc, { ...this.look }, this.slot); Game.hero.equip = { ...STARTER[this.voc] } as any;
           this.cameras.main.fadeOut(900, 255, 255, 255);
           this.time.delayedCall(950, () => this.scene.start('World', { map: 'spire', x: 7, y: 13, dir: 3, script: 'prologue' }));
         } else {
@@ -121,6 +126,7 @@ export class CreateScene extends Phaser.Scene implements Focus {
 
 /** On-screen keyboard (also accepts physical typing). */
 class NameEntry implements Focus {
+  canBack = true;
   c: Phaser.GameObjects.Container; value: string; t: Phaser.GameObjects.Text; keyH: (e: KeyboardEvent) => void;
   constructor(public s: Phaser.Scene, init: string, public done: (v: string | null) => void) {
     this.value = init; this.c = s.add.container(0, 0).setDepth(100);

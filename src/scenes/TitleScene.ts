@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
-import { txt, W, H, ListMenu, SERIF, COL, card } from '../ui/widgets';
+import { txt, W, H, ListMenu, SERIF, COL, card, panel } from '../ui/widgets';
+import { Input } from '../ui/input';
 import { Audio } from '../systems/audio';
-import { Game } from '../systems/state';
+import { Game, SLOTS_N } from '../systems/state';
 import { ensureDoll } from '../systems/paperdoll';
 
 export class TitleScene extends Phaser.Scene {
@@ -68,13 +69,54 @@ export class TitleScene extends Phaser.Scene {
     this.events.once('shutdown', () => window.removeEventListener('keydown', kd));
   }
   showMenu() {
-    const items = [{ label: 'New Game' }, { label: 'Continue', disabled: !Game.hasSave() }, { label: 'How to Play' }];
-    const menu = new ListMenu(this, 160, 620, 400, items, { itemH: 78, fontSize: 36 });
-    if (Game.hasSave()) { menu.idx = 1; menu.refresh(); }
+    Input.backFallback = () => { /* title root: send the app to the background instead of killing it */ import('@capacitor/app').then(m => m.App.minimizeApp()).catch(() => {}); };
+    const latest = Game.latestSlot();
+    const items = [{ label: 'Continue', disabled: latest < 0, sub: latest >= 0 ? `Log ${latest + 1}` : '' }, { label: 'Adventure Logs', disabled: latest < 0 }, { label: 'New Game' }, { label: 'How to Play' }];
+    const menu = new ListMenu(this, 140, 600, 440, items, { itemH: 78, fontSize: 36, back: false });
+    menu.idx = latest >= 0 ? 0 : 2; menu.refresh();
     menu.onSelect = async i => {
-      if (i === 0) { menu.close(); this.cameras.main.fadeOut(500); this.time.delayedCall(520, () => this.scene.start('Create', { mode: 'hero' })); }
-      if (i === 1) { menu.close(); Game.load(); this.cameras.main.fadeOut(500); this.time.delayedCall(520, () => { Audio.stopMusic(); this.scene.start('World', { map: Game.s.map, x: Game.s.x, y: Game.s.y, dir: Game.s.dir }); }); }
-      if (i === 2) { menu.setActive(false); await card(this, 'How to Play', 'Drag on the screen to move.\nTap ✦ to talk, examine and confirm.\nTap ☰ for the menu.\n\nKeyboard: Arrows/WASD, Enter/Space, Esc, M.'); menu.setActive(true); }
+      if (i === 0) { menu.close(); this.begin(latest); }
+      if (i === 1) { menu.setActive(false); const k = await this.pickSlot('Load which Adventure Log?', true); menu.setActive(true); if (k >= 0) { menu.close(); this.begin(k); } }
+      if (i === 2) {
+        menu.setActive(false);
+        const k = await this.pickSlot('Record the new adventure in…', false);
+        if (k < 0) { menu.setActive(true); return; }
+        const inf = Game.slotInfo(k);
+        if (inf) {
+          const ok = await this.confirm(`Adventure Log ${k + 1} holds ${inf.name} (Lv ${inf.level}).\nOverwrite it once the new adventure is first saved?`);
+          if (!ok) { menu.setActive(true); return; }
+        }
+        menu.close(); Game.slot = k; this.cameras.main.fadeOut(500); this.time.delayedCall(520, () => this.scene.start('Create', { mode: 'hero', slot: k }));
+      }
+      if (i === 3) { menu.setActive(false); await card(this, 'How to Play', 'Drag anywhere to move — in 8 directions.\nTap ✦ to talk, examine and confirm.\nTap ☰ for the menu. ◀ Back (top-left) or your phone\'s back button closes any menu.\n\nYour adventure autosaves when you change areas, after battles and at story moments. Star-Shrines and Menu → Save also save.\n\nKeyboard: Arrows/WASD, Enter/Space, Esc, M.'); menu.setActive(true); }
     };
+  }
+  begin(slot: number) {
+    if (!Game.load(slot)) { card(this, 'Could not load', 'This Adventure Log could not be read.'); this.scene.restart(); return; }
+    this.cameras.main.fadeOut(500);
+    this.time.delayedCall(520, () => { Audio.stopMusic(); this.scene.start('World', { map: Game.s.map, x: Game.s.x, y: Game.s.y, dir: Game.s.dir }); });
+  }
+  /** Adventure Log picker. When loading, empty logs are disabled. Returns -1 on Back. */
+  pickSlot(title: string, loading: boolean): Promise<number> {
+    return new Promise(res => {
+      const names = ['Opening', 'Ch. II', 'Ch. III'];
+      const items = Array.from({ length: SLOTS_N }, (_, i) => {
+        const inf = Game.slotInfo(i);
+        if (!inf) return { label: `Log ${i + 1}  —  empty`, disabled: loading };
+        const t = inf.playTime; const tm = `${Math.floor(t / 3600)}:${String(Math.floor(t / 60) % 60).padStart(2, '0')}`;
+        return { label: `Log ${i + 1}  ${inf.name}`, sub: `Lv${inf.level} · ${names[inf.chapter - 1] || ''} · ${tm}${inf.fromBackup ? ' ⚠' : ''}` };
+      });
+      const m = new ListMenu(this, 30, 560, W - 60, [...items, { label: 'Back' }], { title, itemH: 84, fontSize: 30 }).setDepth(50);
+      m.onSelect = i => { m.close(); res(i === SLOTS_N ? -1 : i); }; m.onCancel = () => { m.close(); res(-1); };
+    });
+  }
+  confirm(q: string): Promise<boolean> {
+    return new Promise(res => {
+      const c = this.add.container(0, 0).setDepth(60); c.add(this.add.rectangle(0, 0, W, H, 0, 0.6).setOrigin(0).setInteractive());
+      c.add(panel(this, 40, 420, W - 80, 220)); c.add(txt(this, W / 2, 450, q, 28, COL.text, { align: 'center', wordWrap: { width: W - 140 } }).setOrigin(0.5, 0));
+      const m = new ListMenu(this, 160, 660, 400, [{ label: 'No, go back' }, { label: 'Yes, overwrite' }], { itemH: 76 }).setDepth(61);
+      const done = (v: boolean) => { m.close(); c.destroy(); res(v); };
+      m.onSelect = i => done(i === 1); m.onCancel = () => done(false);
+    });
   }
 }

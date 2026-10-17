@@ -10,32 +10,32 @@ import { ITEMS } from '../data/items';
 import { ensureDoll, specOf } from '../systems/paperdoll';
 import { TUTORIALS } from '../data/story';
 
-interface Foe { def: EnemyDef; name: string; hp: number; mp: number; spr: Phaser.GameObjects.Sprite; x: number; y: number; alive: boolean; buffDef: number; buffAtk: number; poisoned: boolean; charged: boolean; stolen?: boolean }
+interface Foe { def: EnemyDef; name: string; hp: number; mp: number; spr: Phaser.GameObjects.Sprite; x: number; y: number; alive: boolean; buffDef: number; buffAtk: number; poisoned: boolean; charged: boolean; stolen?: boolean; asleep?: number; chargeAct?: any }
 interface Act { who: 'p' | 'e'; idx: number; kind: 'attack' | 'skill' | 'item' | 'defend' | 'flee'; skill?: string; item?: string; target?: number; spd: number }
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 const fast = () => !!(window as any).__EMBER?.fast;
 
 export class BattleScene extends Phaser.Scene {
   d: any; foes: Foe[] = []; party: Member[] = []; pSpr: Phaser.GameObjects.Sprite[] = []; cards: Phaser.GameObjects.Container[] = [];
-  msgT!: Phaser.GameObjects.Text; buffs: { atk: number; def: number; defending: boolean; turns: number }[] = []; turn = 0; over = false; boss = false; bossMoment = false;
+  msgT!: Phaser.GameObjects.Text; buffs: { atk: number; def: number; defending: boolean; turns: number; cover?: boolean; asleep?: number }[] = []; turn = 0; over = false; boss = false; bossMoment = false;
   constructor() { super('Battle'); }
   init(d: any) { this.d = d; this.foes = []; this.pSpr = []; this.cards = []; this.turn = 0; this.over = false; this.bossMoment = false; }
   create() {
     const d = this.d; this.boss = !!d.boss; this.party = Game.s.party;
     this.buffs = this.party.map(() => ({ atk: 1, def: 1, defending: false, turns: 0 }));
     Audio.play(d.music || (this.boss ? 'boss' : 'battle'), true);
-    this.cameras.main.fadeIn(300); diorama(this.cameras.main, 'battle', this.d.bg === 'bg_boss' ? { warm: 0xff7040, bloom: 1.3 } : this.d.bg === 'bg_hollow' ? { warm: 0xc0a0ff } : {});
+    this.cameras.main.fadeIn(300); diorama(this.cameras.main, 'battle', ({ bg_boss: { warm: 0xff7040, bloom: 1.3 }, bg_hollow: { warm: 0xc0a0ff }, bg_road: { warm: 0xffb060, bloom: 1.15 }, bg_coast: { warm: 0xfff0d0 }, bg_grotto: { warm: 0x60e0e0, bloom: 1.25 }, bg_choir: { warm: 0xff5a8a, bloom: 1.3 } } as any)[this.d.bg] ?? {});
     this.add.rectangle(0, 0, W, H, 0x07060f).setOrigin(0);
     // cinematic backdrop: far layer blurred for depth of field, slow camera drift
-    const bg = this.add.image(W / 2, 0, d.bg || 'bg_fields').setOrigin(0.5, 0).setScale(5.2);
+    const bg = this.add.image(W / 2, 0, d.bg || 'bg_fields').setOrigin(0.5, 0); const bs = 936 / bg.width; bg.setScale(bs);
     const webgl = this.game.renderer.type === Phaser.WEBGL;
     if (webgl && DioramaFX.quality > 0) bg.preFX?.addBlur(1, 1.2, 1.2, 1);
-    this.tweens.add({ targets: bg, scale: 5.3, x: W / 2 - 12, yoyo: true, repeat: -1, duration: 7000, ease: 'Sine.inOut' });
-    const gc = ({ bg_fields: 0x3f7f3a, bg_hollow: 0x3a3048, bg_boss: 0x3a2430 } as any)[d.bg || 'bg_fields'] ?? 0x3f7f3a;
+    this.tweens.add({ targets: bg, scale: bs * 1.02, x: W / 2 - 12, yoyo: true, repeat: -1, duration: 7000, ease: 'Sine.inOut' });
+    const gc = ({ bg_fields: 0x3f7f3a, bg_hollow: 0x3a3048, bg_boss: 0x3a2430, bg_road: 0x8a6a30, bg_coast: 0xc8b07a, bg_grotto: 0x245050, bg_choir: 0x34243a } as any)[d.bg || 'bg_fields'] ?? 0x3f7f3a;
     const ground = this.add.graphics(); ground.fillGradientStyle(gc, gc, 0x07060f, 0x07060f, 0, 0, 1, 1); ground.fillRect(0, 540, W, 60); ground.fillGradientStyle(gc, gc, 0x07060f, 0x07060f, 1, 1, 1, 1); ground.fillRect(0, 600, W, 220);
     for (let i = 0; i < 60; i++) { ground.fillStyle(Phaser.Display.Color.ValueToColor(gc).darken(20).color, 0.8); ground.fillRect(Math.random() * W, 600 + Math.random() * 180, 8 + Math.random() * 12, 4); }
     // volumetric light shafts + floating motes + foreground blur silhouettes
-    const outdoor = (d.bg || 'bg_fields') === 'bg_fields';
+    const outdoor = ['bg_fields', 'bg_road', 'bg_coast'].includes(d.bg || 'bg_fields');
     const shaftC = outdoor ? 0xfff0c0 : this.boss ? 0xff8040 : 0x9a80ff;
     for (let i = 0; i < 4; i++) {
       const sh = this.add.image(120 + i * 170, -40, 'light').setOrigin(0.5, 0).setScale(0.9, 9).setAngle(-24).setTint(shaftC).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.10 + (i % 2) * 0.05);
@@ -54,9 +54,11 @@ export class BattleScene extends Phaser.Scene {
     d.group.forEach((id: string, i: number) => {
       const def = ENEMIES[id]; counts[id] = (counts[id] || 0) + 1;
       const L = [[[250, 640]], [[170, 560], [330, 700]], [[140, 540], [330, 600], [200, 720]], [[120, 520], [300, 560], [160, 700], [350, 730]]][Math.min(n, 4) - 1];
-      const [x, y] = def.boss ? [230, 690] : L[i % L.length];
+      const hasBoss = d.group.some((g: string) => ENEMIES[g].boss);
+      const minion = d.group.slice(0, i).filter((g: string) => !ENEMIES[g].boss).length;
+      const [x, y] = def.boss ? [hasBoss && n > 1 ? 240 : 230, n > 1 ? 650 : 690] : hasBoss ? ([[80, 590], [400, 745], [70, 760]][minion % 3] as number[]) : L[i % L.length];
       if (def.boss || n === 1) this.add.image(x, y - 160, 'light').setTint(def.boss ? 0xff5020 : 0xffe0b0).setScale(def.boss ? 3.4 : 2).setAlpha(def.boss ? 0.35 : 0.18).setBlendMode(Phaser.BlendModes.ADD);
-      const spr = this.add.sprite(x, y, def.sprite + '_hd').setOrigin(0.5, 1).setScale(def.boss ? 2.7 : 2.6).setDepth(y / 100);
+      const spr = this.add.sprite(x, y, def.sprite + '_hd').setOrigin(0.5, 1).setScale((def.boss ? 2.7 : 2.6) * (def.scale ?? 1)).setDepth(y / 100);
       this.add.image(x, y - 4, 'shadow').setScale(def.boss ? 16 : 8, 4.5).setDepth(-0.5).setAlpha(0.8);
       this.tweens.add({ targets: spr, scaleY: spr.scaleY * 1.04, yoyo: true, repeat: -1, duration: 700 + i * 90, ease: 'Sine.inOut' });
       spr.setAlpha(0).setY(y + 30); this.tweens.add({ targets: spr, alpha: 1, y, duration: 400, delay: i * 120, ease: 'Back.out' });
@@ -83,9 +85,9 @@ export class BattleScene extends Phaser.Scene {
   skip = false;
   buildCards() {
     this.cards.forEach(c => c.destroy()); this.cards = [];
-    const n = this.party.length; const cw = (W - 32 - (n - 1) * 8) / n;
+    const n = this.party.length; const X0 = 150; const cw = (W - X0 - 16 - (n - 1) * 8) / n;
     this.party.forEach((m, i) => {
-      const s = stats(m); const c = this.add.container(16 + i * (cw + 8), 12);
+      const s = stats(m); const c = this.add.container(X0 + i * (cw + 8), 12);
       const g = this.add.graphics(); g.fillStyle(m.hp <= 0 ? 0x3a0a1a : 0x0b0c22, 0.88); g.fillRoundedRect(0, 0, cw, 100, 12); g.lineStyle(3, m.hp <= 0 ? 0xff6b6b : m.hp < s.hp / 4 ? 0xffb050 : COL.gold); g.strokeRoundedRect(1, 1, cw - 2, 98, 12);
       c.add(g); c.add(txt(this, 12, 6, m.name, n > 3 ? 20 : 24, m.hp <= 0 ? COL.red : COL.text)); c.add(txt(this, cw - 10, 8, 'Lv' + m.level, 18, COL.goldS).setOrigin(1, 0));
       c.add(txt(this, 12, 38, `HP ${m.hp}`, 20)); const hb = this.add.graphics({ x: 12, y: 62 }); drawBar(hb, cw - 24, 12, m.hp / s.hp, COL.hp); c.add(hb);
@@ -127,17 +129,24 @@ export class BattleScene extends Phaser.Scene {
       // end of turn: poison, buff decay
       for (const f of this.aliveFoes()) if (f.poisoned) { const dmg = Math.max(1, Math.floor(f.def.hp / 12)); f.hp -= dmg; this.popNum(f.x, f.y - 120, String(dmg), '#c070ff'); await this.msg(`${f.name} suffers from poison!`, 400); if (f.hp <= 0) await this.killFoe(f); }
       for (const o of this.aliveParty()) if (o.m.poisoned) { const dmg = Math.max(1, Math.floor(stats(o.m).hp / 16)); o.m.hp = Math.max(0, o.m.hp - dmg); this.buildCards(); await this.msg(`${o.m.name} suffers from poison!`, 400); if (o.m.hp <= 0) await this.downMember(o.i); }
-      this.buffs.forEach(b => { b.defending = false; if (b.turns > 0 && --b.turns === 0) { b.atk = 1; b.def = 1; } });
+      this.buffs.forEach(b => { b.defending = false; b.cover = false; if (b.turns > 0 && --b.turns === 0) { b.atk = 1; b.def = 1; } });
       await this.checkEnd();
     }
   }
-  groupName() { const f = this.foes; if (f.length === 1) return (this.boss ? '' : /^[AEIOU]/.test(f[0].def.name) ? 'An ' : 'A ') + f[0].def.name; const ids = [...new Set(f.map(x => x.def.id))]; return ids.map(id => { const c = f.filter(x => x.def.id === id).length; return c > 1 ? `${c} ${ENEMIES[id].name}s` : `A ${ENEMIES[id].name}`; }).join(' and '); }
+  groupName() {
+    const f = this.foes; const art = (n: string) => (/^[AEIOU]/.test(n) ? 'An ' : 'A ') + n;
+    const ids = [...new Set(f.map(x => x.def.id))];
+    const parts = ids.map(id => { const c = f.filter(x => x.def.id === id).length; const d = ENEMIES[id]; if (c > 1) return `${c} ${d.name}s`; return this.boss && d.boss ? d.name : art(d.name); });
+    if (this.boss) { const bi = ids.findIndex(id => ENEMIES[id].boss); if (bi > 0) parts.unshift(parts.splice(bi, 1)[0]); }
+    return parts.length < 3 ? parts.join(' and ') : parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1];
+  }
   async commandPhase(): Promise<Act[]> {
     const acts: Act[] = []; const alive = this.aliveParty(); let k = 0;
     while (k < alive.length) {
       const { m, i } = alive[k];
+      if ((this.buffs[i].asleep || 0) > 0) { acts.push({ who: 'p', idx: i, kind: 'defend', spd: -1, skill: 'sleep' }); k++; continue; }
       this.tweens.add({ targets: this.pSpr[i], x: this.pSpr[i].getData('hx') - 40, duration: 140 }); this.cards[i].setScale(1.03);
-      const a = await this.chooseAction(m, i);
+      const a = await this.chooseAction(m, i, k > 0);
       this.tweens.add({ targets: this.pSpr[i], x: this.pSpr[i].getData('hx'), duration: 140 }); this.cards[i].setScale(1);
       if (a === 'back') { if (k > 0) { k--; acts.pop(); } continue; }
       if (a.kind === 'flee') return [a];
@@ -145,13 +154,13 @@ export class BattleScene extends Phaser.Scene {
     }
     return acts;
   }
-  chooseAction(m: Member, i: number): Promise<Act | 'back'> {
+  chooseAction(m: Member, i: number, canBack = false): Promise<Act | 'back'> {
     return new Promise(async res => {
       this.msgT.setText(`What will ${m.name} do?`);
       const s = stats(m); const spd = s.agi * rand(0.75, 1.25);
       const sk = skillsOf(m); const spells = sk.filter(id => SKILLS[id].kind === 'spell'), skills = sk.filter(id => SKILLS[id].kind === 'skill');
       const items: MenuItem[] = [{ label: 'Attack' }, { label: 'Spells', disabled: !spells.length }, { label: 'Skills', disabled: !skills.length }, { label: 'Items' }, { label: 'Defend' }, { label: 'Flee', disabled: !!this.d.noFlee }];
-      const menu = new ListMenu(this, 16, 968, W - 32, items, { cols: 2, itemH: 72, fontSize: 34, title: m.name + `  —  Lv${m.level} ${m.voc[0].toUpperCase() + m.voc.slice(1)}` });
+      const menu = new ListMenu(this, 16, 968, W - 32, items, { cols: 2, itemH: 72, fontSize: 34, back: canBack, title: m.name + `  —  Lv${m.level} ${m.voc[0].toUpperCase() + m.voc.slice(1)}` });
       (this as any).cmd = { menu, member: i, hpFrac: m.hp / s.hp, spells, skills };
       menu.onCancel = () => { menu.close(); res('back'); };
       menu.onSelect = async c => {
@@ -211,9 +220,9 @@ export class BattleScene extends Phaser.Scene {
     for (const a of acts) {
       if (this.over) return;
       if (a.who === 'p') { const m = this.party[a.idx]; if (m.hp <= 0) continue; await this.partyAct(a, m); }
-      else { const f = this.foes[a.idx]; if (!f.alive) continue; await this.foeAct(f); }
+      else { const f = this.foes[a.idx]; if (!f.alive) continue; if ((f.asleep || 0) > 0) { f.asleep!--; if (!f.asleep) { f.spr.clearTint(); await this.msg(`${f.name} wakes up!`, 450); } else await this.msg(`${f.name} is sound asleep. Zzz…`, 450); } else await this.foeAct(f); }
       await this.checkEnd(); if (this.over) return;
-      if (this.boss && !this.bossMoment) { const b = this.foes[0]; if (b.alive && b.hp < b.def.hp * 0.4) await this.bossShardMoment(); }
+      if (this.boss && !this.bossMoment) { const b = this.foes.find(f => f.def.boss); if (b && b.alive && b.hp < b.def.hp * 0.4) { if (b.def.id === 'warden') await this.bossShardMoment(); else if (b.def.id === 'cantor') await this.ioneMoment(b); else this.bossMoment = true; } }
     }
   }
   async bossShardMoment() {
@@ -225,9 +234,19 @@ export class BattleScene extends Phaser.Scene {
     if (!hero.extraSkills.includes('starfall')) hero.extraSkills.push('starfall');
     Audio.sfx('levelup'); await this.msg(`${hero.name} remembered STARFALL! (Spells)`, 1200);
   }
+  /** Chapter II: halfway through the Requiem, Ione's song answers from the depths. */
+  async ioneMoment(b: Foe) {
+    this.bossMoment = true; this.cameras.main.flash(500, 120, 240, 255); Audio.sfx('heal');
+    this.burst(W / 2, 300, [0x6af0d0, 0xffffff, 0x9ad0ff], 50, 260);
+    await this.msg('From somewhere deep below, a voice rises against the Requiem…', 1100);
+    await this.msg('Ione\'s song! Mordane\'s hymn falters as the sea itself sings back!', 1100);
+    for (const o of this.aliveParty()) { const s = stats(o.m); const h = Math.round(s.hp * 0.35); o.m.hp = Math.min(s.hp, o.m.hp + h); this.buffs[o.i].asleep = 0; this.healFx(o.i); }
+    b.buffDef = 0.75; this.buildCards(); await this.msg('Your party is restored — and the Cantor\'s guard is broken!', 1100);
+  }
   // ------------------------------------------------------------------ actions
   async partyAct(a: Act, m: Member) {
     const s = stats(m); const b = this.buffs[a.idx]; const spr = this.pSpr[a.idx];
+    if (a.skill === 'sleep') { if ((b.asleep || 0) > 0) { b.asleep!--; if (b.asleep! <= 0 || Math.random() < 0.35) { b.asleep = 0; spr.clearTint(); await this.msg(`${m.name} wakes up!`, 500); } else await this.msg(`${m.name} is fast asleep… Zzz`, 500); } return; }
     if (a.kind === 'defend') { b.defending = true; await this.msg(`${m.name} is on guard.`, 400); return; }
     if (a.kind === 'flee') {
       await this.msg(`${this.party[0].name} and co. try to run…`, 500);
@@ -267,7 +286,12 @@ export class BattleScene extends Phaser.Scene {
   async useSkill(sk: Skill, m: Member, s: any, target: number, b: any) {
     const targets = sk.target === 'allEnemies' ? this.aliveFoes() : sk.target === 'enemy' ? [this.retarget(target)!].filter(Boolean) : [];
     switch (sk.effect) {
-      case 'phys': for (const t of targets) await this.physHit(m, s.atk * b.atk * sk.power, t, sk.id === 'quickStab' ? 1 : 1, 1 / 20, sk.fx); return;
+      case 'phys': for (const t of targets) { if (!t.alive) continue; let p = sk.power; if (sk.element && t.def.weak?.includes(sk.element)) p *= 1.5; if (sk.element) this.spellFx(sk.fx, t.x, t.y - 70); await this.physHit(m, s.atk * b.atk * p, t, 1, sk.crit ?? 1 / 20, sk.fx); } return;
+      case 'multi': { const t0 = targets[0]; for (let h = 0; h < (sk.hits || 2); h++) { const t = t0 && t0.alive ? t0 : this.aliveFoes()[0]; if (!t) return; await this.physHit(m, s.atk * b.atk * sk.power, t, 1, 1 / 16, sk.fx); } return; }
+      case 'healAll': { Audio.sfx('heal'); for (const o of this.aliveParty()) { const h = Math.min(stats(o.m).hp - o.m.hp, Math.round((sk.power + s.mag * 0.4) * rand(0.9, 1.1))); o.m.hp += h; this.healFx(o.i); this.popNum(this.pSpr[o.i].x, this.pSpr[o.i].y - 100, String(h), '#8affa0'); } this.buildCards(); await this.msg('The party\'s wounds close!'); return; }
+      case 'sleep': { Audio.sfx('dark'); let n = 0; for (const t of targets) { this.spellFx('dark', t.x, t.y - 60); if (!t.def.boss && Math.random() < sk.power) { t.asleep = 2 + (Math.random() < 0.5 ? 1 : 0); t.spr.setTint(0x9a9ad8); n++; } } await this.msg(n ? (n > 1 ? `${n} foes drift off to sleep!` : `${targets.find(t => t.asleep)?.name} falls asleep!`) : 'But the foes resist!'); return; }
+      case 'debuffFoe': { Audio.sfx('dark'); for (const t of targets) { t.buffDef = Math.min(t.buffDef, sk.power); this.burst(t.x, t.y - 80, [0xff60c0, 0xa040ff], 16, 160); } await this.msg('The foes\' guard crumbles!'); return; }
+      case 'cover': { const i = this.party.indexOf(m); this.buffs[i].cover = true; Audio.sfx('buff'); this.burst(this.pSpr[i].x, this.pSpr[i].y - 100, [0xffe8a0, 0xffffff], 18, 140); await this.msg(`${m.name} stands guard over the party!`); return; }
       case 'magic': Audio.sfx(sk.fx === 'ice' ? 'ice' : sk.fx === 'light' ? 'heal' : sk.fx === 'dark' ? 'dark' : 'fire');
         for (const t of targets) { this.spellFx(sk.fx, t.x, t.y - 70); await this.wait(250); let dmg = (sk.power + s.mag * 0.35) * rand(0.9, 1.1); const el = sk.element; if (el && t.def.weak?.includes(el)) dmg *= 1.5; if (el && t.def.resist?.includes(el)) dmg *= 0.5; await this.damageFoe(t, Math.round(dmg), false, el && t.def.weak?.includes(el)); }
         return;
@@ -295,7 +319,7 @@ export class BattleScene extends Phaser.Scene {
     await this.damageFoe(t, dmg, crit);
   }
   async damageFoe(t: Foe, dmg: number, crit: boolean, weak = false) {
-    t.hp -= dmg; t.spr.setTintFill(0xffffff); this.time.delayedCall(90, () => t.spr.clearTint());
+    t.hp -= dmg; if (t.asleep && dmg > 0 && Math.random() < 0.5) { t.asleep = 0; this.time.delayedCall(120, () => t.spr.clearTint()); } t.spr.setTintFill(0xffffff); this.time.delayedCall(90, () => t.spr.clearTint());
     this.tweens.add({ targets: t.spr, x: t.x + 14, yoyo: true, repeat: 2, duration: 40, onComplete: () => t.spr.setX(t.x) });
     this.burst(t.x, t.y - t.spr.displayHeight / 2, [0xffffff, 0xffe8a0], crit ? 30 : 10, crit ? 300 : 160, 'px');
     if (dmg > 0) this.cameras.main.shake(120, 0.005 + (crit ? 0.01 : 0));
@@ -330,9 +354,11 @@ export class BattleScene extends Phaser.Scene {
   // ------------------------------------------------------------------ enemies
   async foeAct(f: Foe) {
     const alive = this.aliveParty(); if (!alive.length) return;
-    if (f.charged) { f.charged = false; await this.foeQuake(f, 1.8); return; }
-    const tot = f.def.actions.reduce((t, a) => t + a.w, 0); let r = Math.random() * tot; let act = f.def.actions[0];
-    for (const a of f.def.actions) { r -= a.w; if (r <= 0) { act = a; break; } }
+    if (f.charged) { f.charged = false; const ca = f.chargeAct; f.chargeAct = undefined; f.spr.clearTint(); if (ca) { await this.foeQuake(f, ca.power || 1.3, `${f.name}'s ${ca.name} crescendos!`); return; } await this.foeQuake(f, 1.8); return; }
+    const pool = f.def.actions.filter(a => !a.below || f.hp < f.def.hp * a.below);
+    const tot = pool.reduce((t, a) => t + a.w, 0); let r = Math.random() * tot; let act = pool[0];
+    for (const a of pool) { r -= a.w; if (r <= 0) { act = a; break; } }
+    if (act.kind && await this.foeSpecial(f, act, alive)) return;
     const lunge = () => this.tweens.add({ targets: f.spr, scaleX: f.spr.scaleX * 1.15, scaleY: f.spr.scaleY * 1.15, y: f.y + 30, yoyo: true, duration: 140 });
     if (act.type === 'skill' && act.name === 'Smoulder') { f.charged = true; this.tweens.add({ targets: f.spr, tint: 0xff8040, duration: 300 }); this.burst(f.x, f.y - 150, [0xff7a2a, 0xffc860], 30); Audio.sfx('fire'); await this.msg(`${f.name} ${act.msg}`, 700); if (!Game.flag('tut_defendHint')) { Game.set('tut_defendHint'); await this.msg('(Its next attack will be devastating — DEFEND!)', 1000); } return; }
     if (act.type === 'skill' && act.name === 'Cinder Quake') { await this.foeQuake(f, act.power || 0.85); return; }
@@ -349,22 +375,43 @@ export class BattleScene extends Phaser.Scene {
     lunge(); await this.msg(act.type === 'skill' ? `${f.name} ${act.msg}` : `${f.name} attacks!`, 300);
     const s = stats(this.party[t]); const b = this.buffs[t];
     if (Math.random() < Math.min(0.15, s.agi / 400)) { Audio.sfx('miss'); this.tweens.add({ targets: this.pSpr[t], x: this.pSpr[t].x + 40, yoyo: true, duration: 120 }); await this.msg(`${this.party[t].name} dodges!`, 400); return; }
-    let dmg = (f.def.atk * f.buffAtk * (act.power || 1) / 2 - (s.def * b.def) / 4) * rand(0.85, 1.15); if (b.defending) dmg /= 2;
+    let dmg = (f.def.atk * f.buffAtk * (act.power || 1) / 2 - (s.def * b.def) / 4) * rand(0.85, 1.15); if (b.defending || b.cover) dmg /= 2;
     dmg = dmg < 1 ? (Math.random() < 0.5 ? 0 : 1) : Math.round(dmg);
     await this.damageMember(t, dmg);
   }
-  pickMemberTarget(alive: { m: Member; i: number }[]) { // front-liners (warriors) draw more aggro
-    const w = alive.map(o => (o.m.voc === 'warrior' ? 3 : 2)); let r = Math.random() * w.reduce((a, b) => a + b, 0);
+  /** Data-driven enemy behaviours (see EnemyDef.actions.kind). Returns true if the action was handled. */
+  async foeSpecial(f: Foe, act: any, alive: { m: Member; i: number }[]): Promise<boolean> {
+    const lunge = () => this.tweens.add({ targets: f.spr, scaleX: f.spr.scaleX * 1.15, scaleY: f.spr.scaleY * 1.15, y: f.y + 30, yoyo: true, duration: 140 });
+    switch (act.kind) {
+      case 'all': await this.foeQuake(f, act.power || 0.8, `${f.name} ${act.msg}`); return true;
+      case 'charge': f.charged = true; f.chargeAct = act; this.tweens.add({ targets: f.spr, tint: 0xff80c0, duration: 300 }); this.burst(f.x, f.y - 150, [0xff80c0, 0xffffff], 30); Audio.sfx('dark'); await this.msg(`${f.name} ${act.msg}`, 800); if (!Game.flag('tut_defendHint2')) { Game.set('tut_defendHint2'); await this.msg('(Something terrible is coming — DEFEND or heal up!)', 900); } return true;
+      case 'heal': { const h = Math.round(f.def.hp * (act.power || 0.2)); f.hp = Math.min(f.def.hp, f.hp + h); Audio.sfx('heal'); this.burst(f.x, f.y - 100, [0x8affa0, 0xffffff], 24, 160); this.popNum(f.x, f.y - f.spr.displayHeight - 10, String(h), '#8affa0'); await this.msg(`${f.name} ${act.msg}`, 600); return true; }
+      case 'weaken': case 'soften': { Audio.sfx('dark'); lunge(); for (const o of alive) { const b = this.buffs[o.i]; if (act.kind === 'weaken') b.atk = Math.min(b.atk, act.power || 0.8); else b.def = Math.min(b.def, act.power || 0.8); b.turns = Math.max(b.turns, 3); this.burst(this.pSpr[o.i].x, this.pSpr[o.i].y - 100, [0xa040ff, 0x501070], 12, 120); } await this.msg(`${f.name} ${act.msg}`, 800); return true; }
+      case 'sleep': { const t = this.pickMemberTarget(alive); lunge(); await this.msg(`${f.name} ${act.msg}`, 500); Audio.sfx('dark'); this.spellFx('dark', this.pSpr[t].x, this.pSpr[t].y - 80); if (Math.random() < 0.6 && !this.buffs[t].defending) { this.buffs[t].asleep = 2; this.pSpr[t].setTint(0x9a9ad8); await this.msg(`${this.party[t].name} falls asleep!`, 600); } else await this.msg(`${this.party[t].name} shakes it off!`, 500); return true; }
+      case 'venom': case 'drain': {
+        const t = this.pickMemberTarget(alive); lunge(); await this.msg(`${f.name} ${act.msg}`, 300);
+        const s = stats(this.party[t]); const b = this.buffs[t]; let dmg = (f.def.atk * f.buffAtk * (act.power || 1) / 2 - (s.def * b.def) / 4) * rand(0.85, 1.15); if (b.defending || b.cover) dmg /= 2; dmg = Math.max(1, Math.round(dmg));
+        await this.damageMember(t, dmg);
+        if (act.kind === 'venom' && this.party[t].hp > 0 && Math.random() < 0.45) { this.party[t].poisoned = true; Audio.sfx('poison'); this.buildCards(); await this.msg(`${this.party[t].name} is poisoned!`, 500); }
+        if (act.kind === 'drain' && f.alive) { f.hp = Math.min(f.def.hp, f.hp + dmg); this.popNum(f.x, f.y - f.spr.displayHeight - 10, String(dmg), '#8affa0'); }
+        return true;
+      }
+    }
+    return false;
+  }
+  pickMemberTarget(alive: { m: Member; i: number }[]) { // front-liners draw more aggro; a covering Paladin draws everything
+    const cov = alive.find(o => this.buffs[o.i].cover); if (cov) return cov.i;
+    const w = alive.map(o => (['warrior', 'paladin'].includes(o.m.voc) ? 3 : 2)); let r = Math.random() * w.reduce((a, b) => a + b, 0);
     for (let k = 0; k < alive.length; k++) { r -= w[k]; if (r <= 0) return alive[k].i; } return alive[0].i;
   }
-  async foeQuake(f: Foe, power: number) {
+  async foeQuake(f: Foe, power: number, msg?: string) {
     this.tweens.add({ targets: f.spr, y: f.y - 60, yoyo: true, duration: 220, ease: 'Quad.out' });
-    await this.msg(`${f.name} slams the ground! The cavern quakes!`, 300); Audio.sfx('quake'); this.cameras.main.shake(700, 0.03);
+    await this.msg(msg ?? `${f.name} slams the ground! The cavern quakes!`, 300); Audio.sfx('quake'); this.cameras.main.shake(700, 0.03);
     f.spr.clearTint();
-    for (const o of this.aliveParty()) { const s = stats(o.m); let dmg = (f.def.atk * power / 2 - s.def * this.buffs[o.i].def / 4) * rand(0.85, 1.1); if (this.buffs[o.i].defending) dmg /= 2; await this.damageMember(o.i, Math.max(1, Math.round(dmg))); }
+    for (const o of this.aliveParty()) { const s = stats(o.m); let dmg = (f.def.atk * power / 2 - s.def * this.buffs[o.i].def / 4) * rand(0.85, 1.1); if (this.buffs[o.i].defending || this.buffs[o.i].cover) dmg /= 2; await this.damageMember(o.i, Math.max(1, Math.round(dmg))); }
   }
   async damageMember(i: number, dmg: number) {
-    const m = this.party[i]; m.hp = Math.max(0, m.hp - dmg); Audio.sfx('enemyHit');
+    const m = this.party[i]; m.hp = Math.max(0, m.hp - dmg); Audio.sfx('enemyHit'); if (this.buffs[i].asleep && dmg > 0 && Math.random() < 0.5) this.buffs[i].asleep = 0;
     const spr = this.pSpr[i]; spr.setTintFill(0xff4040); this.time.delayedCall(100, () => spr.clearTint());
     this.cameras.main.shake(180, 0.012); this.cameras.main.flash(80, 120, 0, 0);
     this.tweens.add({ targets: this.cards[i], y: 22, yoyo: true, duration: 60, repeat: 1 });
@@ -380,7 +427,7 @@ export class BattleScene extends Phaser.Scene {
     if (this.aliveFoes().length) return;
     this.over = true; Audio.play('victory', true);
     const xp = this.foes.reduce((t, f) => t + f.def.xp, 0), gold = this.foes.reduce((t, f) => t + f.def.gold, 0);
-    await this.msg(this.boss ? 'The Hollow Warden has been vanquished!' : 'Victory!', 700);
+    await this.msg(this.boss ? `${this.foes.find(f => f.def.boss)?.def.name ?? 'The foe'} has been vanquished!` : 'Victory!', 700);
     const living = this.aliveParty();
     await this.msg(`Each survivor gains ${xp} EXP. Found ${gold} gold.`, 1000); Game.s.gold += gold;
     for (const f of this.foes) if (f.def.drop && Math.random() < f.def.drop.chance) { Game.addItem(f.def.drop.item); Audio.sfx('chest'); await this.msg(`The ${f.def.name} dropped a ${ITEMS[f.def.drop.item].name}!`, 800); }

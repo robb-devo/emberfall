@@ -73,6 +73,8 @@ const HEADM: Record<string, { r0: number; F: string[]; S: string[]; B: string[];
   wizard: { r0: -4, F: M('......a.....|.....aa.....|....aaaA....|....aaaaA...|...aaaaaA...|...bbbbbb...|aaaaaaaaaaaA|.AAAAAAAAAA.'), S: M('........a...|.......aa...|......aaA...|....aaaaA...|...aaaaaA...|...bbbbbb...|aaaaaaaaaaaA|.AAAAAAAAAA.'), B: M('......a.....|.....aa.....|....aaaA....|....aaaaA...|...aaaaaA...|...bbbbbb...|aaaaaaaaaaaA|.AAAAAAAAAA.'), hideHair: 3 },
   helm: { r0: -1, F: M('.....bb.....|....abba....|..aaaaaaaa..|.aaaaaaaaaa.|.aaaaaaaaaa.|.aAAAAAAAAa.|.a........a.|.a........a.'), S: M('........bb..|.......bbb..|...aaaabbb..|..aaaaaaaa..|.aaaaaaaaaa.|.aaaaaaaaaa.|.AAAAaaaaaa.|.....aaaaaa.|......aaaaa.'), B: M('.....bb.....|....abbaa...|..aaabbaaa..|.aaaaaaaaaa.|.aaaaaaaaaa.|.aaaaaaaaaa.|.aaaaaaaaaa.|.aaaaaaaaaa.|.aaaaaaaaaa.|..AAAAAAAA..'), hideHair: 6 },
   circlet: { r0: 3, F: M('.aaaabbaaaa.'), S: M('.aaaaaaaaaa.'), B: M('.aaaaaaaaaa.') },
+  hood: { r0: 0, F: M('...aaaaaa...|..aaaaaaaa..|.aaaaaaaaaa.|.aaAAAAAAaa.|.aA......Aa.|.aA......Aa.|.a........a.|.a........a.|..A......A..'), S: M('...aaaaaa...|..aaaaaaaaa.|.aaaaaaaaaaa|.aaaaaAAAaaa|......Aaaaaa|.......aaaaa|.......aaaaa|........aaaa|.........aaA'), B: M('...aaaaaa...|..aaaaaaaa..|.aaaaaaaaaa.|.aaaaaaaaaa.|.aaaaaaaaaa.|.aaaaaaaaaa.|.aaaaaaaaaa.|.aaaaaaaaaa.|..aaaaaaaa..|...AAAAAA...'), hideHair: 9 },
+  cap: { r0: 1, F: M('.........bb.|...aaaaaabb.|..aaaaaaaab.|.aaaaaaaaaa.|AAAAAAAAAAAA'), S: M('......b.....|...aaaabb...|..aaaaaaab..|.aaaaaaaaaa.|AAAAAAAAAAA.'), B: M('.....bb.....|...aaaabb...|..aaaaaaaa..|.aaaaaaaaaa.|.AAAAAAAAAA.'), hideHair: 3 },
 };
 
 export interface DollSpec { look: Look; equip: Record<string, string | undefined>; voc?: string }
@@ -224,6 +226,10 @@ function drawWeapon(g: Grid, v: { type: string; c1: number; c2?: number }, x: nu
     case 'dagger': g.rect(x, hy - 4, 1, 3, hl); g.set(x, hy - 5, c); g.rect(x - 1, hy - 1, 3, 1, h); g.set(x, hy, h); break;
     case 'axe': g.rect(x, hy - 6, 1, 9, h); g.rect(x - 3, hy - 7, 3, 4, c); g.rect(x - 3, hy - 7, 1, 4, hl); g.set(x - 1, hy - 4, d); break;
     case 'mace': g.rect(x, hy - 3, 1, 6, h); g.rect(x - 1, hy - 6, 3, 3, c); g.set(x, hy - 7, hl); g.set(x - 2, hy - 5, hl); g.set(x + 2, hy - 5, d); break;
+    case 'spear': g.rect(x, hy - 12, 1, 16, h); g.rect(x, hy - 12, 1, 6, shade(h, 1.2)); g.rect(x - 1, hy - 14, 3, 2, c); g.set(x, hy - 16, hl); g.set(x, hy - 15, c); g.set(x - 1, hy - 12, d); g.set(x + 1, hy - 12, d); break;
+    case 'bow': for (let j = -6; j <= 4; j++) g.set(x + Math.round(Math.cos((j + 1) / 6.5) * 2.4) - 2, hy + j, j < -3 || j > 1 ? d : c); g.rect(x - 2, hy - 6, 1, 11, h); g.set(x - 1, hy - 1, shade(c, 1.3)); break;
+    case 'lute': g.rect(x, hy - 9, 1, 6, h); g.rect(x - 1, hy - 10, 3, 1, shade(h, 0.8)); g.rect(x - 2, hy - 3, 5, 4, c); g.rect(x - 1, hy - 4, 3, 1, c); g.rect(x - 1, hy + 1, 3, 1, d); g.set(x, hy - 2, 0x2a1a10); g.set(x - 2, hy - 3, hl); break;
+    case 'hammer': g.rect(x, hy - 6, 1, 10, h); g.rect(x - 2, hy - 9, 5, 3, c); g.rect(x - 2, hy - 9, 5, 1, hl); g.rect(x - 2, hy - 7, 5, 1, d); break;
     case 'staff': default: g.rect(x, hy - 8, 1, 12, c); g.rect(x, hy - 8, 1, 12, back ? d : c); g.rect(x - 1, hy - 11, 3, 3, h); g.set(x, hy - 12, shade(h, 1.4)); g.set(x - 1, hy - 11, shade(h, 1.5)); break;
   }
 }

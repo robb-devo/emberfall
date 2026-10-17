@@ -1,6 +1,8 @@
 /** Procedural pixel-art generator: tiles, monsters, FX, icons. No external assets. */
 import Phaser from 'phaser';
 import { shade } from './paperdoll';
+import { makeTiles2, T2 } from './art2';
+export { T2 };
 
 const hex = (c: number) => '#' + c.toString(16).padStart(6, '0');
 let seed = 1;
@@ -15,7 +17,7 @@ export const T = {
   edgeN: 53, edgeS: 54, edgeW: 55, edgeE: 56, shoreN: 57, shoreS: 58, shoreW: 59, shoreE: 60,
   bed: 37, shelf: 38, barrel: 39, crate: 40, void: 41, sky: 42, starTile: 43, hedge: 44, glow: 45, lamp: 46, sign: 47, table: 48, hearth: 49, statue: 50, pine: 51, pineTop: 52,
 };
-const N_TILES = 64;
+const N_TILES = 128;
 
 function grassBase(c: Ctx, x: number, v: number) {
   px(c, x, 0, 0x4f9a46, 16, 16);
@@ -162,12 +164,13 @@ export function makeTiles(scene: Phaser.Scene) {
         if (side === 'W') px(c, x0 + j, i, col); if (side === 'E') px(c, x0 + 15 - j, i, col); } }
   };
   shore(T.shoreN, 'N'); shore(T.shoreS, 'S'); shore(T.shoreW, 'W'); shore(T.shoreE, 'E');
+  makeTiles2(c, at);
   tex.refresh();
   // make individual frames for tilemap (Phaser tilemap reads from image)
 }
 
 /** Generic blob painter with directional light & auto outline, used for monsters. */
-class Pix {
+export class Pix {
   d: number[]; constructor(public w: number, public h: number) { this.d = new Array(w * h).fill(-1); }
   set(x: number, y: number, c: number) { x |= 0; y |= 0; if (x >= 0 && y >= 0 && x < this.w && y < this.h) this.d[y * this.w + x] = c; }
   get(x: number, y: number) { return x >= 0 && y >= 0 && x < this.w && y < this.h ? this.d[y * this.w + x] : -1; }
@@ -347,6 +350,9 @@ export function makeFx(scene: Phaser.Scene) {
     sword: c => { px(c, 9, 1, 0xdfe6ee, 2, 2); for (let i = 0; i < 7; i++) px(c, 8 - i, 2 + i, 0xdfe6ee, 2, 1); px(c, 1, 8, 0xd8a040, 4, 1); px(c, 1, 9, 0x6b4220, 2, 2); },
     dagger: c => { for (let i = 0; i < 4; i++) px(c, 8 - i, 3 + i, 0xeeeeee, 2, 1); px(c, 3, 7, 0x7a3b8f, 3, 1); px(c, 2, 8, 0x6b4220, 2, 2); },
     axe: c => { for (let i = 0; i < 9; i++) px(c, 2 + i, 10 - i, 0x8a5a2b); px(c, 7, 1, 0xc79a4a, 4, 5); },
+    spear: c => { for (let i = 0; i < 9; i++) px(c, 1 + i, 10 - i, 0x8a5a2b); px(c, 9, 0, 0xc8e0f0, 3, 3); px(c, 10, 1, 0xffffff); },
+    bow: c => { c.strokeStyle = '#8a5a2b'; c.lineWidth = 2; c.beginPath(); c.arc(2, 6, 7, -1.2, 1.2); c.stroke(); px(c, 4, 0, 0xe8e0c8, 1, 12); },
+    lute: c => { c.fillStyle = '#c8904a'; c.beginPath(); c.ellipse(4, 8, 4, 3.5, -0.7, 0, 7); c.fill(); for (let i = 0; i < 6; i++) px(c, 6 + i, 5 - i, 0x6b4220); px(c, 3, 7, 0x2a1a10, 2, 2); },
     staff: c => { for (let i = 0; i < 8; i++) px(c, 2 + i, 10 - i, 0x8a5a2b); px(c, 8, 0, 0x6fd3ff, 3, 3); },
     mace: c => { for (let i = 0; i < 6; i++) px(c, 2 + i, 10 - i, 0x6b4220); px(c, 7, 1, 0xf0c75e, 4, 4); },
     shield: c => { c.fillStyle = '#9c6b3a'; c.beginPath(); c.arc(6, 6, 5, 0, 7); c.fill(); px(c, 5, 5, 0xd8b04a, 2, 2); },

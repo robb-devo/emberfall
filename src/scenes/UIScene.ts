@@ -3,7 +3,7 @@ import Phaser from 'phaser';
 import { txt, panel, W, H, COL, ListMenu, DialogBox, card, drawBar, SERIF, MenuItem } from '../ui/widgets';
 import { Input, Focus, Action } from '../ui/input';
 import { Audio } from '../systems/audio';
-import { Game, stats, Member, skillsOf, canEquip, baseStats } from '../systems/state';
+import { Game, stats, Member, skillsOf, canEquip, baseStats, changeVocation } from '../systems/state';
 import { TUTORIALS, QUESTS } from '../data/story';
 import { ITEMS, SLOTS, SLOT_NAMES, Slot } from '../data/items';
 import { SKILLS } from '../data/skills';
@@ -15,6 +15,10 @@ const SHOPS: Record<string, string[]> = {
   weapons: ['stick', 'dagger', 'shortsword', 'mace', 'wand', 'bronzeAxe', 'ironsword'],
   armor: ['tunic', 'leather', 'robe', 'scale', 'pot', 'buckler', 'kite', 'bandana', 'pointyhat', 'helm', 'cape'],
   items: ['herb', 'antidote', 'ether', 'firebomb', 'feather'],
+  peddler: ['herb', 'hiHerb', 'antidote', 'ether', 'feather', 'shortbow', 'lute', 'hood', 'featherCap'],
+  tideWeapons: ['steelsword', 'spear', 'warhammer', 'longbow', 'seaStaff', 'lute', 'shortbow'],
+  tideArmor: ['chain', 'sailorCoat', 'silkRobe', 'towerShield', 'shellBuckler', 'knightHelm', 'hood', 'featherCap', 'pearlRing'],
+  tideItems: ['herb', 'hiHerb', 'antidote', 'ether', 'feather', 'firebomb'],
 };
 
 export class UIScene extends Phaser.Scene {
@@ -78,10 +82,12 @@ export class UIScene extends Phaser.Scene {
   async say(t: string, name?: string) { await this.dialog.show(t, name); }
   async narr(t: string) { await this.dialog.show(t); this.hideDialog(); }
   hideDialog() { this.dialog.hide(); }
-  async choice(opts: string[]): Promise<number> {
+  /** Choice list. `cancelIdx` makes it backable (Back/Esc picks that option); story choices have none. */
+  async choice(opts: string[], cancelIdx?: number): Promise<number> {
     return new Promise(res => {
       const m = new ListMenu(this, W - 460, H - 380 - opts.length * 76 - 50, 440, opts.map(label => ({ label })), { itemH: 76, fontSize: 30 }).setDepth(1100);
       m.onSelect = i => { m.close(); res(i); };
+      if (cancelIdx !== undefined) m.onCancel = () => { m.close(); res(cancelIdx); };
     });
   }
   async caption(title: string, sub?: string) {
@@ -110,31 +116,33 @@ export class UIScene extends Phaser.Scene {
     return new Promise<void>(res => { this.fadeRect.setFillStyle(color, 1); this.fadeRect.setAlpha(dir === 'in' ? 1 : this.fadeRect.alpha); this.tweens.add({ targets: this.fadeRect, alpha: dir === 'in' ? 0 : 1, duration: ms, onComplete: () => res() }); });
   }
   // ------------------------------------------------------------- inn / save
-  async inn(price: number) {
+  async inn(price: number, who = 'Berta') {
     const cost = price * Game.s.party.length;
-    const i = await this.choice([`Stay (${cost} G)`, 'No thanks']);
-    if (i === 1) { await this.say('Safe travels, then!', 'Berta'); return; }
-    if (Game.s.gold < cost) { await this.say('Oh dear, you\'re a bit short. Come back when your purse is heavier, love.', 'Berta'); return; }
+    const i = await this.choice([`Stay (${cost} G)`, 'No thanks'], 1);
+    if (i === 1) { await this.say('Safe travels, then!', who); return false; }
+    if (Game.s.gold < cost) { await this.say('Oh dear, you\'re a bit short. Come back when your purse is heavier, love.', who); return false; }
     Game.s.gold -= cost; this.hideDialog(); await this.fade('out', 700, 0); Audio.stopMusic(); Audio.sfx('inn');
     await new Promise(r => this.time.delayedCall(1800, r)); Game.healAll(); this.refreshHud();
-    Audio.play('hearth'); await this.fade('in', 700, 0);
-    await this.say('Good morning! You look much better. HP and MP fully restored!', 'Berta');
+    Audio.play(this.world.def.music); await this.fade('in', 700, 0);
+    await this.say('Good morning! You look much better. HP and MP fully restored!', who);
     if (!Game.flag('tut_heal')) await this.tutorial('heal');
+    Game.markDirty('inn'); return true;
   }
   async saveShrine() {
     await this.dialog.show('A Star-Shrine glimmers softly. Its light feels… familiar.');
     if (!Game.flag('tut_save')) await this.tutorial('save');
-    const i = await this.choice(['Save adventure', 'Leave']);
+    const i = await this.choice(['Save adventure', 'Leave'], 1);
     if (i === 0) {
       const w = this.world; Game.s.savePoint = { map: w.def.id, x: w.hero.tx, y: w.hero.ty - 1 };
-      Game.s.x = w.hero.tx; Game.s.y = w.hero.ty; Game.s.dir = w.hero.dir; Game.save(); Audio.sfx('save');
+      Game.s.x = w.hero.tx; Game.s.y = w.hero.ty; Game.s.dir = w.hero.dir; Game.healAll(); this.refreshHud();
+      const ok = Game.save('shrine'); Audio.sfx(ok ? 'save' : 'cancel');
       this.cameras.main.flash(300, 180, 230, 255);
-      await this.dialog.show('Your adventure has been recorded in the stars.');
+      await this.dialog.show(ok ? `Your adventure has been recorded in the stars. (Adventure Log ${Game.slot + 1})\nThe shrine's light restores your party.` : 'The stars could not record your adventure. (Storage unavailable — your previous record is safe.)');
     }
     this.hideDialog();
   }
   // ------------------------------------------------------------- menus
-  modalWrap<T>(fn: () => Promise<T>): Promise<T> { this.modal = true; return fn().finally(() => { this.modal = false; this.refreshHud(); }); }
+  modalWrap<T>(fn: () => Promise<T>): Promise<T> { this.modal = true; this.partyHud?.setVisible(false); return fn().finally(() => { this.modal = false; if (!this.sys.isActive()) return; this.partyHud?.setVisible(true); this.refreshHud(); Game.markDirty('menu'); }); }
   memberPicker(title: string, sub?: (m: Member) => string, list = Game.s.party): Promise<number> {
     return new Promise(res => {
       const m = new ListMenu(this, 60, 360, W - 120, list.map(p => ({ label: p.name, sub: sub ? sub(p) : `HP ${p.hp}/${stats(p).hp}` })), { title, itemH: 80 }).setDepth(1300);
@@ -151,13 +159,16 @@ export class UIScene extends Phaser.Scene {
       const pt = Game.s.playTime; root.add(txt(this, 400, 222, `Time ${Math.floor(pt / 3600)}:${String(Math.floor(pt / 60) % 60).padStart(2, '0')}`, 24));
       root.add(txt(this, 400, 258, this.world.def.name, 22, COL.dim, { wordWrap: { width: 280 } }));
       while (true) {
-        const items: MenuItem[] = [{ label: 'Items' }, { label: 'Equipment' }, { label: 'Spells' }, { label: 'Status' }, { label: 'Quests' }, { label: 'Settings' }, { label: 'Close' }];
-        const m = new ListMenu(this, 20, 160, 340, items, { itemH: 74 }).setDepth(1201);
-        const i = await new Promise<number>(r => { m.onSelect = i => r(i); m.onCancel = () => r(6); });
+        const items: MenuItem[] = ['Items', 'Equipment', 'Spells', 'Status', 'Quests', 'Save', 'Settings', 'Close'].map(label => ({ label }));
+        const m = new ListMenu(this, 20, 160, 340, items, { itemH: 74, rows: 8 }).setDepth(1201);
+        const i = await new Promise<number>(r => { m.onSelect = i => r(i); m.onCancel = () => r(items.length - 1); });
         m.close();
-        if (i === 6) break;
+        const pick = items[i].label;
+        if (pick === 'Close') break;
         root.setVisible(false);
-        if (i === 0) await this.itemsMenu(); if (i === 1) await this.equipMenu(); if (i === 2) await this.spellsMenu(); if (i === 3) await this.statusMenu(); if (i === 4) await this.questMenu(); if (i === 5) await this.settingsMenu();
+        if (pick === 'Items') await this.itemsMenu(); if (pick === 'Equipment') await this.equipMenu(); if (pick === 'Spells') await this.spellsMenu();
+        if (pick === 'Status') await this.statusMenu(); if (pick === 'Quests') await this.questMenu(); if (pick === 'Settings') await this.settingsMenu();
+        if (pick === 'Save') { const quit = await this.saveMenu(); if (quit) { root.destroy(); return; } }
         root.setVisible(true);
       }
       root.destroy();
@@ -189,7 +200,9 @@ export class UIScene extends Phaser.Scene {
       const upd = (k: number) => desc.setText(SKILLS[sk[k]].desc + (SKILLS[sk[k]].usableInField ? '' : ' (Battle only)')); upd(0); m.onChange = upd;
       const k = await new Promise<number>(r => { m.onSelect = i => r(i); m.onCancel = () => r(-1); });
       m.close(); desc.destroy(); dp.destroy(); if (k < 0) return;
-      const s = SKILLS[sk[k]]; const t = await this.memberPicker(`Cast ${s.name} on…`); if (t < 0) continue;
+      const s = SKILLS[sk[k]];
+      if (s.effect === 'healAll') { m0.mp -= s.mp; let tot = 0; for (const p of Game.s.party) if (p.hp > 0) { const b = p.hp; p.hp = Math.min(stats(p).hp, p.hp + Math.round(s.power + stats(m0).mag * 0.4)); tot += p.hp - b; } Audio.sfx('heal'); this.refreshHud(); await card(this, s.name, `The party recovers ${tot} HP in total!`); continue; }
+      const t = await this.memberPicker(`Cast ${s.name} on…`); if (t < 0) continue;
       const tgt = Game.s.party[t]; if (tgt.hp <= 0) { await card(this, s.name, 'It has no effect on the fallen.'); continue; }
       m0.mp -= s.mp; const before = tgt.hp; tgt.hp = Math.min(stats(tgt).hp, tgt.hp + Math.round(s.power + stats(m0).mag * 0.6)); Audio.sfx('heal'); this.refreshHud();
       await card(this, s.name, `${tgt.name} recovers ${tgt.hp - before} HP!`);
@@ -212,7 +225,7 @@ export class UIScene extends Phaser.Scene {
       SLOTS.forEach((sl, i) => { const id = mm.equip[sl]; c.add(txt(this, 60, 620 + i * 48, SLOT_NAMES[sl], 26, COL.goldS)); c.add(txt(this, 260, 620 + i * 48, id ? ITEMS[id].name : '—', 26)); });
       c.add(txt(this, 60, 880, 'Abilities: ' + (skillsOf(mm).map(k => SKILLS[k].name).join(', ') || '—'), 24, COL.text, { wordWrap: { width: W - 120 } }));
       c.add(txt(this, W / 2, 1110, Game.s.party.length > 1 ? '◀ ▶ change member   ·   ✦ close' : '✦ close', 24, COL.dim).setOrigin(0.5));
-      const a = await new Promise<string>(r => { const f: Focus = { onAction: x => { if (x === 'left' || x === 'right' || x === 'ok' || x === 'cancel') { Input.pop(f); r(x); } } }; Input.push(f); c.list[0].on('pointerdown', (p: Phaser.Input.Pointer) => { Input.pop(f); r(p.y > 1000 ? 'ok' : p.x < W / 2 ? 'left' : 'right'); }); });
+      const a = await new Promise<string>(r => { const f: Focus = { canBack: true, onAction: x => { if (x === 'left' || x === 'right' || x === 'ok' || x === 'cancel') { Input.pop(f); r(x); } } }; Input.push(f); c.list[0].on('pointerdown', (p: Phaser.Input.Pointer) => { Input.pop(f); r(p.y > 1000 ? 'ok' : p.x < W / 2 ? 'left' : 'right'); }); });
       c.destroy(); Audio.sfx('cursor');
       if (a === 'ok' || a === 'cancel' || Game.s.party.length === 1) return;
       idx = (idx + (a === 'left' ? -1 : 1) + Game.s.party.length) % Game.s.party.length;
@@ -232,6 +245,21 @@ export class UIScene extends Phaser.Scene {
       if (k === 2) { DioramaFX.quality = DioramaFX.quality ? 0 : 1; localStorage.setItem('ember_gfx', String(DioramaFX.quality)); continue; }
       if (k === 0) Audio.setMusicVol(((Math.round(Audio.musicVol * 5) + 1) % 6) / 5); else Audio.setSfxVol(((Math.round(Audio.sfxVol * 5) + 1) % 6) / 5);
     }
+  }
+  /** Menu → Save: manual save to the current Adventure Log, optionally return to title. Returns true when quitting. */
+  async saveMenu(): Promise<boolean> {
+    const w = this.world; const inf = Game.slotInfo(Game.slot);
+    const m = new ListMenu(this, 60, 360, W - 120, [{ label: 'Save now', sub: `Log ${Game.slot + 1}` }, { label: 'Save & return to title' }, { label: 'Back' }], { title: inf ? `Last saved: ${new Date(inf.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Not saved yet' }).setDepth(1300);
+    const k = await new Promise<number>(r => { m.onSelect = i => r(i); m.onCancel = () => r(2); }); m.close();
+    if (k === 2) return false;
+    Game.s.x = w.hero.tx; Game.s.y = w.hero.ty; Game.s.dir = w.hero.dir;
+    const ok = Game.save('manual'); Game.dirty = ''; Audio.sfx(ok ? 'save' : 'cancel');
+    (this.scene.get('Overlay') as any)?.flashSaved?.(ok);
+    if (!ok) { await card(this, 'Save failed', 'Your adventure could not be written (storage unavailable). Your previous record has not been touched.'); return false; }
+    if (k === 0) { await card(this, 'Saved', `Your adventure has been recorded in Adventure Log ${Game.slot + 1}.`, 'crystal'); return false; }
+    this.modal = false; Audio.stopMusic(); this.cameras.main.fadeOut(400);
+    this.time.delayedCall(420, () => { w.scene.stop(); this.scene.start('Title'); });
+    return true;
   }
   // ------------------------------------------------------------- equipment (with live paper-doll preview)
   async equipMenu() {
@@ -275,7 +303,7 @@ export class UIScene extends Phaser.Scene {
   async shop(kind: string) {
     await this.modalWrap(async () => {
       while (true) {
-        const i = await this.choice(['Buy', 'Sell', 'Leave']);
+        const i = await this.choice(['Buy', 'Sell', 'Leave'], 2);
         if (i === 2) { await this.say('Come again!'); this.hideDialog(); return; }
         if (i === 0) await this.shopBuy(kind); else await this.shopSell();
       }
@@ -317,7 +345,7 @@ export class UIScene extends Phaser.Scene {
         const who = Game.s.party.map((p, i) => ({ p, i })).filter(o => canEquip(o.p, id));
         if (who.length) {
           view.setVisible(false);
-          const ans = await this.choice([...who.map(o => `Equip on ${o.p.name}`), 'Keep in bag']);
+          const ans = await this.choice([...who.map(o => `Equip on ${o.p.name}`), 'Keep in bag'], who.length);
           view.setVisible(true);
           if (ans < who.length) { const mem = who[ans].p; const old = mem.equip[it.slot!]; if (old) Game.addItem(old); Game.addItem(id, -1); mem.equip[it.slot!] = id; Audio.sfx('buff'); this.world.refreshParty(); }
         }
@@ -334,23 +362,48 @@ export class UIScene extends Phaser.Scene {
     if (k < 0) return; const id = ids[k]; Game.addItem(id, -1); Game.s.gold += Math.floor(ITEMS[id].price / 2); Audio.sfx('coin'); this.refreshHud();
   }
   // ------------------------------------------------------------- recruitment
-  async recruit() {
+  async recruit(who = 'Dahlia') {
     await this.modalWrap(async () => {
       while (true) {
-        const i = await this.choice(['Create a companion', 'Change party', 'Leave']);
-        if (i === 2) { await this.say('Whenever you need me, I\'ll be here.', 'Dahlia'); this.hideDialog(); return; }
+        const i = await this.choice(['Create a companion', 'Change party', 'Leave'], 2);
+        if (i === 2) { await this.say('Whenever you need me, I\'ll be here.', who); this.hideDialog(); return; }
         if (i === 0) {
           if (Game.s.roster.length + Game.s.party.length >= 10) { await this.say('My Ledger is full, sweetheart.', 'Dahlia'); continue; }
           this.hideDialog(); this.scene.setVisible(false);
           const m = await new Promise<Member | null>(r => { this.scene.launch('Create', { mode: 'companion', onDone: r }); this.scene.bringToTop('Create'); });
           this.scene.setVisible(true);
           if (m) {
-            if (Game.s.party.length < 4) { Game.s.party.push(m); Audio.sfx('join'); await this.say(`${m.name} the ${VOCATIONS[m.voc].name} joined the party!`, 'Dahlia'); }
-            else { Game.s.roster.push(m); await this.say(`${m.name} signed the Ledger and will wait here at the Hearth.`, 'Dahlia'); }
+            if (Game.s.party.length < 4) { Game.s.party.push(m); Audio.sfx('join'); await this.say(`${m.name} the ${VOCATIONS[m.voc].name} joined the party!`, who); }
+            else { Game.s.roster.push(m); await this.say(`${m.name} signed the Ledger and will wait at any Party Ledger.`, who); }
             this.world.refreshParty(); this.refreshHud();
           }
         }
         if (i === 1) await this.changeParty();
+      }
+    });
+  }
+  /** Chapter II: the Chapel of Alltrades. Change a party member's vocation; each vocation keeps its own level and learned abilities stay. */
+  async vocationMenu(who = 'Abbess Maren') {
+    await this.modalWrap(async () => {
+      while (true) {
+        const c = await this.memberPicker('Who will change vocation?', p => `${VOCATIONS[p.voc].name} Lv${p.level}`); if (c < 0) { this.hideDialog(); return; }
+        const mem = Game.s.party[c]; const keys = Object.keys(VOCATIONS);
+        const lv = (k: string) => k === mem.voc ? mem.level : mem.vocs?.[k]?.level ?? 1;
+        const view = this.add.container(0, 0).setDepth(1300);
+        view.add(this.add.rectangle(0, 0, W, H, 0x05040c, 0.86).setOrigin(0).setInteractive());
+        view.add(panel(this, 20, 120, W - 40, 330));
+        const doll = this.add.sprite(150, 420, ensureDoll(this, specOf(mem)), 0).setOrigin(0.5, 1).setScale(11); view.add(doll);
+        const dt = txt(this, 290, 150, '', 25, COL.text, { wordWrap: { width: W - 330 }, lineSpacing: 6 }); view.add(dt);
+        const m = new ListMenu(this, 20, 470, W - 40, keys.map(k => ({ label: VOCATIONS[k].name, sub: k === mem.voc ? `Lv${lv(k)} (current)` : `Lv${lv(k)}`, color: k === mem.voc ? COL.accent : undefined })), { title: `${mem.name}'s vocation`, rows: 7, itemH: 72 }).setDepth(1301);
+        const upd = (k: number) => { const v = VOCATIONS[keys[k]]; const st = stats({ ...mem, voc: keys[k], level: lv(keys[k]) } as any); dt.setText(`${v.name}\n${v.desc.replace(/ \(Unlocked.*\)/, '')}\n\nHP ${st.hp}  MP ${st.mp}  ATK ${st.atk}\nDEF ${st.def}  AGI ${st.agi}  MAG ${st.mag}`); };
+        upd(Math.max(0, keys.indexOf(mem.voc))); m.idx = Math.max(0, keys.indexOf(mem.voc)); m.refresh(); m.onChange = upd;
+        const k = await new Promise<number>(r => { m.onSelect = i => r(i); m.onCancel = () => r(-1); }); m.close(); view.destroy();
+        if (k < 0 || keys[k] === mem.voc) continue;
+        const ans = await this.choice([`Become a ${VOCATIONS[keys[k]].name}`, 'Not yet'], 1);
+        if (ans !== 0) continue;
+        changeVocation(mem, keys[k], id => Game.addItem(id)); Audio.sfx('star'); this.cameras.main.flash(400, 255, 240, 200);
+        this.world.refreshParty(); this.refreshHud(); Game.markDirty('vocation');
+        await this.say(`By the light of the Alltrades, ${mem.name} walks the path of the ${VOCATIONS[keys[k]].name}! (Lv${mem.level}) Gear that no longer fits was returned to your bag; every ability learned still remains.`, who);
       }
     });
   }

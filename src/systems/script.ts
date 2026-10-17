@@ -1,7 +1,9 @@
 /** Interprets SCRIPTS (src/data/story.ts) against the WorldScene + UIScene. */
 import Phaser from 'phaser';
 import { SCRIPTS, Cmd, QUESTS } from '../data/story';
-import { Game } from './state';
+import { Game, newMember, stats } from './state';
+import { STORY_MEMBERS } from '../data/story2';
+import { VOCATIONS } from '../data/vocations';
 import { Audio } from './audio';
 import { evalCond } from './cond';
 import { ITEMS } from '../data/items';
@@ -31,13 +33,16 @@ export class ScriptRunner {
     if (c.stop) { this.stopped = true; return; }
     if (c.set !== undefined) { Game.set(c.set, c.v ?? true); return; }
     if (c.give) { Game.addItem(c.give, c.n || 1); Audio.sfx('chest'); ui.refreshHud(); return; }
-    if (c.take) { Game.addItem(c.take, -(Game.s.inv[c.take] || 0)); return; }
+    if (c.take) { Game.addItem(c.take, -Math.min(Game.s.inv[c.take] || 0, c.n ?? Infinity)); return; }
     if (c.gold) { Game.s.gold += c.gold; Audio.sfx('coin'); ui.refreshHud(); return; }
     if (c.quest) { const prev = Game.s.quests[c.quest]; Game.s.quests[c.quest] = c.state; if (prev !== c.state) await ui.questToast(QUESTS[c.quest].name, c.state); return; }
     if (c.tut) { if (Game.flag('tut_' + c.tut)) return; Game.set('tut_' + c.tut); return ui.tutorial(c.tut); }
     if (c.shop) { ui.hideDialog(); if (!Game.flag('tut_shop')) { Game.set('tut_shop'); await ui.tutorial('shop'); } return ui.shop(c.shop); }
-    if (c.inn !== undefined) { return ui.inn(c.inn); }
-    if (c.recruit) { ui.hideDialog(); return ui.recruit(); }
+    if (c.inn !== undefined) { const ok = await ui.inn(c.inn, c.who); if (ok && c.slept) await this.exec(SCRIPTS[c.slept] || []); return; }
+    if (c.recruit) { ui.hideDialog(); return ui.recruit(c.who); }
+    if (c.vocation) { ui.hideDialog(); return ui.vocationMenu(c.who); }
+    if (c.join) { return joinStory(w, c.join); }
+    if (c.leave) { Game.s.party = Game.s.party.filter(m => m.id !== c.leave); Game.s.roster = Game.s.roster.filter(m => m.id !== c.leave); w.refreshParty(); ui.refreshHud(); return; }
     if (c.heal) { Game.healAll(); ui.refreshHud(); return; }
     if (c.battle) { ui.hideDialog(); const r = await w.startBattle(c.battle, { bg: c.bg, music: c.music, boss: c.boss, noFlee: c.noFlee }); if (r === 'lose') this.stopped = true; return; }
     if (c.fade) { ui.hideDialog(); return ui.fade(c.fade, c.ms || 600, c.color ?? 0); }
@@ -57,7 +62,7 @@ export class ScriptRunner {
     if (c.warp) { ui.hideDialog(); Game.s.map = c.warp; w.scene.restart({ map: c.warp, x: c.x, y: c.y, dir: c.dir ?? 0, noFade: true, script: '__continue' }); await new Promise<void>(r => w.events.once('create', r)); return; }
     if (c.call) return this.exec(SCRIPTS[c.call] || []);
     if (c.fx) return fx(w, c.fx);
-    if (c.end) { ui.hideDialog(); await ui.fade('out', 1500, 0); w.scene.stop('UI'); w.scene.start('End'); this.stopped = true; return; }
+    if (c.end) { ui.hideDialog(); await ui.fade('out', 1500, 0); Game.s.x = w.hero.tx; Game.s.y = w.hero.ty; w.scene.stop('UI'); w.scene.start('End', { chapter: c.chapter || 1 }); this.stopped = true; return; }
     console.warn('unknown cmd', c);
   }
 }
@@ -116,6 +121,41 @@ async function fx(w: WorldScene, name: string) {
       w.cameras.main.shake(400, 0.02); w.time.delayedCall(1200, () => { st?.destroy(); gl?.destroy(); }); return;
     }
     case 'bramGlow': { const b = w.actor('elder'); if (b) { const ring = add.image(b.spr.x, b.spr.y - 26, 'ring').setScale(0.22, 0.08).setTint(0xffe8a0).setBlendMode(Phaser.BlendModes.ADD).setDepth(9500).setAlpha(0); w.tweens.add({ targets: ring, alpha: { from: 0, to: 1 }, yoyo: true, duration: 600, repeat: 1, onComplete: () => ring.destroy() }); } return w.wait(1600); }
+    case 'song': { // musical notes and sea-glow around Ione (or the hero's party)
+      const src = w.actor('ione') || w.actor('ioneL') || w.followers.find(f => f) || w.hero; const x = src.spr.x, y = src.spr.y - 14;
+      Audio.sfx('heal');
+      const notes = add.particles(x, y, 'px', { lifespan: 2200, speedY: { min: -18, max: -8 }, speedX: { min: -10, max: 10 }, scale: { start: 1.3, end: 0 }, tint: [0x6af0d0, 0xa0e0ff, 0xffffff, 0xffd0f0], blendMode: 'ADD', frequency: 70 }).setDepth(9500);
+      const glow = add.image(x, y, 'light').setScale(0.4).setTint(0x60f0d0).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0).setDepth(9499);
+      w.tweens.add({ targets: glow, alpha: 0.5, scale: 1.2, yoyo: true, hold: 1600, duration: 900, onComplete: () => glow.destroy() });
+      w.time.delayedCall(3200, () => { notes.stop(); w.time.delayedCall(2300, () => notes.destroy()); });
+      return w.wait(1200);
+    }
+    case 'abductFlash': {
+      const m = w.actor('mordaneN'); const x = m ? m.spr.x : h.x, y = m ? m.spr.y - 10 : h.y;
+      for (let i = 0; i < 3; i++) w.time.delayedCall(i * 160, () => { const r = add.image(x, y, 'ring').setScale(0.05).setTint(0xa040ff).setBlendMode(Phaser.BlendModes.ADD).setDepth(9500); w.tweens.add({ targets: r, scale: 1.4, alpha: 0, duration: 800, onComplete: () => r.destroy() }); });
+      Audio.sfx('dark'); w.tweens.add({ targets: h, angle: -80, duration: 300, yoyo: true, hold: 900 });
+      return w.wait(900);
+    }
+    case 'cantorFade': { const c = w.actor('cantor'); if (c) { burst(c.spr.x, c.spr.y - 20, [0x9a9aa8, 0xd8d0c0, 0x5a5068], 70, 60); w.tweens.add({ targets: c.spr, alpha: 0, scaleY: 0, duration: 1400 }); Audio.sfx('die'); } return w.wait(1500); }
+    case 'shardRestore': {
+      const io = w.actor('ioneB'); const x = io ? io.spr.x : h.x, y = io ? io.spr.y - 12 : h.y - 12;
+      const st = add.image(x, y - 50, 'star').setScale(0.5).setTint(0x6af0ff).setBlendMode(Phaser.BlendModes.ADD).setDepth(9600);
+      const gl = add.image(x, y - 50, 'light').setScale(0.6).setTint(0x40d0ff).setBlendMode(Phaser.BlendModes.ADD).setDepth(9599);
+      await new Promise<void>(r => w.tweens.add({ targets: [st, gl], y, duration: 1600, ease: 'Sine.inOut', onComplete: () => r() }));
+      burst(x, y, [0x6af0ff, 0xffffff, 0x60f0d0], 60, 90); w.cameras.main.flash(600, 160, 240, 255); st.destroy(); gl.destroy();
+      return w.wait(400);
+    }
+    case 'beam': { // the lighthouse wakes: a rotating beam sweeping across the bay
+      const lx = 36 * 16 + 8, ly = 5 * 16 - 51;
+      const core = add.image(lx, ly, 'light').setScale(0.1).setTint(0xfff4c0).setBlendMode(Phaser.BlendModes.ADD).setDepth(9600);
+      w.tweens.add({ targets: core, scale: 1.4, duration: 1200, ease: 'Expo.out' });
+      const beam = add.image(lx, ly, 'light').setOrigin(0, 0.5).setScale(5, 0.35).setTint(0xfff0b0).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0).setDepth(9601);
+      w.tweens.add({ targets: beam, alpha: 0.75, duration: 900 }); w.tweens.add({ targets: beam, angle: 360, duration: 5200, repeat: -1 });
+      w.fxObjs.beam = beam; w.fxObjs.beamCore = core; w.cameras.main.flash(900, 255, 250, 220); w.cameras.main.shake(500, 0.006); Audio.sfx('star');
+      burst(lx, ly, [0xfff4c0, 0xffffff, 0x9ad0ff], 90, 120);
+      return w.wait(2200);
+    }
+    case 'nightOff': { await new Promise<void>(r => w.tweens.add({ targets: w, nightK: 0, duration: 2600, onComplete: () => r() })); return; }
     case 'starRain': {
       const cam = w.cameras.main;
       for (let i = 0; i < 26; i++) w.time.delayedCall(i * 260, () => {
@@ -127,5 +167,15 @@ async function fx(w: WorldScene, name: string) {
       return w.wait(2500);
     }
   }
+}
+/** Story companions (e.g. Ione) join with a fixed look, vocation and gear. */
+async function joinStory(w: WorldScene, id: string) {
+  const def = STORY_MEMBERS[id]; if (!def || Game.s.party.some(m => m.id === id) || Game.s.roster.some(m => m.id === id)) return;
+  const lvl = Math.max(def.level, Math.round(Game.s.party.reduce((t, m) => t + m.level, 0) / Game.s.party.length));
+  const m = newMember(id, def.name, def.voc, def.look, lvl); m.equip = { ...def.equip }; m.extraSkills = [...(def.skills || [])];
+  const st = stats(m); m.hp = st.hp; m.mp = st.mp;
+  if (Game.s.party.length < 4) Game.s.party.push(m); else Game.s.roster.push(m);
+  Audio.sfx('join'); w.refreshParty(); w.ui.refreshHud();
+  await w.ui.narr(Game.s.party.includes(m) ? `${def.name} the ${VOCATIONS[def.voc].name} joined the party!` : `${def.name} joined you! (Your party is full — ${def.name} waits at the Party Ledger.)`);
 }
 export { ITEMS };
