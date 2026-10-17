@@ -40,7 +40,7 @@ const C = {
 const FLOW = [0xff6b8a, 0xffd34e, 0xffffff, 0x9ad0ff, 0xc28cff, 0xff9a4a].map(rgb);
 const AFLOW = [0xffd34e, 0xff8a3a, 0xffffff, 0xe85a4a].map(rgb);
 
-export interface GroundResult { key: string; waterKey?: string; blank: boolean[][]; ter: number[][]; w: number; h: number }
+export interface GroundResult { fresh?: boolean; key: string; waterKey?: string; blank: boolean[][]; ter: number[][]; w: number; h: number }
 
 /** most common neighbouring ground for structure/prop cells */
 function deriveGround(grid: string[], x: number, y: number, ch: string): number {
@@ -58,7 +58,9 @@ function deriveGround(grid: string[], x: number, y: number, ch: string): number 
   return best;
 }
 
-export function paintGround(scene: Phaser.Scene, id: string, grid: string[], propChars: Set<string>): GroundResult {
+export function paintGround(scene: Phaser.Scene, id: string, grid: string[], propChars: Set<string>, outdoor = false): GroundResult {
+  // outdoor maps use the cave-rock chars as weathered coastal cliffs
+  C.ct0 = rgb(outdoor ? 0x3a3834 : 0x0e1c24); C.ct1 = rgb(outdoor ? 0x6e675a : 0x1f3a48); C.ct2 = rgb(outdoor ? 0xa89e88 : 0x3a6a7a);
   const h = grid.length, w = grid[0].length, W = w * TT, H = h * TT;
   const ter: number[][] = []; const blank: boolean[][] = [];
   for (let y = 0; y < h; y++) { ter.push([]); blank.push([]); for (let x = 0; x < w; x++) {
@@ -109,11 +111,11 @@ export function paintGround(scene: Phaser.Scene, id: string, grid: string[], pro
           const tall = ch === '"' || ch === '&';
           // tufts: small 3-blade sprigs on a jittered grid
           const cs = tall ? 4 : 6, cx = Math.floor(X / cs), cy = Math.floor(Y / cs), hh = hash(cx, cy, 1);
-          if (hh < (tall ? 0.95 : 0.42)) {
+          if (hh < (tall ? 0.95 : 0.3)) {
             const ox = cx * cs + Math.floor(hash(cx, cy, 2) * (cs - 2)) + 1, oy = cy * cs + cs - 1, dx = X - ox, dy = oy - Y, bh = tall ? 5 + Math.floor(hash(cx, cy, 6) * 3) : 3;
             if ((dx === 0 && dy >= 0 && dy < bh) || (Math.abs(dx) === 1 && dy >= 0 && dy < bh - 2 && ((dy + (dx > 0 ? 1 : 0)) % 2 === 0 || dy < 1))) {
               const top = dy >= bh - (dx === 0 ? 2 : 1);
-              c = top ? mix(c, aut ? C.a3 : C.gHi, 0.75) : dy === 0 ? mul(c, 0.78) : mix(c, aut ? C.a3 : C.g3, 0.35);
+              c = top ? mix(c, aut ? C.a3 : C.gHi, tall ? 0.6 : 0.42) : dy === 0 ? mul(c, 0.78) : mix(c, aut ? C.a3 : C.g3, 0.35);
             } else if (dy === -1 && Math.abs(dx) <= 1) c = mul(c, 0.85);
           }
           if (tall) c = mul(c, 0.86 + 0.14 * noise(X * 0.3, Y * 0.3));
@@ -235,5 +237,5 @@ export function paintGround(scene: Phaser.Scene, id: string, grid: string[], pro
   };
   put(key, out);
   if (wat) put(waterKey, wat);
-  return res;
+  res.fresh = true; return res;
 }

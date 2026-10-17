@@ -24,3 +24,6 @@ Regression tests: run against a *built* copy so Vite HMR reloads don't break the
 - [ ] Battle overhaul: backdrops, big sprites, VFX, camera, ornate UI.
 - [ ] Interiors.
 - [ ] APK + release v0.3.0.
+
+## Scope update (user, 11:16)
+Elevate EVERYTHING: characters (more detailed sprites, dialogue portraits, smoother animation, visible gear layers), monsters & bosses, UI/menus/fonts, title screen, cutscenes & transitions — not only environments.

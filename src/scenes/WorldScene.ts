@@ -13,6 +13,7 @@ import { ScriptRunner } from '../systems/script';
 import type { UIScene } from './UIScene';
 import { diorama } from '../fx/diorama';
 import { paintGround, HD, STRUCT } from '../gfx/ground';
+import { buildStructures, OH } from '../gfx/structures';
 import { DioramaFX } from '../fx/diorama';
 
 const TS = 16; const DX = [0, -1, 1, 0], DY = [1, 0, 0, -1]; // dir: 0 down 1 left 2 right 3 up
@@ -28,12 +29,12 @@ export class WorldScene extends Phaser.Scene {
   symbols: Symbol[] = []; history: { x: number; y: number; dir: number }[] = []; busy = false; ui!: UIScene; script!: ScriptRunner;
   layer!: Phaser.Tilemaps.TilemapLayer; waterTiles: [number, number, number, number][] = []; dark?: Phaser.GameObjects.RenderTexture; lightImgs: { x: number; y: number; r: number; img?: Phaser.GameObjects.Image; flick: number }[] = [];
   eraser!: Phaser.GameObjects.Image; heroLight = 0; extraSolid = new Set<string>(); initData: any; offInput?: () => void; aura?: Phaser.GameObjects.Container; fxObjs: Record<string, Phaser.GameObjects.GameObject> = {};
-  fx?: any; hdOn = false; hdg?: ReturnType<typeof paintGround>; water?: Phaser.GameObjects.Image; hdStruct = false;
+  fx?: any; hdOn = false; hdg?: ReturnType<typeof paintGround>; water?: Phaser.GameObjects.Image; hdStruct = false; trees: Phaser.GameObjects.Image[] = []; nightWindows: [number, number][] = [];
   constructor() { super('World'); }
   init(d: any) { this.initData = d; }
   create() {
     const d = this.initData; this.def = MAPS[d.map]; this.grid = this.def.grid;
-    this.nightK = 1; this.followers = []; this.npcs = []; this.chests = []; this.symbols = []; this.history = []; this.lightImgs = []; this.extraSolid.clear(); this.waterTiles = []; this.busy = false; this.fxObjs = {};
+    this.nightK = 1; this.trees = []; this.nightWindows = []; this.followers = []; this.npcs = []; this.chests = []; this.symbols = []; this.history = []; this.lightImgs = []; this.extraSolid.clear(); this.waterTiles = []; this.busy = false; this.fxObjs = {};
     Game.s.map = d.map; Game.s.x = d.x; Game.s.y = d.y; Game.s.dir = d.dir ?? 0;
     if (!this.scene.isActive('Overlay')) this.scene.launch('Overlay');
     if (!this.scene.isActive('UI')) this.scene.launch('UI'); this.ui = this.scene.get('UI') as UIScene; this.scene.bringToTop('UI');
@@ -66,6 +67,7 @@ export class WorldScene extends Phaser.Scene {
   }
   // ------------------------------------------------------------------ build
   buildTiles() {
+    this.hdOn = true;
     const h = this.grid.length, w = this.grid[0].length;
     const ground: number[][] = [], over: number[][] = [];
     for (let y = 0; y < h; y++) { ground.push([]); over.push(Array(w).fill(-1)); }
@@ -86,15 +88,25 @@ export class WorldScene extends Phaser.Scene {
       }
       const L = LEGEND[ch] || LEGEND['.']; ground[y][x] = L.t;
       if (L.anim) this.waterTiles.push([x, y, L.t, L.anim]);
-      if (L0.over !== undefined && y > 0) over[y - 1][x] = L0.over;
+      if (L0.over !== undefined && y > 0 && !(this.hdOn && STRUCT.has(this.grid[y][x]))) over[y - 1][x] = L0.over;
     }
     // ---- round 3: HD painted ground (classic tiles stay only where the painter has no art yet)
-    this.hdOn = DioramaFX.quality > 0 || true;
     if (this.hdOn) {
       const propChars = new Set(Object.keys(LEGEND).filter(k => PT[LEGEND[k].t] !== undefined));
-      const g = paintGround(this, this.def.id, this.grid, propChars); this.hdg = g;
+      const g = paintGround(this, this.def.id, this.grid, propChars, this.def.outdoor); this.hdg = g;
       this.add.image(0, 0, g.key).setOrigin(0).setScale(1 / HD).setDepth(-2);
       if (g.waterKey) this.water = this.add.image(0, 0, g.waterKey).setOrigin(0).setScale(1 / HD).setDepth(-1);
+      this.hdStruct = true;
+      const st = buildStructures(this, this.def.id, this.grid, this.isNight(), g.key, !!g.fresh);
+      for (const hs of st.houses) {
+        this.add.image(hs.x0 * TS - OH / HD, (hs.y1 + 1) * TS, hs.key).setOrigin(0, 1).setScale(1 / HD).setDepth(10 + (hs.y1 + 1) * TS - 1);
+        if (hs.chimney) this.add.particles(hs.x0 * TS - OH / HD + hs.chimney[0] / HD, (hs.y1 + 1) * TS - this.textures.get(hs.key).source[0].height / HD + 1, 'light', { lifespan: 3600, speedY: { min: -9, max: -5 }, speedX: { min: 2, max: 6 }, scale: { start: 0.03, end: 0.16 }, alpha: { start: 0.35, end: 0 }, tint: this.isNight() ? 0x8890b0 : 0xe8e4f0, frequency: 260 }).setDepth(7100);
+        if (this.isNight()) for (const [wx, wy] of hs.windows) { const X = hs.x0 * TS - OH / HD + wx / HD, Y = (hs.y1 + 1) * TS - this.textures.get(hs.key).source[0].height / HD + wy / HD; (this.def.lights = this.def.lights || []); this.nightWindows.push([X, Y]); }
+      }
+      for (const t of st.trees) {
+        const im = this.add.image(t.x * TS + 8, t.y * TS + 17, 'hdtrees', t.kind + t.v).setOrigin(0.5, 1).setScale(1 / HD).setDepth(10 + t.y * TS + 16).setFlipX(((t.x * 7 + t.y * 3) % 5) < 2);
+        this.trees.push(im);
+      }
       for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (g.blank[y][x] && (!STRUCT.has(this.grid[y][x]) || this.hdStruct)) ground[y][x] = -1;
       this.waterTiles = this.waterTiles.filter(([x, y]) => ground[y][x] >= 0);
     }
@@ -235,6 +247,10 @@ export class WorldScene extends Phaser.Scene {
     }
     // glowing coral lights itself (sea caves)
     { let k = 0; for (let y = 0; y < this.grid.length; y++) for (let x = 0; x < this.grid[0].length; x++) if (this.grid[y][x] === 'j' && (k++ % 2) === 0) lights.push({ x, y, c: k % 4 ? 0x50f0d0 : 0xff80c0, r: 2.2 }); }
+    for (const [X, Y] of this.nightWindows) {
+      const img = this.add.image(X, Y + 2, 'light').setTint(0xffb050).setBlendMode(Phaser.BlendModes.ADD).setDepth(8001).setScale(0.5).setAlpha(0.5);
+      this.lightImgs.push({ x: X, y: Y + 6, r: 1.6, img, flick: Math.random() * 10 });
+    }
     for (const l of lights) {
       const img = this.add.image(l.x * TS + 8, l.y * TS + 8, 'light').setTint(l.c).setBlendMode(Phaser.BlendModes.ADD).setDepth(8001).setScale(l.r * 0.28).setAlpha(0.5);
       this.lightImgs.push({ x: l.x * TS + 8, y: l.y * TS + 8, r: l.r, img, flick: Math.random() * 10 });
