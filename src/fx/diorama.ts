@@ -30,9 +30,12 @@ float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
 void main() {
   vec2 uv = outTexCoord;
   float top = uv.y;                       // 1 = top of screen (far), 0 = bottom (near)
-  float s = 1.0 - uPersp * (1.0 - top);
-  float a = uPersp * 0.9;
-  vec2 src = vec2(0.5 + (uv.x - 0.5) * s, top - a * top * (1.0 - top));
+  // projective ground-plane tilt (camera pitched like OT2): far rows (top) recede, near rows (bottom) loom.
+  // x scale ratio top/bottom = 1+k, y follows the matching hyperbola, so the floor reads as a real receding plane.
+  float k = uPersp;
+  float den = 1.0 + k * (1.0 - top);
+  float s = 1.0 / den;
+  vec2 src = vec2(0.5 + (uv.x - 0.5) * s, top / (1.0 + k * 0.6 * (1.0 - top)));
   vec3 col = tap(src);
   vec2 px = 1.0 / uRes;
   if (uQuality > 0.5) {
@@ -84,11 +87,11 @@ void main() {
 
 export interface DioramaParams { focus: number; sat: number; persp: number; blur: number; bloom: number; rays: number; fogAmt: number; fog: number; warm: number; cool: number; vig: number }
 export const PRESETS: Record<string, Partial<DioramaParams>> = {
-  outdoor: { persp: 0.22, blur: 6, bloom: 1.0, rays: 0.12, fogAmt: 0.35, fog: 0xbfd8f0, warm: 0xffc890, cool: 0x3050a0, vig: 0.55 },
-  night: { persp: 0.22, blur: 6, bloom: 1.8, rays: 0.0, fogAmt: 0.35, fog: 0x101838, warm: 0xffb070, cool: 0x2040a0, vig: 0.7 },
-  indoor: { persp: 0.12, blur: 4, bloom: 1.2, rays: 0.05, fogAmt: 0.0, fog: 0x000000, warm: 0xffb070, cool: 0x302060, vig: 0.65 },
-  dungeon: { persp: 0.2, blur: 5.5, bloom: 2.0, rays: 0.0, fogAmt: 0.4, fog: 0x0a0610, warm: 0xff9050, cool: 0x302070, vig: 0.8 },
-  sky: { persp: 0.2, blur: 5.5, bloom: 1.8, rays: 0.14, fogAmt: 0.25, fog: 0x2a2060, warm: 0xffe0a0, cool: 0x5040c0, vig: 0.6 },
+  outdoor: { persp: 0.6, blur: 7, bloom: 1.0, rays: 0.12, fogAmt: 0.35, fog: 0xbfd8f0, warm: 0xffc890, cool: 0x3050a0, vig: 0.55 },
+  night: { persp: 0.6, blur: 7, bloom: 1.8, rays: 0.0, fogAmt: 0.35, fog: 0x101838, warm: 0xffb070, cool: 0x2040a0, vig: 0.7 },
+  indoor: { persp: 0.3, blur: 4, bloom: 1.2, rays: 0.05, fogAmt: 0.0, fog: 0x000000, warm: 0xffb070, cool: 0x302060, vig: 0.65 },
+  dungeon: { persp: 0.42, blur: 5.5, bloom: 2.0, rays: 0.0, fogAmt: 0.4, fog: 0x0a0610, warm: 0xff9050, cool: 0x302070, vig: 0.8 },
+  sky: { persp: 0.42, blur: 5.5, bloom: 1.8, rays: 0.14, fogAmt: 0.25, fog: 0x2a2060, warm: 0xffe0a0, cool: 0x5040c0, vig: 0.6 },
   battle: { persp: 0.0, blur: 0, bloom: 0.8, rays: 0.06, fogAmt: 0.0, fog: 0x000000, warm: 0xffc890, cool: 0x3040a0, vig: 0.6 },
 };
 

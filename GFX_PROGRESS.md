@@ -25,8 +25,13 @@ Regression tests: run against a *built* copy so Vite HMR reloads don't break the
 - [x] Title: painted 4-layer parallax vista (`src/gfx/titleart.ts`), HD hero + companion on the cliff, gold Cinzel Decorative logo with filigree + glints, bloom/ray grade.
 - [x] Transitions: diamond-tile wipe for area changes; freeze-frame shatter into battle (Overlay scene).
 
+- [x] HD props v1: every prop tile Scale4x + re-shaded (`ensurePropHd` in WorldScene), y-sorted with characters, contact shadows; trees sway.
+- [x] Full-screen: logical height adapts to device aspect (`H` in widgets.ts, 1280..1700), `SAFE_T/SAFE_B` insets for HUD; battle stage scales by `K=(820+DY)/800`, bottom UI shifted by `DY`.
+- [x] Battle hit flash = brief additive silhouette (110ms, 42%) instead of solid tintFill (was a white blob under bloom).
+- [x] Diorama depth: projective ground-plane tilt in DioramaFX (k=0.6 outdoor), camera zoom 4 -> 4.6 (`ZOOM`), raised plaza with stone curb faces + cast shadow, taller house walls (+WALLX) and roofs, front cross-gables with round windows, foreground blurred foliage silhouettes at screen edges with parallax.
+
 ## Next
-- [ ] HD props (crates, signs, lanterns, bridges), interiors pass, roof gables.
+- [ ] Interiors pass; HD bridge/sign/lantern polish if needed.
 - [ ] APK + release v0.3.0.
 
 ## Scope update (user, 11:16)

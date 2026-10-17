@@ -213,6 +213,23 @@ export function paintGround(scene: Phaser.Scene, id: string, grid: string[], pro
         case Ter.WATER: { c = C.mud; break; }
         default: { c = [0, 0, 0]; }
       }
+      // raised plaza (diorama depth): stone curb face below the plaza edge, cast shadow under it, lit lips on top
+      { const tr = T(gx, gy), up = T(gx, gy - 1);
+        if (tr !== Ter.PLAZA && up === Ter.PLAZA && t !== Ter.WATER) {
+          if (ly < 7) { const bw = 12, off = (Math.floor(X / 6) % 2) * 0, col = Math.floor((X + off) / bw), vx = (X + off) % bw;
+            c = mix(C.pl0, mul(C.pl1, 0.8), 0.25 + hash(col, gy, 81) * 0.4); c = mul(c, 0.78 - ly * 0.035);
+            if (ly === 0) c = mix(c, rgb(0xf0e8d8), 0.45); else if (vx === 0 || ly === 6) c = mul(c, 0.6); }
+          else if (ly < 15) c = mul(c, 0.55 + 0.45 * smooth(7, 15, ly));
+        }
+        if (tr === Ter.PLAZA) {
+          const dn = T(gx, gy + 1), lf = T(gx - 1, gy), rt = T(gx + 1, gy), un = T(gx, gy - 1);
+          if (dn !== Ter.PLAZA && ly > TT - 3) c = mix(c, rgb(0xfff4e0), 0.35);
+          if (lf !== Ter.PLAZA && lx < 2) c = mix(c, rgb(0xfff4e0), 0.3);
+          if (rt !== Ter.PLAZA && lx > TT - 3) c = mul(c, 0.7);
+          if (un !== Ter.PLAZA && ly < 2) c = mul(c, 0.8);
+        }
+        if (tr !== Ter.PLAZA && T(gx - 1, gy) === Ter.PLAZA && lx < 6 && ly >= 0) c = mul(c, 0.6 + 0.4 * smooth(0, 6, lx));
+      }
       // cliff-top lip
       if (ch === 'C' && ly > TT - 6) c = ly > TT - 3 ? mix(C.cl2, C.cl1, (ly - (TT - 3)) / 3) : mul(c, 0.8);
       const i = (Y * W + X) * 4;

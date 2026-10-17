@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { MAPS, LEGEND, MapDef, NpcDef } from '../data/maps';
 import { T, T2, Pix } from '../systems/art';
 import { W, H } from '../ui/widgets';
+/** World camera zoom: closer than v0.2 so buildings and characters fill the screen like OT2's dioramas. */
+const ZOOM = 4.6;
 /** Scale4x + re-shaded copy of one prop tile ('props' sheet), cached as prop_hd_<idx>. */
 function ensurePropHd(scene: Phaser.Scene, idx: number): string | null {
   const key = 'prop_hd_' + idx; if (scene.textures.exists(key)) return key;
@@ -53,9 +55,10 @@ export class WorldScene extends Phaser.Scene {
     this.buildEntities();
     this.buildLighting();
     this.buildAmbient();
-    const cam = this.cameras.main; cam.setZoom(4); cam.setRoundPixels(false);
+    this.buildForeground();
+    const cam = this.cameras.main; cam.setZoom(ZOOM); cam.setRoundPixels(false);
     const mw = this.grid[0].length * TS, mh = this.grid.length * TS;
-    const vw = W / 4, vh = H / 4;
+    const vw = W / ZOOM, vh = H / ZOOM;
     cam.setBounds(mw < vw ? (mw - vw) / 2 : 0, mh < vh ? (mh - vh) / 2 : 0, Math.max(mw, vw), Math.max(mh, vh));
     cam.startFollow(this.hero.spr, false, 0.1, 0.1, 0, 36); cam.centerOn(this.hero.spr.x, this.hero.spr.y - 36);
     cam.setBackgroundColor(this.def.outdoor ? '#1b2a1a' : '#05040a');
@@ -317,6 +320,30 @@ export class WorldScene extends Phaser.Scene {
     const hr = this.def.outdoor ? 2.2 : (this.def.dark ?? 0) > 0.5 ? 4.6 : 1.8;
     e.setScale(hr * 0.33).setTint(this.def.outdoor ? 0x8090c0 : 0xc8b090).setAlpha(0.9); this.dark.draw(e, this.hero.spr.x, this.hero.spr.y - 10);
   }
+  fgSil: { im: Phaser.GameObjects.Image; bx: number; by: number; k: number }[] = [];
+  /** Foreground silhouettes (OT2 framing): dark, out-of-focus foliage hugging the bottom corners, with stronger parallax than the world. */
+  buildForeground() {
+    this.fgSil = [];
+    if (!this.def.outdoor || DioramaFX.quality === 0 || !this.textures.exists('hdtrees') || this.def.id === 'spire') return;
+    const kind = this.grid.some(r => r.includes('P')) ? 'pine' : this.grid.some(r => r.includes('5') || r.includes('6')) ? 'aut' : 'oak';
+    const tint = this.isNight() ? 0x05070f : 0x0b1a10;
+    const mw = this.grid[0].length * 16;
+    for (let n = 0, bx = -60; bx < mw * 0.4 + 260; n++, bx += 70 + ((n * 37) % 50)) {
+      const v = n % 4, sc = 1.1 + ((n * 13) % 5) * 0.12;
+      const im = this.add.image(0, 0, 'hdtrees', kind + v).setOrigin(0.5, 0.3).setScale(sc / HD * 1.5).setTint(tint).setAlpha(0).setDepth(5900).setFlipX(n % 2 === 1);
+      if (this.game.renderer.type === Phaser.WEBGL) im.preFX?.addBlur(1, 2, 2, 1.2);
+      this.fgSil.push({ im, bx, by: (n * 7) % 12, k: 0.4 });
+    }
+  }
+  placeForeground() {
+    if (!this.fgSil.length) return; const v = this.cameras.main.worldView;
+    for (const f of this.fgSil) {
+      const sx = f.bx - v.x * f.k; // screen-relative x, scrolls faster than the world (parallax)
+      const vis = sx > -50 && sx < v.width + 50; f.im.setVisible(vis); if (!vis) continue;
+      const e = Math.min(sx, v.width - sx) / v.width; // 0 at edges, 0.5 at centre
+      f.im.setPosition(v.x + sx, v.bottom - 16 + f.by).setAlpha(0.94 * Phaser.Math.Clamp(1 - (e - 0.08) / 0.17, 0, 1));
+    }
+  }
   buildAmbient() {
     const mw = this.grid[0].length * TS, mh = this.grid.length * TS; const amb = this.def.ambient;
     if (amb === 'petals') this.add.particles(0, 0, 'px', { x: { min: 0, max: mw }, y: -4, lifespan: 9000, speedY: { min: 8, max: 16 }, speedX: { min: 4, max: 14 }, scale: { start: 1, end: 0.6 }, tint: [0xffb0c8, 0xffffff, 0xffd8e0], frequency: 260, rotate: { min: 0, max: 360 } }).setDepth(7000);
@@ -386,6 +413,7 @@ export class WorldScene extends Phaser.Scene {
     if (Game.dirty && time - Game.lastAuto > 900 && this.canAutosave()) this.autosave();
     else if (!Game.dirty && time - Game.lastAuto > 60000 && this.canAutosave()) { Game.markDirty('periodic'); }
     this.drawLighting();
+    this.placeForeground();
     if (this.aura) this.aura.setPosition(this.hero.spr.x, this.hero.spr.y);
     this.updateSymbols(time);
     this.handleMoveInput();
@@ -511,13 +539,13 @@ export class WorldScene extends Phaser.Scene {
     // shatter-style transition
     const cam = this.cameras.main; const ov: any = this.scene.get('Overlay');
     // quick push-in + flash on the world, then freeze-frame and shatter into the battle
-    this.tweens.add({ targets: cam, zoom: 4.6, duration: 260, ease: 'Cubic.in' }); cam.flash(140, 255, 240, 220);
+    this.tweens.add({ targets: cam, zoom: ZOOM * 1.15, duration: 260, ease: 'Cubic.in' }); cam.flash(140, 255, 240, 220);
     await this.wait(270);
     if (ov?.shatter && ov.sys.isActive()) await ov.shatter(); else { cam.fadeOut(300, 0, 0, 0); await this.wait(320); }
     return new Promise(res => {
       this.scene.pause(); this.ui.scene.setVisible(false);
       this.scene.launch('Battle', { group, bg: o.bg || this.def.bg || 'bg_fields', music: o.music, boss: o.boss, noFlee: o.noFlee, first: o.first, onEnd: async (r: string) => {
-        this.scene.resume(); this.tweens.killTweensOf(cam); this.ui.scene.setVisible(true); cam.setZoom(4); cam.setRotation(0); cam.resetFX(); cam.fadeIn(350);
+        this.scene.resume(); this.tweens.killTweensOf(cam); this.ui.scene.setVisible(true); cam.setZoom(ZOOM); cam.setRotation(0); cam.resetFX(); cam.fadeIn(350);
         if (r === 'lose') { await this.defeat(); res(r); return; }
         Audio.play(Game.flag('night') && this.def.id === 'village' ? 'hearth' : this.def.music); this.ui.refreshHud(); Game.markDirty('battle');
         await this.wait(300); this.busy = this.script.running; res(r);

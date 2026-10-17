@@ -9,7 +9,7 @@ import { HD, TT } from './ground';
 export const TALL_W = 40;
 
 const HOUSE = new Set(['r', 'R', 'u', 'U', '#', 'w', 'D', 'V', 'Y', 'N', 'Q', 'G', '-']);
-const OH = 8, RISE = 22; // texels: roof overhang per side, roof rise above footprint
+const OH = 8, WALLX = 16, RISE = 22 + WALLX + 12; // texels: roof overhang per side, extra wall height (bigger-than-life OT2 scale), roof rise above footprint
 type Buf = { w: number; h: number; d: Uint8ClampedArray };
 const buf = (w: number, h: number): Buf => ({ w, h, d: new Uint8ClampedArray(w * h * 4) });
 const put = (b: Buf, x: number, y: number, c: RGB, a = 255) => { x |= 0; y |= 0; if (x < 0 || y < 0 || x >= b.w || y >= b.h) return; const i = (y * b.w + x) * 4; b.d[i] = c[0]; b.d[i + 1] = c[1]; b.d[i + 2] = c[2]; b.d[i + 3] = a; };
@@ -37,13 +37,13 @@ function paintHouse(grid: string[], hx: { x0: number; y0: number; x1: number; y1
   const wall = grid[hx.y1].slice(hx.x0, hx.x1 + 1); const roofCh = grid[hx.y0][hx.x0];
   const stone = /[NQG]/.test(wall); const big = tw >= 9;
   const roofBase = rgb(roofCh === 'r' || roofCh === 'R' ? 0xb8463a : roofCh === 'u' || roofCh === 'U' ? 0x3c5fa8 : 0x56627a);
-  const faceTop = H - TT * 2, faceBot = H; // wall face spans eave row + wall row
+  const faceTop = H - TT * 2 - WALLX, faceBot = H; // wall face spans eave row + wall row + extra storey height
   const roofBot = faceTop + 10, roofTop = 2;
   const windows: [number, number][] = [], doors: [number, number][] = [];
   // ---- wall face
   const plaster = rgb(0xeadfc4), beam = rgb(0x5e3b22), stoneC = rgb(0xaaa293), stoneD = rgb(0x7e776a);
   for (let y = faceTop; y < faceBot; y++) for (let x = OH; x < W - OH; x++) {
-    const lx = x - OH, ly = y - faceTop; let c: RGB;
+    const lx = x - OH, ly = y - faceTop - WALLX; let c: RGB;
     if (stone) {
       const row = Math.floor(ly / 8), off = (row % 2) * 7, col = Math.floor((lx + off) / 14), vx = (lx + off) % 14, vy = ly % 8;
       c = mix(stoneD, stoneC, 0.45 + hash(col, row, 71) * 0.5 + (noise(x * 0.2, y * 0.2) - 0.5) * 0.2);
@@ -51,7 +51,7 @@ function paintHouse(grid: string[], hx: { x0: number; y0: number; x1: number; y1
     } else {
       c = mix(plaster, rgb(0xd2c4a2), noise(x * 0.07, y * 0.07) * 0.6);
       const post = lx < 3 || lx >= tw * TT - 3 || (lx % (TT * 2) < 3 && lx > 4);
-      if (post || ly < 4 || (ly >= 30 && ly < 33)) c = mix(beam, rgb(0x7a5232), noise(x * 0.5, y * 0.1) * 0.6);
+      if (post || (ly < 4 && ly > -WALLX + 4) || ly < -WALLX + 3 || (ly >= 30 && ly < 33)) c = mix(beam, rgb(0x7a5232), noise(x * 0.5, y * 0.1) * 0.6);
       // diagonal braces in the upper panels
       const pan = Math.floor(lx / (TT * 2)), px2 = lx - pan * TT * 2;
       if (ly > 4 && ly < 30 && pan % 2 === 1 && Math.abs(px2 - (ly - 4) * 2.2) < 2) c = beam;
@@ -65,7 +65,7 @@ function paintHouse(grid: string[], hx: { x0: number; y0: number; x1: number; y1
   for (let i = 0; i < tw; i++) {
     const ch = wall[i], cx = OH + i * TT + TT / 2;
     if (ch === 'w' || ch === 'Q' || ch === '-') {
-      const ww = ch === '-' ? 14 : 16, wh = ch === '-' ? 22 : 15, wx = cx - ww / 2, wy = faceTop + (ch === '-' ? 8 : 12);
+      const ww = ch === '-' ? 14 : 16, wh = ch === '-' ? 22 : 15, wx = cx - ww / 2, wy = faceTop + WALLX * 0.6 + (ch === '-' ? 8 : 12);
       for (let y = -2; y < wh + 2; y++) for (let x = -2; x < ww + 2; x++) {
         const inside = x >= 0 && y >= 0 && x < ww && y < wh; const arch = ch === '-' && y < 7 && Math.hypot(x - ww / 2 + 0.5, y - 7) > 7.5;
         if (arch && !(Math.hypot(x - ww / 2 + 0.5, y - 7) < 9.5)) continue;
@@ -113,6 +113,24 @@ function paintHouse(grid: string[], hx: { x0: number; y0: number; x1: number; y1
       if (y >= roofBot - 3) c = y === roofBot - 1 ? rgb(0x2a1a18) : mul(roofBase, 0.5); // eave fascia
       put(b, x, y, c);
     }
+  }
+  // ---- front cross-gable (OT2 cottages): timber-framed triangle breaking the roof line, with its own barge boards + round window
+  const hasChim = !stone && tw >= 5 && roofCh !== 'V';
+  if (!stone && tw >= 4 && roofCh !== 'V' && roofCh !== 'Y') {
+    const gw = Math.min(TT * 3, Math.floor(tw * TT * 0.5)), gcx = Math.round(OH + (hasChim ? tw * TT * 0.3 : tw * TT * 0.5)), gTop = roofTop + 2, gBot = roofBot - 1, gh = gBot - gTop, wy0 = gTop + gh * 0.55;
+    for (let y = gTop; y < gBot; y++) { const t = (y - gTop) / gh, half = Math.round(gw / 2 * t) + 3;
+      for (let x = -half; x <= half; x++) { const X = gcx + x; let c: RGB;
+        const edge = half - Math.abs(x);
+        if (edge < 4) c = edge < 1 ? rgb(0x2a1a18) : edge < 2 ? mul(roofBase, 0.55) : mul(roofBase, edge === 2 ? 1.15 : 0.95);
+        else {
+          c = mul(mix(plaster, rgb(0xd2c4a2), noise(X * 0.07, y * 0.07) * 0.6), 0.9 + t * 0.12);
+          if (Math.abs(x) < 2 || ((y - gTop) % 14 < 2 && t > 0.3) || edge < 6) c = mix(beam, rgb(0x7a5232), noise(X * 0.5, y * 0.1) * 0.6);
+          const wr = Math.hypot(x, y - wy0);
+          if (wr < 6.5) { c = wr > 4.8 ? rgb(0x4a2c16) : night ? mix(rgb(0xffc860), rgb(0xfff0c0), 0.4) : mix(rgb(0x2a4060), rgb(0x8ab8d8), clamp((x - (y - wy0)) / 8 + 0.4)); if (wr <= 4.8 && (Math.abs(x) < 1 || Math.abs(y - wy0) < 1)) c = rgb(0x4a2c16); }
+        }
+        if (y >= gBot - 3) c = mul(c, 0.7);
+        put(b, X, y, c); } }
+    if (night) windows.push([gcx, wy0]);
   }
   // ---- chimney
   let chimney: [number, number] | undefined;
