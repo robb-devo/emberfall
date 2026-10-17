@@ -537,3 +537,7 @@ Object.assign(MAPS, {
     saves: [{ x: 15, y: 29 }],
     lights: [{ x: 14, y: 4, c: 0xff6080, r: 5 }, { x: 11, y: 3, c: 0xff80c0, r: 2 }, { x: 17, y: 3, c: 0x80c0ff, r: 2 }, { x: 6, y: 19, c: 0x60f0d0, r: 3 }, { x: 21, y: 19, c: 0x60f0d0, r: 3 }] },
 } as Record<string, MapDef>);
+
+// ---- Round 5 dark world props / NPCs (all cond 'adult&…'; see dark.ts)
+import { mergeDarkNpcs } from './dark';
+mergeDarkNpcs(MAPS);

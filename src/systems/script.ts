@@ -5,7 +5,8 @@ import { Game, newMember, stats } from './state';
 import { STORY_MEMBERS } from '../data/story2';
 import { VOCATIONS } from '../data/vocations';
 import { Audio } from './audio';
-import { evalCond } from './cond';
+import { evalCond, sellableMate } from './cond';
+import { Mature } from './mature';
 import { ITEMS } from '../data/items';
 import type { WorldScene } from '../scenes/WorldScene';
 
@@ -13,9 +14,10 @@ const DIRC: Record<string, number> = { D: 0, L: 1, R: 2, U: 3 };
 export class ScriptRunner {
   running = false; stopped = false;
   constructor(public w: WorldScene) {}
-  fmt(s: string) { return s.replace(/\{hero\}/g, Game.hero.name); }
+  fmt(s: string) { return s.replace(/\{hero\}/g, Game.hero.name).replace(/\{mate\}/g, sellableMate()?.name || Game.s.flags.soldMate || 'your companion'); }
   async run(name: string) {
-    const cmds = SCRIPTS[name]; if (!cmds) return;
+    // Round 5: with Settings → Adult on, a darker variant `dk_<name>` replaces the script when one exists
+    const cmds = (Mature.on && SCRIPTS['dk_' + name]) || SCRIPTS[name]; if (!cmds) return;
     const outer = this.running; this.running = true; this.stopped = false;
     try { await this.exec(cmds); } catch (e) { console.error('script error', name, e); }
     if (!outer) { this.running = false; this.stopped = false; this.w.ui.hideDialog(); }
@@ -25,7 +27,7 @@ export class ScriptRunner {
   }
   async one(c: Cmd) {
     const w = this.w, ui = w.ui;
-    if (c.say !== undefined) return ui.say(this.fmt(c.t), c.say);
+    if (c.say !== undefined) return ui.say(this.fmt(c.t), this.fmt(c.say));
     if (c.narr !== undefined) return ui.narr(this.fmt(c.narr));
     if (c.caption !== undefined) { ui.hideDialog(); return ui.caption(c.caption, c.sub); }
     if (c.choice) { const i = await ui.choice(c.choice.map((s: string) => this.fmt(s))); return this.exec(c.then[i] || []); }
@@ -60,7 +62,13 @@ export class ScriptRunner {
     if (c.face) { const a = w.actor(c.face); if (a) { a.dir = c.dir; w.setFrame(a); } return; }
     if (c.step === 'back') { const h = w.hero; const back = 3 - h.dir; ui.hideDialog(); await w.walk(h, back, 200); h.dir = 3 - back; h.step = 0; w.setFrame(h); return; }
     if (c.warp) { ui.hideDialog(); Game.s.map = c.warp; w.scene.restart({ map: c.warp, x: c.x, y: c.y, dir: c.dir ?? 0, noFade: true, script: '__continue' }); await new Promise<void>(r => w.events.once('create', r)); return; }
-    if (c.call) return this.exec(SCRIPTS[c.call] || []);
+    if (c.call) return this.exec((Mature.on && SCRIPTS['dk_' + c.call]) || SCRIPTS[c.call] || []);
+    // Round 5 hidden reputation: karma (mercy, honesty) and infamy (cruelty, greed). Never shown as numbers.
+    if (c.karma !== undefined || c.infamy !== undefined) { if (c.karma) Game.set('karma', (Game.s.flags.karma || 0) + c.karma); if (c.infamy) Game.set('infamy', (Game.s.flags.infamy || 0) + c.infamy); return; }
+    if (c.count) { Game.set(c.count, (Game.s.flags[c.count] || 0) + (c.n ?? 1)); return; }
+    if (c.sellMate) { const m = sellableMate(); if (!m) return; Game.set('soldMate', m.name); Game.s.party = Game.s.party.filter(x => x !== m); Game.s.roster = Game.s.roster.filter(x => x.id !== m.id); w.refreshParty(); ui.refreshHud(); return; }
+    if (c.hurt) { for (const m of Game.s.party) m.hp = Math.max(1, Math.round(m.hp * (1 - c.hurt))); ui.refreshHud(); return; }
+    if (c.mark) { const h = Game.hero; h.look.bodyMarks = [...(h.look.bodyMarks || []).filter(b => b.region !== c.mark.region), c.mark]; w.refreshParty(); return; }
     if (c.fx) return fx(w, c.fx);
     if (c.end) { ui.hideDialog(); await ui.fade('out', 1500, 0); Game.s.x = w.hero.tx; Game.s.y = w.hero.ty; w.scene.stop('UI'); w.scene.start('End', { chapter: c.chapter || 1 }); this.stopped = true; return; }
     console.warn('unknown cmd', c);

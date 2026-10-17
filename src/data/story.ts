@@ -227,3 +227,7 @@ Object.assign(QUESTS, QUESTS2, QUESTS3); Object.assign(TUTORIALS, TUTORIALS2);
 const elderCh1 = SCRIPTS.elder;
 Object.assign(SCRIPTS, SCRIPTS2);
 SCRIPTS.elder = [{ if: 'chapter1Done&!ch2Started', then: [{ call: 'ch2Dawn' }], else: [{ if: 'ch2Started', then: [{ call: 'elderCh2' }], else: elderCh1 }] }];
+
+// ---- Round 5 dark world (Adult only; see dark.ts)
+import { mergeDarkData } from './dark';
+mergeDarkData(SCRIPTS, QUESTS);
