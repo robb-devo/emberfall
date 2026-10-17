@@ -1,0 +1,2 @@
+{ "appId": "com.samueldakka.emberfall", "appName": "Emberfall", "webDir": "dist",
+  "android": { "backgroundColor": "#07060f" } }

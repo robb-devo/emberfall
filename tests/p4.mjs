@@ -1,0 +1,18 @@
+import { open } from './lib.mjs';
+const h = await open();
+await h.devStart('hollow', 14, 30, { metElder: true, trig_hollowIntro: true });
+await h.E(() => { const G = window.__EMBER.Game; const m = G.hero; m.level = 6; m.xp = 300; G.healAll(); });
+await h.wait(500); await h.shot('/tmp/p4a.png');
+console.log(await h.walkTo(14, 16)); await h.fight(); await h.shot('/tmp/p4b.png');
+await h.devStart('lair', 8, 17, { metElder: true, trig_hollowIntro: true });
+await h.E(() => { const G = window.__EMBER.Game; const m = G.hero; m.level = 5; m.xp = 180; G.s.inv.herb = 6; m.equip.armor = 'leather'; G.healAll(); window.__EMBER.fast = false; });
+console.log(await h.walkTo(8, 12)); await h.wait(300); await h.shot('/tmp/p4c.png');
+console.log(await h.advance(20));
+console.log(await h.talkTo(8, 5));
+await h.wait(1500); await h.shot('/tmp/p4d.png');
+await h.E(() => { window.__EMBER.fast = true; });
+console.log(await h.fightSmart());
+await h.shot('/tmp/p4e.png');
+console.log(await h.advance(100)); await h.shot('/tmp/p4f.png');
+console.log(await h.hero(), h.errs);
+await h.b.close();

@@ -1,0 +1,415 @@
+import Phaser from 'phaser';
+import { MAPS, LEGEND, MapDef, NpcDef } from '../data/maps';
+import { T } from '../systems/art';
+import { Game, stats } from '../systems/state';
+import { ensureDoll, specOf, FH } from '../systems/paperdoll';
+import { Audio } from '../systems/audio';
+import { Input, Action } from '../ui/input';
+import { ENCOUNTERS, ENEMIES } from '../data/enemies';
+import { ITEMS } from '../data/items';
+import { evalCond } from '../systems/cond';
+import { ScriptRunner } from '../systems/script';
+import type { UIScene } from './UIScene';
+import { diorama } from '../fx/diorama';
+
+const TS = 16; const DX = [0, -1, 1, 0], DY = [1, 0, 0, -1]; // dir: 0 down 1 left 2 right 3 up
+export interface Actor { id: string; spr: Phaser.GameObjects.Sprite; shadow: Phaser.GameObjects.Image; tx: number; ty: number; dir: number; moving: boolean; doll: boolean; def?: NpcDef; step: number; hidden?: boolean }
+interface Symbol { spr: Phaser.GameObjects.Sprite; shadow: Phaser.GameObjects.Image; tx: number; ty: number; type: string; moving: boolean; next: number; alive: boolean }
+
+export class WorldScene extends Phaser.Scene {
+  def!: MapDef; grid!: string[]; hero!: Actor; followers: Actor[] = []; npcs: Actor[] = []; chests: { id: string; x: number; y: number; spr: Phaser.GameObjects.Sprite; item?: string; gold?: number }[] = [];
+  symbols: Symbol[] = []; history: { x: number; y: number; dir: number }[] = []; busy = false; ui!: UIScene; script!: ScriptRunner;
+  layer!: Phaser.Tilemaps.TilemapLayer; waterTiles: [number, number][] = []; dark?: Phaser.GameObjects.RenderTexture; lightImgs: { x: number; y: number; r: number; img?: Phaser.GameObjects.Image; flick: number }[] = [];
+  eraser!: Phaser.GameObjects.Image; heroLight = 0; extraSolid = new Set<string>(); initData: any; offInput?: () => void; aura?: Phaser.GameObjects.Container; fxObjs: Record<string, Phaser.GameObjects.GameObject> = {};
+  fx?: any;
+  constructor() { super('World'); }
+  init(d: any) { this.initData = d; }
+  create() {
+    const d = this.initData; this.def = MAPS[d.map]; this.grid = this.def.grid;
+    this.followers = []; this.npcs = []; this.chests = []; this.symbols = []; this.history = []; this.lightImgs = []; this.extraSolid.clear(); this.waterTiles = []; this.busy = false; this.fxObjs = {};
+    Game.s.map = d.map; Game.s.x = d.x; Game.s.y = d.y; Game.s.dir = d.dir ?? 0;
+    if (!this.scene.isActive('UI')) this.scene.launch('UI'); this.ui = this.scene.get('UI') as UIScene; this.scene.bringToTop('UI');
+    if (!this.script) this.script = new ScriptRunner(this);
+    this.buildTiles();
+    this.buildEntities();
+    this.buildLighting();
+    this.buildAmbient();
+    const cam = this.cameras.main; cam.setZoom(4); cam.setRoundPixels(true);
+    const mw = this.grid[0].length * TS, mh = this.grid.length * TS;
+    const vw = 720 / 4, vh = 1280 / 4;
+    cam.setBounds(mw < vw ? (mw - vw) / 2 : 0, mh < vh ? (mh - vh) / 2 : 0, Math.max(mw, vw), Math.max(mh, vh));
+    cam.startFollow(this.hero.spr, true, 0.18, 0.18, 0, 36);
+    cam.setBackgroundColor(this.def.outdoor ? '#1b2a1a' : '#05040a');
+    const preset = this.def.id === 'spire' ? 'sky' : this.def.outdoor ? (Game.flag('night') ? 'night' : 'outdoor') : (this.def.dark ?? 0) > 0.5 ? 'dungeon' : 'indoor';
+    this.fx = diorama(cam, preset);
+    if (!d.noFade) cam.fadeIn(450);
+    if (this.def.music && !d.script) Audio.play(this.def.music === 'village' && Game.flag('night') ? 'hearth' : this.def.music);
+    this.offInput = Input.on(a => this.onAction(a));
+    this.events.once('shutdown', () => { this.offInput?.(); });
+    this.time.addEvent({ delay: 550, loop: true, callback: () => this.animWater() });
+    this.time.addEvent({ delay: 2200, loop: true, callback: () => this.wanderNpcs() });
+    this.time.delayedCall(40, () => this.ui.setLocation(this.def.name, !d.script && !d.noBanner));
+    (window as any).__EMBER.world = this;
+    if (d.script === '__continue') this.busy = true;
+    else if (d.script) this.time.delayedCall(60, () => this.runScript(d.script));
+    else this.time.delayedCall(500, () => this.checkTriggers());
+  }
+  // ------------------------------------------------------------------ build
+  buildTiles() {
+    const h = this.grid.length, w = this.grid[0].length;
+    const ground: number[][] = [], over: number[][] = [];
+    for (let y = 0; y < h; y++) { ground.push([]); over.push(Array(w).fill(-1)); }
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const L = LEGEND[this.grid[y][x]] || LEGEND['.']; ground[y][x] = L.t;
+      if (L.anim) this.waterTiles.push([x, y]);
+      if (L.over !== undefined && y > 0) over[y - 1][x] = L.over;
+    }
+    const m = this.make.tilemap({ data: ground, tileWidth: TS, tileHeight: TS });
+    const ts = m.addTilesetImage('tiles', 'tiles', TS, TS, 0, 0)!;
+    this.layer = m.createLayer(0, ts, 0, 0)!.setDepth(0);
+    // edge decoration layers (path fringes & shorelines)
+    const isPath = (c?: string) => c === ':' ; const isGrass = (c?: string) => c === '.' || c === ',' || c === '*' || c === '"' || c === 'T' || c === 'P' || c === 'b';
+    const isWater = (c?: string) => c === '~';
+    const sides: [number, number, number, number][] = [[0, -1, T.edgeN, T.shoreN], [0, 1, T.edgeS, T.shoreS], [-1, 0, T.edgeW, T.shoreW], [1, 0, T.edgeE, T.shoreE]];
+    for (const [dx, dy, et, st] of sides) {
+      const data: number[][] = []; let any = false;
+      for (let y = 0; y < h; y++) { data.push([]); for (let x = 0; x < w; x++) { const c = this.grid[y][x], n = this.grid[y + dy]?.[x + dx]; let v = -1; if (isPath(c) && isGrass(n)) v = et; else if (isWater(c) && isGrass(n)) v = st; if (v >= 0) any = true; data[y].push(v); } }
+      if (!any) continue;
+      const me = this.make.tilemap({ data, tileWidth: TS, tileHeight: TS }); const tse = me.addTilesetImage('tiles', 'tiles', TS, TS, 0, 0)!; me.createLayer(0, tse, 0, 0)!.setDepth(0.5);
+    }
+    const m2 = this.make.tilemap({ data: over, tileWidth: TS, tileHeight: TS });
+    const ts2 = m2.addTilesetImage('tiles', 'tiles', TS, TS, 0, 0)!;
+    m2.createLayer(0, ts2, 0, 0)!.setDepth(5000);
+  }
+  animWater() { const f = Math.floor(this.time.now / 550) % 2; for (const [x, y] of this.waterTiles) this.layer.putTileAt(f ? T.water2 : T.water, x, y); }
+  makeActor(id: string, tex: string, x: number, y: number, dir: number, doll = true): Actor {
+    const shadow = this.add.image(x * TS + 8, y * TS + 15, 'shadow').setDepth(1);
+    const spr = this.add.sprite(x * TS + 8, y * TS + 16, tex, doll ? dir * 3 : undefined).setOrigin(0.5, 1);
+    if (!doll) spr.setScale(tex === 'm_warden' ? 0.75 : 0.6);
+    const a: Actor = { id, spr, shadow, tx: x, ty: y, dir, moving: false, doll, step: 0 };
+    this.depthOf(a); return a;
+  }
+  depthOf(a: Actor) { a.spr.setDepth(10 + a.spr.y); a.shadow.setPosition(a.spr.x, a.spr.y - 1); }
+  buildEntities() {
+    const d = this.initData;
+    // hero + followers
+    const party = Game.s.party;
+    this.hero = this.makeActor('hero', ensureDoll(this, specOf(party[0])), d.x, d.y, d.dir ?? 0);
+    for (let i = 1; i < party.length; i++) { const f = this.makeActor('f' + i, ensureDoll(this, specOf(party[i])), d.x, d.y, d.dir ?? 0); this.followers.push(f); }
+    for (let i = 0; i < 8; i++) this.history.push({ x: d.x, y: d.y, dir: d.dir ?? 0 });
+    // NPCs
+    for (const n of this.def.npcs) {
+      if (!evalCond(n.cond) || (n.notCond && evalCond(n.notCond))) continue;
+      const tex = n.sprite || ensureDoll(this, { look: n.look!, equip: n.equip || {} });
+      const a = this.makeActor(n.id, tex, n.x, n.y, n.dir ?? 0, !n.sprite); a.def = n;
+      if (n.hidden && !Game.flag('show_' + n.id)) { a.hidden = true; a.spr.setVisible(false); a.shadow.setVisible(false); }
+      if (n.sprite) { this.tweens.add({ targets: a.spr, scaleY: a.spr.scaleY * 1.04, yoyo: true, repeat: -1, duration: 900, ease: 'Sine.inOut' }); const gl = this.add.image(a.spr.x, a.spr.y - 20, 'light').setTint(0xff5010).setBlendMode(Phaser.BlendModes.ADD).setScale(1.2).setAlpha(0.35).setDepth(a.spr.depth - 1); this.tweens.add({ targets: gl, alpha: 0.15, yoyo: true, repeat: -1, duration: 700 }); this.fxObjs['bossGlow'] = gl; }
+      this.npcs.push(a);
+    }
+    // Inactive roster waiting in the Hearth
+    if (this.def.id === 'hearth') Game.s.roster.forEach((m, i) => {
+      const spots = [[6, 6], [10, 6], [9, 8], [3, 6], [11, 9], [5, 5]]; const [x, y] = spots[i % spots.length];
+      const a = this.makeActor('r' + i, ensureDoll(this, specOf(m)), x, y, i % 4); a.def = { id: 'r' + i, name: m.name, x, y, script: 'roster' } as any; this.npcs.push(a);
+    });
+    // chests
+    for (const c of this.def.chests) {
+      const open = Game.flag('chest_' + c.id);
+      const spr = this.add.sprite(c.x * TS + 8, c.y * TS + 8, 'chest', open ? 1 : 0).setDepth(10 + c.y * TS + 16);
+      this.chests.push({ ...c, spr }); this.extraSolid.add(c.x + ',' + c.y);
+      if (!open) { const sp = this.add.particles(c.x * TS + 8, c.y * TS + 4, 'px', { lifespan: 900, speed: { min: 4, max: 12 }, scale: { start: 0.8, end: 0 }, tint: 0xffe8a0, frequency: 600, blendMode: 'ADD' }).setDepth(5001); (c as any).sp = sp; this.chests[this.chests.length - 1] = { ...this.chests[this.chests.length - 1], sp } as any; }
+    }
+    // save crystals
+    for (const s of this.def.saves) {
+      const onStatue = this.grid[s.y][s.x] === 'x';
+      const cr = this.add.image(s.x * TS + 8, s.y * TS + (onStatue ? -2 : 6), 'crystal').setDepth(10 + s.y * TS + 17);
+      this.tweens.add({ targets: cr, y: cr.y - 3, yoyo: true, repeat: -1, duration: 1200, ease: 'Sine.inOut' });
+      this.add.particles(s.x * TS + 8, s.y * TS + 6, 'px', { lifespan: 1400, speedY: { min: -14, max: -6 }, speedX: { min: -4, max: 4 }, scale: { start: 1, end: 0 }, tint: [0x9ae6ff, 0xffffff], frequency: 160, blendMode: 'ADD' }).setDepth(5001);
+      this.extraSolid.add(s.x + ',' + s.y);
+      this.def.lights = this.def.lights || []; if (!this.def.lights.some(l => l.x === s.x && l.y === s.y)) this.def.lights.push({ x: s.x, y: s.y, c: 0x9ad0ff, r: 3 });
+    }
+    // spire heartstar
+    if (this.def.id === 'spire') {
+      const hs = this.add.image(7 * TS + 8, 3 * TS, 'star').setScale(1.6).setTint(0xfff0b0).setDepth(4000).setBlendMode(Phaser.BlendModes.ADD);
+      const hg = this.add.image(7 * TS + 8, 3 * TS, 'light').setScale(1.2).setTint(0xffd070).setDepth(3999).setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({ targets: hs, angle: 360, duration: 8000, repeat: -1 }); this.tweens.add({ targets: [hs, hg], scale: '*=1.12', yoyo: true, repeat: -1, duration: 1200 });
+      this.fxObjs.heart = hs; this.fxObjs.heartGlow = hg;
+    }
+    // roaming monsters
+    if (this.def.encounters && !this.initData.noMonsters) this.spawnSymbols();
+    this.updateFollowers(true);
+  }
+  spawnSymbols() {
+    const enc = this.def.encounters!; const table = ENCOUNTERS[enc.table];
+    const cand: [number, number][] = [];
+    for (let y = 2; y < this.grid.length - 2; y++) for (let x = 2; x < this.grid[0].length - 2; x++) {
+      const ch = this.grid[y][x]; if (LEGEND[ch]?.solid || ch === ':' || ch === 'v' || ch === '^') continue;
+      if (Math.abs(x - this.hero.tx) + Math.abs(y - this.hero.ty) < 7) continue;
+      if (enc.table === 'fields' && y < 5) continue; cand.push([x, y]);
+    }
+    const tall = cand.filter(([x, y]) => this.grid[y][x] === '"');
+    let s = 77 + Game.s.steps; const r = () => ((s = (s * 16807 + 11) % 2147483647) / 2147483647);
+    for (let i = 0; i < enc.count; i++) {
+      const pool = tall.length && r() < 0.7 ? tall : cand; const [x, y] = pool[Math.floor(r() * pool.length)];
+      const tot = table.reduce((a, e) => a + e.w, 0); let k = r() * tot; let g = table[0]; for (const e of table) { k -= e.w; if (k <= 0) { g = e; break; } }
+      const type = g.group[0];
+      const spr = this.add.sprite(x * TS + 8, y * TS + 15, ENEMIES[type].sprite).setOrigin(0.5, 1).setScale(0.5);
+      const shadow = this.add.image(x * TS + 8, y * TS + 14, 'shadow');
+      this.tweens.add({ targets: spr, scaleY: 0.44, scaleX: 0.55, yoyo: true, repeat: -1, duration: 380 + r() * 200, ease: 'Sine.inOut' });
+      const sym: Symbol = { spr, shadow, tx: x, ty: y, type, moving: false, next: this.time.now + 1000 + r() * 1500, alive: true };
+      spr.setDepth(10 + spr.y); this.symbols.push(sym);
+    }
+  }
+  buildLighting() {
+    const mw = this.grid[0].length * TS, mh = this.grid.length * TS;
+    this.dark = this.add.renderTexture(0, 0, mw, mh).setOrigin(0).setDepth(8000);
+    this.eraser = this.make.image({ key: 'light', add: false });
+    const lights = [...(this.def.lights || [])];
+    if (this.def.torches) {
+      let k = 0;
+      for (let y = 1; y < this.grid.length - 1; y++) for (let x = 0; x < this.grid[0].length; x++) {
+        if (this.grid[y][x] !== 'M' || LEGEND[this.grid[y + 1][x]]?.solid) continue;
+        if ((k++ % 4) !== 1) continue;
+        const tx = x * TS + 8, ty = y * TS + 8;
+        this.add.rectangle(tx, ty + 3, 2, 6, 0x5a3818).setDepth(2);
+        this.add.particles(tx, ty - 1, 'px', { lifespan: 380, speedY: { min: -22, max: -10 }, speedX: { min: -3, max: 3 }, scale: { start: 1.3, end: 0 }, tint: [0xffe080, 0xff8030, 0xff4010], blendMode: 'ADD', frequency: 45 }).setDepth(8002);
+        lights.push({ x, y, c: 0xff8a3a, r: 2.6 });
+      }
+    }
+    for (const l of lights) {
+      const img = this.add.image(l.x * TS + 8, l.y * TS + 8, 'light').setTint(l.c).setBlendMode(Phaser.BlendModes.ADD).setDepth(8001).setScale(l.r * 0.28).setAlpha(0.5);
+      this.lightImgs.push({ x: l.x * TS + 8, y: l.y * TS + 8, r: l.r, img, flick: Math.random() * 10 });
+    }
+  }
+  darkness(): { c: number; a: number } {
+    if (!this.def.outdoor) return { c: 0x05030c, a: this.def.dark ?? 0 };
+    if (Game.flag('night')) return { c: 0x06062a, a: 0.72 };
+    // day-night cycle: 8 real minutes
+    const t = ((Game.s.playTime + 60) % 480) / 480; // 0..1
+    const n = (Math.cos(t * Math.PI * 2) * -0.5 + 0.5); // 0 day -> 1 night at t=.5
+    const a = Phaser.Math.Clamp((n - 0.35) * 1.1, 0, 0.55);
+    const c = n < 0.6 ? 0x40183a : 0x0a0a32;
+    return { c, a };
+  }
+  drawLighting() {
+    if (!this.dark) return; const { c, a } = this.darkness();
+    this.dark.clear(); if (a <= 0.01) { this.lightImgs.forEach(l => l.img?.setAlpha(0)); return; }
+    this.dark.fill(c, a);
+    const t = this.time.now / 1000;
+    for (const l of this.lightImgs) {
+      const f = 1 + Math.sin(t * 7 + l.flick) * 0.04 + Math.sin(t * 13 + l.flick) * 0.03;
+      this.eraser.setScale(l.r * 0.3 * f); this.dark.erase(this.eraser, l.x, l.y);
+      l.img?.setAlpha(Math.min(0.4, a * 0.6) * f).setScale(l.r * 0.28 * f);
+    }
+    const hr = this.def.outdoor ? 2.2 : (this.def.dark ?? 0) > 0.5 ? 4.6 : 1.8;
+    this.eraser.setScale(hr * 0.3); this.dark.erase(this.eraser, this.hero.spr.x, this.hero.spr.y - 10);
+  }
+  buildAmbient() {
+    const mw = this.grid[0].length * TS, mh = this.grid.length * TS; const amb = this.def.ambient;
+    if (amb === 'petals') this.add.particles(0, 0, 'px', { x: { min: 0, max: mw }, y: -4, lifespan: 9000, speedY: { min: 8, max: 16 }, speedX: { min: 4, max: 14 }, scale: { start: 1, end: 0.6 }, tint: [0xffb0c8, 0xffffff, 0xffd8e0], frequency: 260, rotate: { min: 0, max: 360 } }).setDepth(7000);
+    if (amb === 'fireflies') this.add.particles(0, 0, 'px', { x: { min: 0, max: mw }, y: { min: 0, max: mh }, lifespan: 4000, speed: { min: 2, max: 8 }, scale: { start: 0.9, end: 0 }, alpha: { start: 0, end: 1, ease: 'Sine.inOut' }, tint: [0xd8ff80, 0xffe080], frequency: 140, blendMode: 'ADD' }).setDepth(8100);
+    if (amb === 'embers') this.add.particles(0, 0, 'px', { x: { min: 0, max: mw }, y: { min: 0, max: mh }, lifespan: 3000, speedY: { min: -14, max: -4 }, speedX: { min: -3, max: 3 }, scale: { start: 1, end: 0 }, tint: [0xff8040, 0xffc060, 0xff4020], frequency: 70, blendMode: 'ADD' }).setDepth(8100);
+    if (amb === 'stars') this.add.particles(0, 0, 'px', { x: { min: -40, max: mw + 40 }, y: { min: -40, max: mh + 40 }, lifespan: 2500, scale: { start: 0, end: 1.2, ease: 'Sine.inOut' }, alpha: { start: 1, end: 0 }, tint: [0xffffff, 0xb0c0ff, 0xffe8a0], frequency: 40, blendMode: 'ADD' }).setDepth(-1);
+  }
+  // ------------------------------------------------------------------ movement
+  solidAt(x: number, y: number, ignoreActor?: Actor) {
+    if (y < 0 || x < 0 || y >= this.grid.length || x >= this.grid[0].length) return !this.warpAt(x, y);
+    if (LEGEND[this.grid[y][x]]?.solid) return true;
+    if (this.extraSolid.has(x + ',' + y)) return true;
+    for (const n of this.npcs) if (n !== ignoreActor && !n.hidden && n.tx === x && n.ty === y) return true;
+    if (this.def.id === 'lair' && Game.flag('lairDone') === undefined) { /* boss is npc */ }
+    return false;
+  }
+  warpAt(x: number, y: number) { return this.def.warps.find(w => w.x === x && w.y === y); }
+  update(time: number, dt: number) {
+    this.drawLighting();
+    if (this.aura) this.aura.setPosition(this.hero.spr.x, this.hero.spr.y);
+    this.updateSymbols(time);
+    if (this.busy || Input.busy || this.hero.moving || this.ui.modal) return;
+    const d = Input.dir();
+    if (Math.abs(d.x) < 0.3 && Math.abs(d.y) < 0.3) { if (this.hero.step) { this.hero.step = 0; this.setFrame(this.hero); } return; }
+    const dir = Math.abs(d.x) > Math.abs(d.y) ? (d.x < 0 ? 1 : 2) : d.y < 0 ? 3 : 0;
+    this.tryStep(dir);
+  }
+  setFrame(a: Actor) { if (a.doll) a.spr.setFrame(a.dir * 3 + (a.step ? (a.step % 2 ? 1 : 2) : 0)); }
+  async tryStep(dir: number) {
+    const h = this.hero; h.dir = dir; this.setFrame(h);
+    const nx = h.tx + DX[dir], ny = h.ty + DY[dir];
+    const w = this.warpAt(nx, ny);
+    if (this.solidAt(nx, ny)) { if (!w) return; }
+    if (w && w.cond && !evalCond(w.cond)) { if (w.blockScript) { this.runScript(w.blockScript); } return; }
+    this.history.unshift({ x: h.tx, y: h.ty, dir }); this.history.length = 8;
+    const p = this.walk(h, dir, 150);
+    this.updateFollowers(false);
+    await p; Game.s.steps++; Game.s.x = h.tx; Game.s.y = h.ty; Game.s.dir = h.dir;
+    const ch = this.grid[h.ty]?.[h.tx];
+    if (ch === '"') this.add.particles(h.spr.x, h.spr.y - 3, 'px', { lifespan: 400, speed: { min: 10, max: 30 }, angle: { min: 200, max: 340 }, gravityY: 60, tint: [0x7fd068, 0x4f9a46], quantity: 4, emitting: false }).setDepth(9000).explode(4);
+    if (ch === ':' && Game.s.steps % 2) this.add.particles(h.spr.x, h.spr.y - 1, 'px', { lifespan: 300, speed: { min: 4, max: 10 }, angle: { min: 180, max: 360 }, tint: 0xd8c090, alpha: { start: 0.6, end: 0 }, emitting: false }).setDepth(9).explode(2);
+    if (Game.s.party.some(m => m.poisoned) && Game.s.steps % 4 === 0) { for (const m of Game.s.party) if (m.poisoned && m.hp > 1) m.hp -= 1; this.cameras.main.flash(80, 120, 0, 160); Audio.sfx('poison'); }
+    const wp = this.warpAt(h.tx, h.ty) || (h.ty < 0 || h.tx < 0 || h.ty >= this.grid.length ? w : undefined);
+    if (wp) { this.doWarp(wp.to, wp.tx, wp.ty, wp.dir ?? h.dir); return; }
+    this.checkTriggers(); this.checkSymbolContact(false);
+  }
+  walk(a: Actor, dir: number, ms: number): Promise<void> {
+    a.dir = dir; a.moving = true; const nx = a.tx + DX[dir], ny = a.ty + DY[dir]; a.tx = nx; a.ty = ny;
+    a.step = (a.step % 4) + 1; this.setFrame(a);
+    if (a === this.hero && Game.s.steps % 2 === 0) Audio.sfx('step');
+    return new Promise(res => this.tweens.add({ targets: a.spr, x: nx * TS + 8, y: ny * TS + 16, duration: ms, onUpdate: () => this.depthOf(a), onComplete: () => { a.moving = false; res(); } }));
+  }
+  updateFollowers(instant: boolean) {
+    this.followers.forEach((f, i) => {
+      const p = this.history[i]; if (!p) return;
+      const dir = p.x < f.tx ? 1 : p.x > f.tx ? 2 : p.y < f.ty ? 3 : p.y > f.ty ? 0 : f.dir;
+      if (instant || (p.x === f.tx && p.y === f.ty)) { f.tx = p.x; f.ty = p.y; f.spr.setPosition(p.x * TS + 8, p.y * TS + 16); f.dir = this.hero.dir; this.setFrame(f); this.depthOf(f); return; }
+      this.walk(f, dir, 150);
+    });
+  }
+  async doWarp(to: string, x: number, y: number, dir: number) {
+    this.busy = true; Audio.sfx('door'); this.cameras.main.fadeOut(260, 0, 0, 0);
+    await this.wait(280); this.scene.restart({ map: to, x, y, dir });
+  }
+  wait(ms: number) { return new Promise<void>(r => this.time.delayedCall(ms, r)); }
+  wanderNpcs() {
+    if (this.busy || Input.busy) return;
+    for (const n of this.npcs) {
+      if (!n.def?.wander || n.moving || n.hidden || Math.random() < 0.4) continue;
+      const dir = Math.floor(Math.random() * 4), nx = n.tx + DX[dir], ny = n.ty + DY[dir];
+      if (Math.abs(nx - n.def.x) > 3 || Math.abs(ny - n.def.y) > 3) continue;
+      if (this.solidAt(nx, ny, n) || (nx === this.hero.tx && ny === this.hero.ty) || this.warpAt(nx, ny) || this.followers.some(f => f.tx === nx && f.ty === ny)) continue;
+      this.walk(n, dir, 300);
+    }
+  }
+  updateSymbols(time: number) {
+    if (this.busy || this.ui.modal || Input.busy) return;
+    for (const s of this.symbols) {
+      if (!s.alive || s.moving || time < s.next) continue;
+      const dx = this.hero.tx - s.tx, dy = this.hero.ty - s.ty; const dist = Math.abs(dx) + Math.abs(dy);
+      let dir: number; const chase = dist <= 4;
+      if (chase) dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 1 : 2) : dy < 0 ? 3 : 0; else dir = Math.floor(Math.random() * 4);
+      s.next = time + (chase ? 420 : 900 + Math.random() * 1400);
+      const nx = s.tx + DX[dir], ny = s.ty + DY[dir];
+      const ch = this.grid[ny]?.[nx];
+      if (!ch || LEGEND[ch]?.solid || this.extraSolid.has(nx + ',' + ny) || this.warpAt(nx, ny) || ch === 'v' || ch === '^' || (this.def.id === 'fields' && ny < 5)) continue;
+      if (this.symbols.some(o => o !== s && o.alive && o.tx === nx && o.ty === ny)) continue;
+      s.moving = true; s.tx = nx; s.ty = ny; s.spr.setFlipX(dir === 2);
+      this.tweens.add({ targets: [s.spr], x: nx * TS + 8, y: ny * TS + 15, duration: chase ? 260 : 400, onUpdate: () => { s.spr.setDepth(10 + s.spr.y); s.shadow.setPosition(s.spr.x, s.spr.y - 1); }, onComplete: () => { s.moving = false; this.checkSymbolContact(true); } });
+    }
+  }
+  checkSymbolContact(byMonster: boolean) {
+    if (this.busy) return;
+    const s = this.symbols.find(s => s.alive && s.tx === this.hero.tx && s.ty === this.hero.ty);
+    if (!s) return;
+    const table = ENCOUNTERS[this.def.encounters!.table].filter(e => e.group[0] === s.type);
+    const g = table[Math.floor(Math.random() * table.length)] || { group: [s.type] };
+    this.startBattle(g.group, { bg: this.def.bg, first: byMonster ? 'enemy' : 'party' }).then(r => { if (r === 'win' || r === 'flee') { s.alive = false; this.tweens.add({ targets: [s.spr, s.shadow], alpha: 0, duration: 300, onComplete: () => { s.spr.destroy(); s.shadow.destroy(); } }); } });
+  }
+  async startBattle(group: string[], o: { bg?: string; music?: string; boss?: boolean; noFlee?: boolean; first?: 'party' | 'enemy' } = {}): Promise<string> {
+    this.busy = true; Audio.stopMusic(); Audio.sfx('encounter');
+    if (!Game.flag('tut_battle')) { /* shown inside battle */ }
+    // shatter-style transition
+    const cam = this.cameras.main; cam.flash(120, 255, 255, 255);
+    this.tweens.add({ targets: cam, zoom: 6, rotation: 0.25, duration: 520, ease: 'Cubic.in' }); cam.fadeOut(520, 0, 0, 0);
+    await this.wait(560);
+    return new Promise(res => {
+      this.scene.pause(); this.ui.scene.setVisible(false);
+      this.scene.launch('Battle', { group, bg: o.bg || this.def.bg || 'bg_fields', music: o.music, boss: o.boss, noFlee: o.noFlee, first: o.first, onEnd: async (r: string) => {
+        this.scene.resume(); this.tweens.killTweensOf(cam); this.ui.scene.setVisible(true); cam.setZoom(4); cam.setRotation(0); cam.resetFX(); cam.fadeIn(350);
+        if (r === 'lose') { await this.defeat(); res(r); return; }
+        Audio.play(Game.flag('night') && this.def.id === 'village' ? 'hearth' : this.def.music); this.ui.refreshHud();
+        await this.wait(300); this.busy = this.script.running; res(r);
+      } });
+    });
+  }
+  async defeat() {
+    this.busy = true;
+    await this.ui.narr('Your party has been wiped out…');
+    const lost = Math.floor(Game.s.gold / 2); Game.s.gold -= lost; Game.healAll();
+    await this.ui.narr(`A gentle light carries you back to the last Star-Shrine.\nYou lost ${lost} gold.`);
+    const sp = Game.s.savePoint; this.scene.restart({ map: sp.map, x: sp.x, y: sp.y + 1, dir: 0 });
+  }
+  checkTriggers() {
+    const h = this.hero;
+    for (const t of this.def.triggers) {
+      if (h.tx < t.x || h.ty < t.y || h.tx >= t.x + (t.w || 1) || h.ty >= t.y + (t.h || 1)) continue;
+      if (t.once && Game.flag('trig_' + t.once)) continue; if (!evalCond(t.cond)) continue;
+      if (t.once) Game.set('trig_' + t.once); this.runScript(t.script); return;
+    }
+  }
+  // ------------------------------------------------------------------ interaction
+  onAction(a: Action) {
+    if (this.busy || this.ui.modal || this.hero.moving) return;
+    if (a === 'menu') { this.ui.openMenu(); return; }
+    if (a !== 'ok') return;
+    this.interact();
+  }
+  facing() { return { x: this.hero.tx + DX[this.hero.dir], y: this.hero.ty + DY[this.hero.dir] }; }
+  async interact() {
+    const f = this.facing(); const h = this.hero;
+    let npc = this.npcs.find(n => !n.hidden && n.tx === f.x && n.ty === f.y);
+    const tile = this.grid[f.y]?.[f.x];
+    if (!npc && tile === 'k') { const bx = f.x + DX[h.dir], by = f.y + DY[h.dir]; npc = this.npcs.find(n => n.tx === bx && n.ty === by); }
+    if (npc) {
+      if (npc.def?.script === 'roster') { this.ui.say(`${npc.def.name}: Ready when you are! Talk to Dahlia to change the party.`); return; }
+      if (npc.doll && !npc.def?.counter) { npc.dir = 3 - h.dir; this.setFrame(npc); }
+      this.runScript(npc.def!.script); return;
+    }
+    const chest = this.chests.find(c => c.x === f.x && c.y === f.y);
+    if (chest) { this.openChest(chest); return; }
+    if (this.def.saves.some(s => s.x === f.x && s.y === f.y)) { this.busy = true; await this.ui.saveShrine(); this.busy = false; return; }
+    const sign = this.def.signs?.find(s => s.x === f.x && s.y === f.y);
+    if (sign) { this.busy = true; await this.ui.narr(sign.text); this.busy = false; return; }
+    if (tile === 'W') { this.busy = true; await this.ui.narr('You peer into the well. Your reflection stares back — no halo, no light. Just you.'); this.busy = false; return; }
+    if (tile === 'K') { this.busy = true; await this.ui.narr(['Dusty books. "A Field Guide to Slimes, Vol. III."', '"The Song of the Twelve Wardens" — the last pages are torn out.', 'A cookbook. Page 12: Turnip Stew. Heavily annotated.'][(f.x + f.y) % 3]); this.busy = false; return; }
+    if (tile === 'O' || tile === 'X') { this.busy = true; const k = 'pot_' + this.def.id + f.x + '_' + f.y; if (!Game.flag(k) && (f.x + f.y) % 2 === 0) { Game.set(k); Game.addItem('herb'); Audio.sfx('chest'); await this.ui.narr('You rummage around… and find a Medicinal Herb!'); } else await this.ui.narr('Nothing but dust and old turnips.'); this.busy = false; return; }
+  }
+  async openChest(c: any) {
+    if (Game.flag('chest_' + c.id)) { this.busy = true; await this.ui.narr('The chest is empty.'); this.busy = false; return; }
+    this.busy = true; Game.set('chest_' + c.id); c.spr.setFrame(1); c.sp?.destroy(); Audio.sfx('chest');
+    this.add.particles(c.spr.x, c.spr.y - 4, 'spark', { lifespan: 700, speed: { min: 20, max: 60 }, scale: { start: 0.5, end: 0 }, tint: [0xffe8a0, 0xffffff], blendMode: 'ADD', emitting: false }).setDepth(9000).explode(14);
+    let msg = '';
+    if (c.item) { Game.addItem(c.item); msg = `You found ${/^[AEIOU]/.test(ITEMS[c.item].name) ? 'an' : 'a'} ${ITEMS[c.item].name}!`; }
+    if (c.gold) { Game.s.gold += c.gold; msg = `You found ${c.gold} gold!`; }
+    await this.ui.narr(msg);
+    if (!Game.flag('tut_chest')) { Game.set('tut_chest'); await this.ui.tutorial('chest'); }
+    if (c.item && ITEMS[c.item].kind === 'equip' && !Game.flag('tut_equip')) { Game.set('tut_equip'); await this.ui.tutorial('equip'); }
+    this.ui.refreshHud(); this.busy = false;
+  }
+  async runScript(name: string) {
+    this.busy = true; await this.script.run(name); this.busy = false; this.refreshNpcs();
+  }
+  refreshNpcs() {
+    // spawn/despawn NPCs whose conditions changed
+    for (const n of this.def.npcs) {
+      const want = evalCond(n.cond) && !(n.notCond && evalCond(n.notCond));
+      const have = this.npcs.find(a => a.id === n.id);
+      if (want && !have) { const tex = n.sprite || ensureDoll(this, { look: n.look!, equip: n.equip || {} }); const a = this.makeActor(n.id, tex, n.x, n.y, n.dir ?? 0, !n.sprite); a.def = n; if (n.hidden && !Game.flag('show_' + n.id)) { a.hidden = true; a.spr.setVisible(false); a.shadow.setVisible(false); } this.npcs.push(a); }
+      if (!want && have) { have.spr.destroy(); have.shadow.destroy(); this.npcs = this.npcs.filter(a => a !== have); if (n.sprite) (this.fxObjs.bossGlow as any)?.destroy(); }
+    }
+  }
+  /** Rebuild hero/follower sprites after equipment or party changes. */
+  refreshParty() {
+    const p = Game.s.party; this.hero.spr.setTexture(ensureDoll(this, specOf(p[0]))); this.setFrame(this.hero);
+    this.followers.forEach(f => { f.spr.destroy(); f.shadow.destroy(); }); this.followers = [];
+    for (let i = 1; i < p.length; i++) { const hp = this.history[i - 1]; const f = this.makeActor('f' + i, ensureDoll(this, specOf(p[i])), hp.x, hp.y, this.hero.dir); this.followers.push(f); }
+    this.updateFollowers(true);
+    if (this.def.id === 'hearth') { // rebuild roster idlers
+      this.npcs.filter(n => n.def?.script === 'roster').forEach(n => { n.spr.destroy(); n.shadow.destroy(); });
+      this.npcs = this.npcs.filter(n => n.def?.script !== 'roster');
+      Game.s.roster.forEach((m, i) => { const spots = [[6, 6], [10, 6], [9, 8], [3, 6], [11, 9], [5, 5]]; const [x, y] = spots[i % spots.length]; const a = this.makeActor('r' + i, ensureDoll(this, specOf(m)), x, y, i % 4); a.def = { id: 'r' + i, name: m.name, x, y, script: 'roster' } as any; this.npcs.push(a); });
+    }
+  }
+  actor(id: string) { return id === 'hero' ? this.hero : this.npcs.find(n => n.id === id); }
+  /** Pathfinding helper used by tests and scripted moves (BFS over walkable tiles). */
+  findPath(tx: number, ty: number, adjacent = false): number[] | null {
+    const W = this.grid[0].length, H = this.grid.length; const start = this.hero.tx + ',' + this.hero.ty;
+    const prev = new Map<string, [string, number]>(); const q = [[this.hero.tx, this.hero.ty]]; prev.set(start, ['', -1]);
+    while (q.length) {
+      const [x, y] = q.shift()!;
+      if ((adjacent && Math.abs(x - tx) + Math.abs(y - ty) === 1) || (!adjacent && x === tx && y === ty)) {
+        const path: number[] = []; let k = x + ',' + y; while (k !== start) { const [p, d] = prev.get(k)!; path.unshift(d); k = p; } return path;
+      }
+      for (let d = 0; d < 4; d++) { const nx = x + DX[d], ny = y + DY[d], k = nx + ',' + ny; if (nx < 0 || ny < 0 || nx >= W || ny >= H || prev.has(k)) continue; if (this.solidAt(nx, ny) && !(nx === tx && ny === ty && this.warpAt(nx, ny))) continue; if (this.warpAt(nx, ny) && !(nx === tx && ny === ty)) continue; prev.set(k, [x + ',' + y, d]); q.push([nx, ny]); }
+    }
+    return null;
+  }
+}
+export { TS, DX, DY, FH };

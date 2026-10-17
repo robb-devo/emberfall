@@ -1,0 +1,41 @@
+/**
+ * Original compositions for EMBERFALL. Each song: tempo, chord per bar, hand-written lead melody
+ * (8th-note tokens: note like "C#5", "." = hold, "-" = rest), plus an accompaniment style that the
+ * synth expands into bass, arpeggio/pad and drums. 8 tokens per bar.
+ */
+export interface Song { bpm: number; chords: string[]; lead: string; style: 'arp' | 'pad' | 'drive' | 'march' | 'fanfare' | 'waltz'; leadWave: 'square' | 'pulse' | 'triangle' | 'saw'; loop: boolean; drums?: boolean; counter?: string }
+export const SONGS: Record<string, Song> = {
+  title: { bpm: 92, style: 'march', leadWave: 'pulse', loop: true, drums: true,
+    chords: ['Dm', 'Bb', 'F', 'C', 'Dm', 'Bb', 'Gm', 'A'],
+    lead: 'D5 . . A4 D5 E5 F5 . | G5 . F5 . E5 . D5 . | C5 . . A4 C5 D5 F5 . | E5 . . . G5 . . . | A5 . . G5 F5 . E5 F5 | D5 . . C5 Bb4 . D5 . | G4 . Bb4 . D5 . G5 . | A5 . . . C#5 . E5 .',
+    counter: 'F4 . . . A4 . . . | D4 . . . F4 . . . | A3 . . . C4 . . . | G3 . . . C4 . . . | F4 . . . A4 . . . | F4 . . . D4 . . . | Bb3 . . . D4 . . . | C#4 . . . E4 . . .' },
+  spire: { bpm: 70, style: 'pad', leadWave: 'triangle', loop: true,
+    chords: ['Fm', 'Db', 'Bb', 'C', 'Fm', 'Db', 'Eb', 'C'],
+    lead: 'C5 . . . Ab4 . F4 . | Db5 . . C5 Bb4 . Ab4 . | Bb4 . . . F4 . Db5 . | C5 . . . . . E4 . | F5 . . Eb5 Db5 . C5 . | Ab4 . Bb4 . C5 . Db5 . | Eb5 . . Db5 C5 . Bb4 . | C5 . . . . . . .' },
+  village: { bpm: 100, style: 'waltz', leadWave: 'pulse', loop: true, drums: true,
+    chords: ['G', 'D', 'Em', 'C', 'G', 'C', 'D', 'G'],
+    lead: 'B4 . D5 . G5 . F#5 E5 | D5 . . A4 . . D5 . | E5 . G5 . B4 . A4 G4 | E4 . G4 . C5 . . . | B4 . D5 . G5 . A5 B5 | C6 . B5 A5 G5 . E5 . | F#5 . A5 . D5 . F#5 . | G5 . . . - . . .' },
+  hearth: { bpm: 84, style: 'pad', leadWave: 'triangle', loop: true,
+    chords: ['C', 'Am', 'F', 'G', 'C', 'Am', 'Dm', 'G'],
+    lead: 'E5 . G5 . C6 . B5 . | A5 . . E5 . . C5 . | F5 . A5 . C6 . A5 . | G5 . . . D5 . . . | E5 . G5 . C6 . D6 . | E6 . . C6 A5 . . . | F5 . E5 . D5 . F5 . | G5 . . . . . . .' },
+  field: { bpm: 138, style: 'arp', leadWave: 'square', loop: true, drums: true,
+    chords: ['C', 'G', 'Am', 'F', 'C', 'G', 'F', 'G'],
+    lead: 'C5 . E5 G5 C6 . B5 . | G5 . . D5 G5 . . . | A5 . G5 E5 C5 . E5 . | F5 . . . A5 . G5 F5 | E5 . G5 . C6 . D6 E6 | D6 . B5 . G5 . . . | A5 . F5 . C5 . A5 . | G5 . . . D5 . G5 .' },
+  dungeon: { bpm: 84, style: 'pad', leadWave: 'pulse', loop: true, drums: true,
+    chords: ['Am', 'F', 'Dm', 'E', 'Am', 'F', 'E', 'E'],
+    lead: 'A4 . . C5 B4 . . E4 | F4 . A4 . C5 . B4 . | D5 . . F5 E5 . D5 . | G#4 . . . B4 . . . | A4 . E5 . D5 C5 B4 . | C5 . . A4 F4 . . . | E4 . G#4 . B4 . D5 . | C5 . B4 . G#4 . . .' },
+  battle: { bpm: 168, style: 'drive', leadWave: 'square', loop: true, drums: true,
+    chords: ['Em', 'C', 'D', 'B', 'Em', 'C', 'Am', 'B'],
+    lead: 'E5 E5 - E5 G5 - F#5 E5 | G5 . . E5 C5 . E5 . | F#5 F#5 - F#5 A5 - G5 F#5 | D#5 . . . B4 . . . | E5 . B5 . A5 G5 F#5 G5 | E5 . . C5 G5 . . . | A5 . G5 . F#5 . E5 . | D#5 . F#5 . B5 . . .' },
+  boss: { bpm: 176, style: 'drive', leadWave: 'saw', loop: true, drums: true,
+    chords: ['Cm', 'Ab', 'Fm', 'G', 'Cm', 'Db', 'Bb', 'G'],
+    lead: 'C5 - C5 Eb5 - G5 F5 Eb5 | Ab5 . . G5 Eb5 . C5 . | F5 - F5 Ab5 - C6 Bb5 Ab5 | G5 . . . D5 . B4 . | C6 . G5 . Eb5 . C5 . | Db6 . Ab5 . F5 . Db5 . | Bb5 . F5 . D5 . Bb4 . | B4 . D5 . F5 . G5 .' },
+  victory: { bpm: 150, style: 'fanfare', leadWave: 'square', loop: false, drums: true,
+    chords: ['C', 'F', 'G', 'C'],
+    lead: 'G4 C5 E5 G5 . . E5 G5 | A5 . . . A5 B5 C6 . | B5 . . . G5 A5 B5 . | C6 . . . . . . .' },
+  levelup: { bpm: 180, style: 'fanfare', leadWave: 'square', loop: false,
+    chords: ['C', 'G'], lead: 'C5 E5 G5 C6 . . G5 . | B5 D6 . . G6 . . .' },
+  cliff: { bpm: 60, style: 'pad', leadWave: 'triangle', loop: true,
+    chords: ['Dm', 'Bb', 'Gm', 'A', 'Dm', 'Bb', 'Gm', 'A'],
+    lead: 'A4 . . . D5 . . . | F5 . . . E5 . D5 . | G4 . . . Bb4 . D5 . | C#5 . . . . . . . | A5 . . . F5 . . . | D5 . . . Bb4 . . . | G4 . . . Bb4 . A4 . | A4 . . . . . . .' },
+};
