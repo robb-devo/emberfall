@@ -30,7 +30,11 @@ export class EndScene extends Phaser.Scene {
     ];
     let y = 200; lines.forEach(([t, s, c], i) => { if (t) { const o = txt(this, W / 2, y, t, s, c, i < 2 ? { fontFamily: SERIF } : {}).setOrigin(0.5).setAlpha(0); this.tweens.add({ targets: o, alpha: 1, delay: 800 + i * 450, duration: 900 }); } y += s + 26; });
     (window as any).__EMBER.ended = true;
+    // keyboard goes through the unified Input hub (it preventDefaults keys, so Phaser's own keydown events never fire)
+    let done = false, armed = false; const off = Input.on(a => { if (armed && a === 'ok') go(); });
+    this.events.once('shutdown', off);
     const go = () => {
+      if (done) return; done = true; off();
       this.cameras.main.fadeOut(800);
       this.time.delayedCall(820, () => {
         (window as any).__EMBER.ended = false;
@@ -38,6 +42,6 @@ export class EndScene extends Phaser.Scene {
         else this.scene.start('World', { map: Game.s.map, x: Game.s.x, y: Game.s.y, dir: 0 });
       });
     };
-    this.time.delayedCall(fast() ? 50 : 4000, () => { this.input.once('pointerdown', go); const k = this.input.keyboard; k?.once('keydown-ENTER', go); });
+    this.time.delayedCall(fast() ? 50 : 4000, () => { armed = true; this.input.once('pointerdown', go); });
   }
 }

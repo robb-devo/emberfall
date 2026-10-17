@@ -83,7 +83,7 @@ if (BOSS === 'warden') {
   const inCreate = () => h.E(() => window.__EMBER.active().includes('Create'));
   const register = async () => { for (let i = 0; i < 40 && !(await inCreate()); i++) await h.wait(300); await h.wait(800);
     await h.key('ArrowDown', 1); await h.key('ArrowRight', 2); await h.wait(400); if (!(await h.E(() => window.__EMBER.Game.s.party.length > 1))) await shot('03-companion-creator');
-    await h.key('ArrowUp', 7); await h.key('Enter', 1, 900); for (let i = 0; i < 40 && (await inCreate()); i++) await h.wait(300); };
+    await h.key('ArrowUp', 2); await h.key('Enter', 1, 900); /* Vocation(1) -> wraps to the last row, Register */ for (let i = 0; i < 40 && (await inCreate()); i++) await h.wait(300); };
   await assert(await pick('Create a companion'), 'Ledger menu (1)'); await register();
   await assert(await pick('Create a companion'), 'Ledger menu (2)'); await register();
   await assert(await pick('Leave'), 'Ledger menu (leave)'); await h.advance(20);
