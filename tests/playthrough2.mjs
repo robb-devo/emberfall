@@ -42,7 +42,8 @@ await h.devStart('elder', 4, 6, { chapter1Done: true, lairDone: true, ledgerOpen
 await h.E(() => {
   const G = window.__EMBER.Game; const base = G.hero;
   const mk = (id, name, voc, lv, equip) => { const m = JSON.parse(JSON.stringify(base)); Object.assign(m, { id, name, voc, level: lv, xp: 0, equip, vocs: {} }); return m; };
-  base.level = 7; G.s.party.push(mk('c1', 'Rook', 'priest', 6, { weapon: 'stick', armor: 'tunic' }), mk('c2', 'Wynn', 'mage', 6, { weapon: 'stick', armor: 'robe' }));
+  base.level = 7; base.equip = { weapon: 'ironsword', armor: 'leather', shield: 'pot', head: 'helm' }; G.s.party.push(mk('c1', 'Rook', 'priest', 6, { weapon: 'stick', armor: 'leather' }), mk('c2', 'Wynn', 'mage', 6, { weapon: 'stick', armor: 'robe' }));
+  G.s.savePoint = { map: 'village', x: 15, y: 13 };
   G.s.inv.herb = 6; G.healAll(); window.__EMBER.world.refreshParty(); window.__EMBER.world.ui.refreshHud();
   window.__EMBER.world.runScript('ch2Dawn');
 });
