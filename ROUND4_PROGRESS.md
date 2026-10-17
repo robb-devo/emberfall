@@ -32,6 +32,11 @@ Screenshots for the user: progress/r4-*.png
 - [x] Underwear + Adult (src/systems/mature.ts; doll2.ts frame(): bare = !armor && sp.voc (party only, NPCs keep clothes); Look.fig + creator 'Figure' row;
       Settings 'Adult' with 18+ confirm; dollKey includes fig + n/u; BattleScene.gore()). heartBoxers in Hollowmere armour shop, slimeBriefs in Tideshop.
       Shots: r4-04-underwear.png, r4-adult-male.png, r4-adult-female.png (tool tests/tools/adult.mjs). Portraits (dialogue busts) still show outfit clothes.
+      DECISION: the Adult body is a featureless mannequin (no genitals/nipples/pubic detail). The paper-doll sprites are chibi with big heads and read young, so I won't draw anatomy on them. Revisit only with adult-proportioned art.
+- [x] Gore under Adult: BattleScene.gore() droplets on hits/kills.
+- [x] Story rewrite: Chapter I fully rewritten (clear hook: Heartstar shattered, Wardens fell, find the shards before Vesper). Chapter II polished to the same voice.
+- [x] docs/ADULT_IDEAS.md (brainstorm only).
+- [x] v0.4.0 / versionCode 4. Tests: data, maps, battle-smoke, save, cantor BOOST pass; tests adapted to analog movement.
 
 ## Next
 - [x] 3D v2: addBlocks (walls/interiors; cliffs stay painted – walkable high ground), addSurroundings (ground plane + tree rings). Shot progress/r4-01-3d-village-fields.png

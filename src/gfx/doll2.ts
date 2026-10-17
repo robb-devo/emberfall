@@ -241,7 +241,7 @@ function frame(sp: DollSpec, d: Dir, step: number, cv: Canvas) {
     cv.cyl(15, 35, 15 - (st ? 3 * fwd : 0), 42, 2.4, pants); cv.box(15 - (st ? 3 * fwd : 0) - 3, 42, 6, 4, boot, 0.1, 1); cv.box(15 - (st ? 3 * fwd : 0) - 3, 42, 6, 1, shade(boot, 1.3), 0.5);
     if (robe) cv.poly([[11, 34], [21, 34], [22, 43], [10, 43]], body, -0.1);
     if (undies) { cv.box(12, 32, 9, 5, uw, 0.1, 1); cv.box(12, 32, 9, 1, uw2, 0.3); if (fem) cv.box(12, 23, 8, 4, uw, 0.15, 1); if (undiesItem) { cv.set(15, 34.5, uw2, 0.4, true); cv.set(18, 33.5, uw2, 0.4, true); } }
-    if (nude) { cv.set(12.5, 30, shade(skin, 0.8), 0.2, true); if (fem) { cv.ell(12.2, 25.5, 1.8, 1.8, shade(skin, 0.96), undefined, 0.2); cv.set(11, 25.5, shade(skin, 0.7), 0.3, true); } cv.box(12, 34, 3, 2, shade(hair, 0.9), 0.1); }
+    if (nude) { cv.set(12.5, 30, shade(skin, 0.8), 0.2, true); cv.box(12, 34, 3, 1, shade(skin, 0.9), 0.1); }
     // neck + head
     cv.box(14, 19, 4, 3, skin, -0.4);
     head(cv, d, skin); face(cv, d, L.face, eye, skin, hair);
@@ -273,10 +273,8 @@ function frame(sp: DollSpec, d: Dir, step: number, cv: Canvas) {
     // body shading: collarbone + waist, so a bare torso still reads as a figure at sprite scale
     cv.box(tx + 1, 21, tw - 2, 1, shade(skin, 0.9), 0.2); if (fem) { cv.set(tx, 30, shade(skin, 0.86), 0, true); cv.set(tx + tw - 1, 30, shade(skin, 0.86), 0, true); }
     if (undies) { cv.box(tx, 32, tw, 5, uw, 0.1, 2); cv.box(tx, 32, tw, 1, uw2, 0.3); if (F) cv.box(15, 33, 2, 2, shade(uw, 0.85), 0); if (fem) { cv.box(tx + 1, 23, tw - 2, 4, uw, 0.15, 1); if (F) cv.set(16, 25, shade(uw, 0.8), 0, true); } if (undiesItem) { for (const [a, b] of [[tx + 2, 34], [tx + tw - 3, 33], [tx + 5, 35]]) cv.set(a, b, uw2, 0.4, true); } }
-    else if (F) { // Adult ON: simple low-res anatomy, no detail beyond a few pixels
-      cv.set(16, 29.5, shade(skin, 0.75), 0, true);
-      if (fem) { cv.ell(tx + 3.2, 25.2, 2.2, 1.9, shade(skin, 1.04), undefined, 0.25); cv.ell(tx + tw - 3.2, 25.2, 2.2, 1.9, shade(skin, 1.04), undefined, 0.25); cv.set(tx + 3, 25.5, shade(skin, 0.68), 0, true); cv.set(tx + tw - 3, 25.5, shade(skin, 0.68), 0, true); cv.poly([[14, 33], [18, 33], [16, 35.5]], shade(hair, 0.85), 0.1); }
-      else { cv.box(tx + 2, 25, 3, 1, shade(skin, 0.86), 0); cv.box(tx + tw - 5, 25, 3, 1, shade(skin, 0.86), 0); cv.set(tx + 3, 24, shade(skin, 0.72), 0, true); cv.set(tx + tw - 4, 24, shade(skin, 0.72), 0, true); cv.box(15, 33, 2, 1, shade(hair, 0.85), 0.1); cv.box(15.2, 34, 1.6, 2.2, shade(skin, 0.82), 0); }
+    else if (F) { // Adult ON: featureless mannequin body. The chibi sprites read young, so no anatomical detail is drawn on them.
+      cv.set(16, 29.5, shade(skin, 0.75), 0, true); cv.box(tx + 3, 33, tw - 6, 2, shade(skin, 0.92), 0);
     } else { cv.box(tx + 3, 33, tw - 6, 2, shade(skin, 0.9), 0); }
   } else if (!robe) { cv.box(tx, 31, tw, 2, jerkin ? leather : trim, 0.2); if (F) cv.box(15, 31, 2, 2, 0xf0c75e, 0.6); }
   else { cv.box(tx - 2, 42, tw + 4, 2, trim, 0.2); if (F) cv.box(15, 21, 2, 21, trim, 0.4); }
