@@ -34,7 +34,7 @@ Regression tests: run against a *built* copy so Vite HMR reloads don't break the
   Shots: progress/r3-17-int-*, r3-21-int-chapel. Tool: `MAPS=map:x:y,... node tests/tools/r3int.mjs <prefix>`.
 
 ## Next
-- [ ] Full regression run on the built test server, fix regressions.
+- [ ] Full regression run on the built test server, fix regressions. (data/maps/battle-smoke/save PASS; save diag test made frame-atomic; _gull.mjs removed; playthrough 1+2 running)
 - [ ] Final critical polish pass (characters, monsters, title).
 - [ ] APK + release v0.3.0.
 

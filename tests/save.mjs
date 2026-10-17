@@ -29,9 +29,10 @@ ok(await E(() => !window.__EMBER.world.ui.modal && window.__EMBER.Input.stack.le
 // --- 8 directions
 await E(() => { const w = window.__EMBER.world; w.scene.restart({ map: 'village', x: 6, y: 13, dir: 0, noBanner: true }); }); await h.wait(1500);
 const p0 = await E(() => [window.__EMBER.world.hero.tx, window.__EMBER.world.hero.ty]);
-await h.p.keyboard.down('ArrowDown'); await h.p.keyboard.down('ArrowRight');
+// press both keys in one task so they land on the same frame (two CDP key events can straddle a frame)
+await E(() => ['ArrowDown', 'ArrowRight'].forEach(code => window.dispatchEvent(new KeyboardEvent('keydown', { code, key: code }))));
 await h.p.waitForFunction(([x, y]) => { const w = window.__EMBER.world; return w.hero.tx !== x || w.hero.ty !== y; }, p0, { timeout: 3000 }).catch(() => {});
-await h.p.keyboard.up('ArrowDown'); await h.p.keyboard.up('ArrowRight'); await h.wait(400);
+await E(() => ['ArrowDown', 'ArrowRight'].forEach(code => window.dispatchEvent(new KeyboardEvent('keyup', { code, key: code })))); await h.wait(400);
 const p1 = await E(() => [window.__EMBER.world.hero.tx, window.__EMBER.world.hero.ty]);
 ok(p1[0] > p0[0] && p1[1] > p0[1], `diagonal step ${p0} -> ${p1}`);
 // --- manual save + backup + corruption recovery
