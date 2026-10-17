@@ -31,3 +31,6 @@ Screenshots for the user: progress/r4-*.png
 - [ ] Underwear + Adult toggle
 - [ ] Dialogue rewrite
 - [ ] Tests, 0.4.0, APK, release
+   STEERING 2 (parent, 15:53, replaces featureless body): Adult ON + nothing equipped = simple low-res pixel nude male/female bodies with basic anatomy at sprite scale (Cyberpunk creator style), non-sexual, no poses/animations, adults only (never child NPCs), no explicit content. Low priority (after main items).
+   STEERING 3 (parent, 15:56) – END of round: (a) screenshot Adult nude layer male+female -> progress/r4-adult-*.png;
+   (b) write docs/ADULT_IDEAS.md (brainstorm only, nothing implemented): 8-12 dark mature quest concepts (Berserk/Dark Souls tone: war crimes, torture aftermath, cults, grief, addiction, no-good-answer dilemmas, body horror), gore/battle-VFX concepts, a few dark companion backstories, hooks into Emberfall's story. Literary, not gratuitous. No sexual violence, nothing sexual with minors, no real-world hate.
