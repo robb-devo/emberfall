@@ -1,5 +1,5 @@
 // screenshots of menus / creation with the HD dolls
-import { open } from './lib.mjs';
+import { open } from '../lib.mjs';
 const h = await open(process.argv[2] || 'http://localhost:5173/');
 await h.key('Enter', 1, 900); await h.key('Enter', 1, 800); await h.key('Enter', 1, 1500); await h.shot('/tmp/u_create.png');
 await h.devStart('saltmere', 19, 14, { chapter1Done: true, ch2Started: true }, 'warrior', {});

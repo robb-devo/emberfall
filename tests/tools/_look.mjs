@@ -1,4 +1,4 @@
-import { open } from './lib.mjs';
+import { open } from '../lib.mjs';
 const h = await open();
 const spots = JSON.parse(process.argv[2]);
 for (const [map, x, y, flags, name] of spots) {

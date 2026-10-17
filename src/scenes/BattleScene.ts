@@ -324,12 +324,21 @@ export class BattleScene extends Phaser.Scene {
     this.tweens.add({ targets: t.spr, x: t.x + 14, yoyo: true, repeat: 2, duration: 40, onComplete: () => t.spr.setX(t.x) });
     this.burst(t.x, t.y - t.spr.displayHeight / 2, [0xffffff, 0xffe8a0], crit ? 30 : 10, crit ? 300 : 160, 'px');
     if (dmg > 0) this.cameras.main.shake(120, 0.005 + (crit ? 0.01 : 0));
+    if (crit || weak) this.punch(t.x, t.y - t.spr.displayHeight / 2, crit ? 1.4 : 1);
     this.popNum(t.x, t.y - t.spr.displayHeight - 10, String(dmg), crit ? '#ffd070' : '#ffffff', crit);
     await this.msg(dmg > 0 ? `${t.name} takes ${dmg} damage!${weak ? ' It\'s super effective!' : ''}` : `${t.name} takes no damage!`, 450);
     if (t.hp <= 0) await this.killFoe(t);
   }
+  /** Hit-stop + camera punch: a few frames of freeze, then a quick zoom toward the impact. */
+  punch(x: number, y: number, k = 1) {
+    if (fast()) return;
+    const cam = this.cameras.main; this.tweens.timeScale = 0.04; setTimeout(() => { if (this.sys.isActive()) this.tweens.timeScale = 1; }, 70 * k);
+    const z0 = cam.zoom; cam.zoomTo(z0 * (1 + 0.05 * k), 90, 'Quad.out', true);
+    cam.pan(W / 2 + (x - W / 2) * 0.06 * k, H / 2 + (y - H / 2) * 0.06 * k, 90, 'Quad.out', true);
+    this.time.delayedCall(170 * k, () => { cam.zoomTo(z0, 260, 'Sine.inOut', true); cam.pan(W / 2, H / 2, 260, 'Sine.inOut', true); });
+  }
   async killFoe(t: Foe) {
-    t.alive = false; t.hp = 0; Audio.sfx('die');
+    t.alive = false; t.hp = 0; Audio.sfx('die'); this.punch(t.x, t.y - t.spr.displayHeight / 2, t.def.boss ? 2 : 0.8);
     this.tweens.killTweensOf(t.spr); t.spr.setTint(0xff4060);
     this.burst(t.x, t.y - t.spr.displayHeight / 2, [0xff6080, 0xffd070, 0xffffff], t.def.boss ? 120 : 30, t.def.boss ? 400 : 200);
     if (t.def.boss) { this.cameras.main.shake(1500, 0.03); this.cameras.main.flash(800, 255, 200, 140); Audio.sfx('quake'); }

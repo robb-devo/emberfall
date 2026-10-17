@@ -225,4 +225,47 @@ export function makeBackdrops2(scene: Phaser.Scene) {
     for (let x = 0; x < 360; x += 24) { c.fillStyle = 'rgba(255,255,255,0.05)'; c.fillRect(x, 170, 1, 70); }
     c.fillStyle = 'rgba(80,200,220,0.18)'; for (let y = 200; y < 240; y += 6) c.fillRect(0, y, 360, 2);
   });
+
+  // ---- Chapter I backdrops re-painted at 360 px (replace the v0.1 180 px versions)
+  // Whisperwind Vale - spring meadow, layered blue hills, cumulus clouds
+  g('bg_fields', c => {
+    sky(c, [[0, '#4a9ae8'], [0.55, '#9ad4f4'], [1, '#e8f4e0']]);
+    seed = 61; for (let i = 0; i < 6; i++) { const x = rnd() * 360, y = 16 + rnd() * 50, w = 40 + rnd() * 50;
+      for (let k = 0; k < 5; k++) { c.fillStyle = k < 3 ? '#ffffff' : '#dce8f4'; c.beginPath(); c.ellipse(x + (k - 2) * w * 0.22, y - (k % 3 === 1 ? 7 : 0) + (k > 2 ? 4 : 0), w * 0.28, 9, 0, 0, 7); c.fill(); } }
+    ridge(c, '#9ab8d8', 112, 12, 0.017, 0.5); ridge(c, '#7aa0b8', 124, 10, 0.026, 2.2);
+    c.fillStyle = '#5a6a8a'; c.fillRect(296, 92, 6, 26); c.beginPath(); c.moveTo(293, 92); c.lineTo(299, 80); c.lineTo(305, 92); c.fill(); // far village spire
+    ridge(c, '#6aa060', 140, 8, 0.035, 4); 
+    seed = 62; for (let i = 0; i < 20; i++) tree(c, rnd() * 360, 150 + rnd() * 4, 22 + rnd() * 12, '#4a3a2a', ['#3a7a3a', '#4f9a46', '#7cc060']);
+    godrays(c, 60, 'rgba(255,250,220,0.09)');
+    ground(c, 158, 0x4f9a46, [0x6ab85a, 0x3a7a3a, 0x8ad06a, 0x5aa850], 63);
+    seed = 64; for (let i = 0; i < 90; i++) { const x = rnd() * 360, y = 166 + rnd() * 72, col = ['#ffffff', '#ffe060', '#ff9ac0', '#b0a0ff'][i % 4]; c.fillStyle = col; c.fillRect(x, y, 2, 2); c.fillStyle = '#2a6a2a'; c.fillRect(x, y + 2, 1, 2); }
+    c.fillStyle = 'rgba(200,170,110,0.45)'; c.beginPath(); c.moveTo(150, 158); c.lineTo(205, 158); c.lineTo(260, 240); c.lineTo(100, 240); c.fill();
+  });
+  // Cinderdeep Hollow - smouldering cave: stalactites, ember cracks, violet crystals
+  g('bg_hollow', c => {
+    sky(c, [[0, '#0a0812'], [0.6, '#1e1428'], [1, '#3a2030']]);
+    seed = 71; c.fillStyle = '#140e1c'; for (let x = -10; x < 370; x += 14 + rnd() * 16) { const d = 20 + rnd() * 50; c.beginPath(); c.moveTo(x, 0); c.lineTo(x + 7, d); c.lineTo(x + 16, 0); c.fill(); }
+    ridge(c, '#221830', 118, 16, 0.03, 1); ridge(c, '#2c1e34', 138, 12, 0.045, 3);
+    seed = 72; for (let i = 0; i < 9; i++) { const x = 20 + rnd() * 320, y = 120 + rnd() * 40, h = 10 + rnd() * 16;
+      c.fillStyle = '#7a4ac8'; c.beginPath(); c.moveTo(x, y); c.lineTo(x + 4, y - h); c.lineTo(x + 8, y); c.fill(); c.fillStyle = '#c8a0ff'; c.fillRect(x + 3, y - h + 4, 1, h - 6);
+      c.save(); c.globalCompositeOperation = 'lighter'; const gr = c.createRadialGradient(x + 4, y - h / 2, 1, x + 4, y - h / 2, 26); gr.addColorStop(0, 'rgba(160,110,255,0.35)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = gr; c.fillRect(x - 24, y - h - 24, 56, h + 48); c.restore(); }
+    ground(c, 162, 0x3e3446, [0x4a3e54, 0x2a2232, 0x5a4a62, 0x6a3a3a], 73);
+    seed = 74; c.save(); c.globalCompositeOperation = 'lighter'; for (let i = 0; i < 7; i++) { let x = rnd() * 360, y = 170 + rnd() * 60; c.strokeStyle = 'rgba(255,120,40,0.7)'; c.lineWidth = 1; c.beginPath(); c.moveTo(x, y); for (let k = 0; k < 6; k++) { x += 4 + rnd() * 8; y += (rnd() - 0.5) * 6; c.lineTo(x, y); } c.stroke(); }
+    const gl = c.createLinearGradient(0, 240, 0, 170); gl.addColorStop(0, 'rgba(255,90,30,0.25)'); gl.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = gl; c.fillRect(0, 170, 360, 70); c.restore();
+    seed = 75; for (let i = 0; i < 36; i++) { c.fillStyle = ['#ff9a40', '#ffd070', '#ff6020'][i % 3]; c.fillRect(rnd() * 360, rnd() * 170, 1, 1 + (i % 2)); }
+  });
+  // The Warden's lair - molten heart of the hollow, broken Warden pillars, lava lake
+  g('bg_boss', c => {
+    sky(c, [[0, '#120406'], [0.5, '#3a0e0a'], [1, '#7a2a10']]);
+    c.save(); c.globalCompositeOperation = 'lighter'; const gr = c.createRadialGradient(180, 150, 10, 180, 150, 220); gr.addColorStop(0, 'rgba(255,120,40,0.45)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = gr; c.fillRect(0, 0, 360, 240); c.restore();
+    seed = 81; c.fillStyle = '#1a0806'; for (let x = -10; x < 370; x += 18 + rnd() * 14) { const d = 26 + rnd() * 50; c.beginPath(); c.moveTo(x, 0); c.lineTo(x + 9, d); c.lineTo(x + 20, 0); c.fill(); }
+    for (const [x, h, br] of [[34, 120, 0], [92, 96, 1], [268, 104, 1], [326, 128, 0]] as [number, number, number][]) {
+      c.fillStyle = '#2a1414'; c.fillRect(x - 10, 160 - h, 20, h); c.fillStyle = '#3e2020'; c.fillRect(x - 10, 160 - h, 6, h); c.fillStyle = '#4a2a22'; c.fillRect(x - 14, 160 - h, 28, 6);
+      if (br) { c.fillStyle = '#3a0e0a'; c.beginPath(); c.moveTo(x - 10, 160 - h); c.lineTo(x + 2, 160 - h + 14); c.lineTo(x + 10, 160 - h); c.fill(); }
+      c.fillStyle = '#ffb060'; c.fillRect(x - 2, 160 - h + 20, 4, 4); }
+    ground(c, 160, 0x3e2a2a, [0x5a3a30, 0x2a1a1a, 0x7a4a30, 0x4a2a2a], 83);
+    for (let y = 206; y < 240; y++) { const t = (y - 206) / 34; c.fillStyle = `rgba(${255},${Math.round(120 - t * 60)},${30},${0.35 + t * 0.4})`; c.fillRect(0, y, 360, 1); }
+    seed = 84; c.save(); c.globalCompositeOperation = 'lighter'; for (let i = 0; i < 40; i++) { c.fillStyle = 'rgba(255,220,120,0.6)'; c.fillRect(rnd() * 360, 208 + rnd() * 30, 6 + rnd() * 10, 1); } c.restore();
+    seed = 85; for (let i = 0; i < 50; i++) { c.fillStyle = ['#ff9a40', '#ffd070', '#ff4020'][i % 3]; c.fillRect(rnd() * 360, rnd() * 200, 1, 2); }
+  });
 }

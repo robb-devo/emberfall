@@ -463,6 +463,7 @@ export class WorldScene extends Phaser.Scene {
     this.ui.refreshHud(); this.busy = false; Game.markDirty('chest');
   }
   async runScript(name: string) {
+    { const e = (window as any).__EMBER; (e.scriptLog = e.scriptLog || []).push(name); if (e.scriptLog.length > 50) e.scriptLog.shift(); }
     this.busy = true; await this.script.run(name); this.busy = false; this.refreshNpcs(); Game.markDirty('script:' + name);
   }
   refreshNpcs() {

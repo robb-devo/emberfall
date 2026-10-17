@@ -22,6 +22,7 @@ async function go(x, y, adj = false) {
   }
   return r;
 }
+async function talk(x, y) { for (let k = 0; k < 6; k++) { const r = await go(x, y, true); const p = await h.hero(); if (p && Math.abs(p.x - x) + Math.abs(p.y - y) <= 1) break; } return h.talkTo(x, y); }
 async function grind(level, map) {
   for (let n = 0; n < 60; n++) {
     const s = await state(); if (s.lvl >= level) return;
@@ -54,7 +55,7 @@ await shot('05-hearth-wake');
 // ---- Village → Elder
 log('to village', await go(6, 10)); await h.wait(500); await shot('06-village');
 log('to elder', await go(5, 20));
-log('talk elder', await h.talkTo(4, 3));
+log('talk elder', await talk(4, 3));
 s = await state(); assert(s.flags.metElder, 'met elder'); assert(s.gold >= 80, 'got gold');
 // ---- Shop: buy leather & equip
 log(await go(4, 8)); log(await go(21, 5));
@@ -68,21 +69,21 @@ await h.key('Escape', 1, 400); await untilMenu(5); await h.key('ArrowUp', 1, 200
 s = await state(); log('after shop gold', s.gold, 'equip', await h.E(() => window.__EMBER.Game.hero.equip));
 // ---- Mira quest
 log(await go(6, 9)); log(await go(16, 14, true));
-log('talk mira', await h.talkTo(16, 14));
+log('talk mira', await talk(16, 14));
 s = await state(); assert(s.quests.locket === 'active', 'locket quest');
 // ---- Fields
 log(await go(14, 29)); s = await state(); assert(s.map === 'fields', 'in fields');
 await h.advance(20); await shot('08-fields');
 await grind(2, 'fields');
 await shot('09-field-after-battle');
-log('locket', await h.talkTo(4, 13)); s = await state(); assert(s.inv.locket, 'got locket');
+log('locket', await talk(4, 13)); s = await state(); assert(s.inv.locket, 'got locket');
 await grind(4, 'fields');
-log('tobin', await h.talkTo(22, 24));
-log('save', await h.talkTo(23, 25)); await untilMenu(10); await h.key('Enter', 1, 600); await h.advance(20);
+log('tobin', await talk(22, 24));
+log('save', await talk(23, 25)); await untilMenu(10); await h.key('Enter', 1, 600); await h.advance(20);
 // ---- Hollow
 log(await go(18, 40)); s = await state(); assert(s.map === 'hollow', 'in hollow'); await h.advance(20); await shot('10-dungeon');
 await grind(5, 'hollow');
-log('chest', await h.talkTo(4, 18));
+log('chest', await talk(4, 18));
 await grind(6, 'hollow');
 s = await state();
 log('save crystal', await go(17, 4)); await h.face(3); await h.key('Enter', 1, 400); await untilMenu(10); await h.key('Enter', 1, 600); await h.advance(20);
