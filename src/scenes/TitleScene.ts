@@ -1,65 +1,87 @@
 import Phaser from 'phaser';
-import { txt, W, H, ListMenu, SERIF, COL, card, panel } from '../ui/widgets';
+import { FONT as FONT_SANS, txt, W, H, ListMenu, SERIF, DECO, COL, card, panel } from '../ui/widgets';
+import { ensureTitleArt, CLIFF_Y } from '../gfx/titleart';
+import { diorama } from '../fx/diorama';
 import { Input, minimizeApp } from '../ui/input';
 import { Audio } from '../systems/audio';
 import { Game, SLOTS_N } from '../systems/state';
-import { ensureDoll } from '../systems/paperdoll';
+import { ensureDollHd } from '../systems/paperdoll';
 
 export class TitleScene extends Phaser.Scene {
   constructor() { super('Title'); }
   create() {
     Input.backFallback = minimizeApp;
     this.cameras.main.fadeIn(800, 0, 0, 0);
-    // sky gradient
-    const sky = this.textures.exists('titleSky') ? null : this.textures.createCanvas('titleSky', 90, 160)!;
-    if (sky) { const c = sky.getContext(); const g = c.createLinearGradient(0, 0, 0, 160); g.addColorStop(0, '#05061a'); g.addColorStop(0.45, '#1c1446'); g.addColorStop(0.75, '#5a2a5a'); g.addColorStop(1, '#e07a4a'); c.fillStyle = g; c.fillRect(0, 0, 90, 160); sky.refresh(); }
-    this.add.image(0, 0, 'titleSky').setOrigin(0).setDisplaySize(W, H);
-    // stars
-    for (let i = 0; i < 140; i++) {
-      const s = this.add.image(Math.random() * W, Math.random() * H * 0.7, 'px').setScale(Math.random() < 0.15 ? 2 : 1).setAlpha(Math.random());
-      this.tweens.add({ targets: s, alpha: { from: 0.1, to: 1 }, duration: 600 + Math.random() * 2400, yoyo: true, repeat: -1, delay: Math.random() * 2000 });
-    }
+    // ---- painted HD-2D vista: 4 parallax layers + light
+    ensureTitleArt(this);
+    const L = (k: string, d: number, amp: number, dur: number) => { const im = this.add.image(W / 2, 0, k).setOrigin(0.5, 0).setScale(2.06).setDepth(d); if (amp) this.tweens.add({ targets: im, x: W / 2 + amp, yoyo: true, repeat: -1, duration: dur, ease: 'Sine.inOut' }); return im; };
+    L('tt_sky', -10, 0, 0);
+    // stars twinkle on top of the painted ones
+    for (let i = 0; i < 60; i++) { const st = this.add.image(Math.random() * W, Math.random() * 560, 'px').setScale(Math.random() < 0.2 ? 2 : 1).setDepth(-9).setBlendMode(Phaser.BlendModes.ADD); this.tweens.add({ targets: st, alpha: { from: 0.05, to: 0.9 }, duration: 700 + Math.random() * 2500, yoyo: true, repeat: -1, delay: Math.random() * 2000 }); }
+    const moon = this.add.image(190, 264, 'light').setTint(0xc8c0ff).setBlendMode(Phaser.BlendModes.ADD).setScale(2.4).setAlpha(0.35).setDepth(-9);
+    this.tweens.add({ targets: moon, alpha: 0.5, yoyo: true, repeat: -1, duration: 3000 });
     // aurora ribbons
     for (let i = 0; i < 3; i++) {
-      const g = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.18);
+      const g = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.12).setDepth(-9);
       const col = [0x40ffc0, 0x8060ff, 0xff60c0][i];
-      const draw = (t: number) => { g.clear(); g.fillStyle(col, 1); g.beginPath(); g.moveTo(0, 300 + i * 60); for (let x = 0; x <= W; x += 24) g.lineTo(x, 260 + i * 70 + Math.sin(x * 0.01 + t * 0.0006 * (i + 1)) * 50); for (let x = W; x >= 0; x -= 24) g.lineTo(x, 330 + i * 70 + Math.sin(x * 0.013 + t * 0.0008) * 40); g.closePath(); g.fillPath(); };
-      this.events.on('update', (_: any, __: any) => draw(this.time.now));
+      const draw = (t: number) => { g.clear(); g.fillStyle(col, 1); g.beginPath(); g.moveTo(0, 150 + i * 50); for (let x = 0; x <= W; x += 24) g.lineTo(x, 120 + i * 60 + Math.sin(x * 0.01 + t * 0.0006 * (i + 1)) * 50); for (let x = W; x >= 0; x -= 24) g.lineTo(x, 180 + i * 60 + Math.sin(x * 0.013 + t * 0.0008) * 40); g.closePath(); g.fillPath(); };
+      this.events.on('update', () => draw(this.time.now));
     }
+    const far = L('tt_far', -8, -6, 11000);
+    const beacon = this.add.image(540, 196, 'light').setTint(0xffe8a0).setBlendMode(Phaser.BlendModes.ADD).setScale(0.9).setDepth(-7);
+    this.tweens.add({ targets: beacon, scale: 1.3, alpha: 0.6, yoyo: true, repeat: -1, duration: 1400 });
+    this.tweens.add({ targets: beacon, x: 540 - 6, yoyo: true, repeat: -1, duration: 11000, ease: 'Sine.inOut' }); void far;
+    // sunset glow on the horizon
+    this.add.image(W / 2, 860, 'light').setTint(0xff9050).setBlendMode(Phaser.BlendModes.ADD).setScale(9, 2.6).setAlpha(0.45).setDepth(-7);
+    L('tt_mid', -6, -12, 11000);
+    // village lights bloom + drifting valley mist
+    for (let i = 0; i < 9; i++) { const v = this.add.image(60 + Math.random() * 400, 990 + Math.random() * 120, 'light').setTint(0xffb060).setBlendMode(Phaser.BlendModes.ADD).setScale(0.35 + Math.random() * 0.3).setAlpha(0.5).setDepth(-5); this.tweens.add({ targets: v, alpha: 0.2, yoyo: true, repeat: -1, duration: 600 + Math.random() * 1400 }); }
+    for (let i = 0; i < 4; i++) { const m = this.add.image(Math.random() * W, 1020 + i * 40, 'light').setTint(0xd8a8c8).setBlendMode(Phaser.BlendModes.ADD).setScale(6, 0.8).setAlpha(0.12).setDepth(-5); this.tweens.add({ targets: m, x: m.x + 160, yoyo: true, repeat: -1, duration: 9000 + i * 2000, ease: 'Sine.inOut' }); }
+    const fore = L('tt_fore', -3, -20, 11000);
+    // hero + companion on the cliff, back to us, gazing at the Spire
+    const mk = (sp: any, x: number, sc: number) => { const k = ensureDollHd(this, sp); const h = this.add.sprite(x, 0, k, 9).setOrigin(0.5, 1).setScale(sc).setTint(0xa898c8).setDepth(-2); return h; };
+    const hero = mk({ look: { body: 0, skin: 1, hairStyle: 1, hair: 1, eyes: 1, face: 3, outfit: 0, outfit2: 6 }, equip: { weapon: 'ironsword', acc: 'cape', armor: 'leather' } }, 590, 3.2);
+    const comp = mk({ look: { body: 0, skin: 0, hairStyle: 2, hair: 3, eyes: 5, face: 1, outfit: 4, outfit2: 3 }, equip: { weapon: 'wand', armor: 'robe' } }, 660, 2.9);
+    const cliffY = (sx: number) => CLIFF_Y(Math.round((sx - (W / 2 - TWH)) / 2.06)) * 2.06 + 6;
+    const TWH = 360 * 2.06 / 2;
+    this.events.on('update', () => { const off = fore.x - W / 2; hero.x = 590 + off; comp.x = 660 + off; hero.y = cliffY(590) ; comp.y = cliffY(660) - 4; });
+    this.tweens.add({ targets: [hero, comp], scaleY: '*=1.012', yoyo: true, repeat: -1, duration: 1600, ease: 'Sine.inOut' });
+    const rim = this.add.image(600, 860, 'light').setTint(0xffb070).setBlendMode(Phaser.BlendModes.ADD).setScale(2.4).setAlpha(0.28).setDepth(-1);
+    void rim;
     // falling star loop
     const fallStar = () => {
-      const x0 = 120 + Math.random() * 480; const st = this.add.image(x0, -20, 'star').setScale(2).setTint(0xffe8a0).setBlendMode(Phaser.BlendModes.ADD);
-      const trail = this.add.particles(0, 0, 'dot', { follow: st, lifespan: 700, speed: 10, scale: { start: 1.6, end: 0 }, alpha: { start: 0.9, end: 0 }, tint: [0xffe8a0, 0xff9a40, 0xffffff], blendMode: 'ADD', frequency: 12 });
-      this.tweens.add({ targets: st, x: x0 - 260, y: 780, angle: 360, duration: 2200, ease: 'Quad.in', onComplete: () => { st.destroy(); this.time.delayedCall(800, () => trail.destroy()); } });
+      const x0 = 160 + Math.random() * 480; const st = this.add.image(x0, -20, 'star').setScale(2).setTint(0xffe8a0).setBlendMode(Phaser.BlendModes.ADD).setDepth(-8);
+      const trail = this.add.particles(0, 0, 'dot', { follow: st, lifespan: 700, speed: 10, scale: { start: 1.6, end: 0 }, alpha: { start: 0.9, end: 0 }, tint: [0xffe8a0, 0xff9a40, 0xffffff], blendMode: 'ADD', frequency: 12 }).setDepth(-8);
+      this.tweens.add({ targets: st, x: x0 - 300, y: 640, angle: 360, duration: 2200, ease: 'Quad.in', onComplete: () => { st.destroy(); this.time.delayedCall(800, () => trail.destroy()); } });
     };
     fallStar(); this.time.addEvent({ delay: 4200, loop: true, callback: fallStar });
-    // spire silhouette far away (floating)
-    const sp = this.add.graphics(); sp.fillStyle(0x2a1a4a, 1); sp.fillTriangle(560, 120, 540, 330, 580, 330); sp.fillRect(530, 300, 60, 14); sp.fillTriangle(530, 314, 590, 314, 560, 380);
-    sp.fillStyle(0xffe8a0, 1); sp.fillCircle(560, 150, 5); this.tweens.add({ targets: sp, y: 12, yoyo: true, repeat: -1, duration: 3000, ease: 'Sine.inOut' });
-    const halo = this.add.image(560, 150, 'light').setTint(0xffe8a0).setBlendMode(Phaser.BlendModes.ADD).setScale(0.8); this.tweens.add({ targets: halo, scale: 1.1, alpha: 0.6, yoyo: true, repeat: -1, duration: 1400 });
-    // mountains
-    const m = this.add.graphics();
-    const ridge = (y: number, amp: number, col: number, seed: number) => { m.fillStyle(col, 1); m.beginPath(); m.moveTo(0, H); for (let x = 0; x <= W; x += 20) m.lineTo(x, y + Math.sin(x * 0.012 + seed) * amp + Math.sin(x * 0.041 + seed * 2) * amp * 0.4); m.lineTo(W, H); m.closePath(); m.fillPath(); };
-    ridge(820, 60, 0x2a1838, 1); ridge(900, 50, 0x1c1028, 4); ridge(1010, 30, 0x0e0818, 2);
-    // hero on cliff with cape
-    m.fillStyle(0x08040e, 1); m.fillTriangle(380, 1280, 470, 1060, 720, 1280); m.fillRect(450, 1060, 120, 220);
-    const key = ensureDoll(this, { look: { body: 0, skin: 1, hairStyle: 1, hair: 3, eyes: 1, face: 3, outfit: 0, outfit2: 6 }, equip: { weapon: 'ironsword', acc: 'cape', armor: 'leather' } });
-    const hero = this.add.sprite(505, 1062, key, 9).setOrigin(0.5, 1).setScale(6).setTint(0x2a2040);
-    this.add.image(505, 1000, 'light').setTint(0xff9a60).setBlendMode(Phaser.BlendModes.ADD).setScale(2.2).setAlpha(0.35);
-    // embers rising
-    this.add.particles(0, 0, 'dot', { x: { min: 0, max: W }, y: H + 10, lifespan: 6000, speedY: { min: -60, max: -140 }, speedX: { min: -20, max: 20 }, scale: { start: 1.2, end: 0 }, alpha: { start: 1, end: 0 }, tint: [0xff9a40, 0xffd070, 0xff5a30], blendMode: 'ADD', frequency: 90 });
-    // logo
-    const logo = this.add.text(W / 2, 410, 'EMBERFALL', { fontFamily: SERIF, fontSize: '96px', fontStyle: 'bold', color: '#ffe8b0', stroke: '#2a0e1a', strokeThickness: 12 }).setOrigin(0.5);
-    const grad = logo.context.createLinearGradient(0, 20, 0, logo.height - 20); grad.addColorStop(0, '#fff6d8'); grad.addColorStop(0.5, '#ffc860'); grad.addColorStop(1, '#e0502a'); logo.setFill(grad);
-    logo.setShadow(0, 0, '#ff8040', 28, true, true); logo.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
-    logo.setScale(1.4).setAlpha(0); this.tweens.add({ targets: logo, scale: 1, alpha: 1, duration: 1400, ease: 'Expo.out' });
-    const glow = this.add.image(W / 2, 410, 'light').setTint(0xff8040).setScale(6, 1.6).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.3).setDepth(-1);
-    this.tweens.add({ targets: glow, alpha: 0.55, yoyo: true, repeat: -1, duration: 1800 });
-    const sub = txt(this, W / 2, 505, 'A   T A L E   O F   F A L L E N   S T A R S', 22, '#e8d8ff').setOrigin(0.5).setAlpha(0);
+    // embers + fireflies
+    this.add.particles(0, 0, 'dot', { x: { min: 0, max: W }, y: H + 10, lifespan: 6000, speedY: { min: -60, max: -140 }, speedX: { min: -20, max: 20 }, scale: { start: 1.2, end: 0 }, alpha: { start: 1, end: 0 }, tint: [0xff9a40, 0xffd070, 0xff5a30], blendMode: 'ADD', frequency: 110 });
+    this.add.particles(0, 0, 'dot', { x: { min: 380, max: W }, y: { min: 880, max: 1180 }, lifespan: 3000, speed: { min: 4, max: 18 }, scale: { start: 0.9, end: 0 }, alpha: { start: 0, end: 1, ease: 'Sine.inOut' } as any, tint: [0xd8ff90, 0xfff0a0], blendMode: 'ADD', frequency: 260 });
+    // logo: Cinzel Decorative, molten-gold gradient, filigree rules, glints
+    const logo = this.add.text(W / 2, 400, 'EMBERFALL', { fontFamily: DECO, fontSize: '84px', fontStyle: '900', color: '#ffe8b0', stroke: '#2a0e1a', strokeThickness: 10, padding: { x: 20, y: 20 } }).setOrigin(0.5);
+    const grad = logo.context.createLinearGradient(0, 30, 0, logo.height - 30); grad.addColorStop(0, '#fffbe8'); grad.addColorStop(0.45, '#ffd27a'); grad.addColorStop(0.55, '#e8a040'); grad.addColorStop(1, '#a8401c'); logo.setFill(grad);
+    logo.setShadow(0, 4, '#1a0610', 8, true, false); logo.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
+    logo.setScale(1.25).setAlpha(0); this.tweens.add({ targets: logo, scale: 1, alpha: 1, duration: 1600, ease: 'Expo.out' });
+    const glow = this.add.image(W / 2, 400, 'light').setTint(0xff8040).setScale(6, 1.6).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.3).setDepth(-1);
+    this.tweens.add({ targets: glow, alpha: 0.5, yoyo: true, repeat: -1, duration: 1800 });
+    const orn = this.add.graphics().setAlpha(0);
+    for (const [yy, d] of [[338, -1], [462, 1]] as const) {
+      orn.lineStyle(2, 0xe8cc84, 1); orn.lineBetween(110, yy, 330, yy); orn.lineBetween(390, yy, 610, yy);
+      orn.lineStyle(1, 0xe8cc84, 0.6); orn.lineBetween(150, yy + d * 6, 320, yy + d * 6); orn.lineBetween(400, yy + d * 6, 570, yy + d * 6);
+      orn.fillStyle(0xffe7a0, 1); orn.fillTriangle(360, yy - 9, 372, yy, 360, yy + 9); orn.fillTriangle(360, yy - 9, 348, yy, 360, yy + 9);
+      orn.fillStyle(0x7a1420, 1); orn.fillCircle(360, yy, 3.5);
+      for (const x of [110, 610]) { orn.fillStyle(0xffe7a0, 1); orn.fillCircle(x, yy, 3); }
+    }
+    this.tweens.add({ targets: orn, alpha: 1, delay: 700, duration: 900 });
+    const glint = () => { const g = this.add.image(W / 2 - 250 + Math.random() * 500, 370 + Math.random() * 50, 'star').setTint(0xfff4d0).setBlendMode(Phaser.BlendModes.ADD).setScale(0).setDepth(5); this.tweens.add({ targets: g, scale: 1.6, angle: 90, yoyo: true, duration: 380, onComplete: () => g.destroy() }); };
+    this.time.addEvent({ delay: 900, loop: true, callback: glint });
+    const sub = txt(this, W / 2, 492, 'A TALE OF FALLEN STARS', 24, '#efe0ff', { fontFamily: SERIF, letterSpacing: 6 } as any).setOrigin(0.5).setAlpha(0);
     this.tweens.add({ targets: sub, alpha: 1, delay: 900, duration: 900 });
-    this.add.text(W / 2, H - 30, `v${__APP_VERSION__} · an original JRPG · made with Grok Bot`, { fontFamily: 'sans-serif', fontSize: '18px', color: '#8a80a8' }).setOrigin(0.5);
+    diorama(this.cameras.main, 'sky', { persp: 0, blur: 0, bloom: 1.5, rays: 0.16, fogAmt: 0, vig: 0.5, sat: 1.15 });
+    this.add.text(W / 2, H - 30, `v${__APP_VERSION__} · an original JRPG · made with Grok Bot`, { fontFamily: FONT_SANS, fontSize: '19px', color: '#b8acd8' }).setOrigin(0.5).setDepth(5);
 
-    const tap = txt(this, W / 2, 700, 'TAP TO BEGIN', 36, COL.accent).setOrigin(0.5);
+    const tap = txt(this, W / 2, 700, 'Tap to Begin', 38, '#ffe6b0', { fontFamily: SERIF }).setOrigin(0.5);
     this.tweens.add({ targets: tap, alpha: 0.25, yoyo: true, repeat: -1, duration: 700 });
     const start = () => {
       if (!tap.active) return; tap.destroy(); Audio.unlock(); Audio.play('title'); Audio.sfx('confirm'); this.time.delayedCall(250, () => this.showMenu());
