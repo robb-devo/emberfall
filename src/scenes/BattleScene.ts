@@ -334,9 +334,9 @@ export class BattleScene extends Phaser.Scene {
   punch(x: number, y: number, k = 1) {
     if (fast()) return;
     const cam = this.cameras.main; this.tweens.timeScale = 0.04; setTimeout(() => { if (this.sys.isActive()) this.tweens.timeScale = 1; }, 70 * k);
-    const z0 = cam.zoom; cam.zoomTo(z0 * (1 + 0.05 * k), 90, 'Quad.out', true);
-    cam.pan(W / 2 + (x - W / 2) * 0.06 * k, H / 2 + (y - H / 2) * 0.06 * k, 90, 'Quad.out', true);
-    this.time.delayedCall(170 * k, () => { cam.zoomTo(z0, 260, 'Sine.inOut', true); cam.pan(W / 2, H / 2, 260, 'Sine.inOut', true); });
+    const z0 = cam.zoom; cam.zoomTo(z0 * (1 + 0.05 * k), 90, Phaser.Math.Easing.Quadratic.Out, true);
+    cam.pan(W / 2 + (x - W / 2) * 0.06 * k, H / 2 + (y - H / 2) * 0.06 * k, 90, Phaser.Math.Easing.Quadratic.Out, true);
+    this.time.delayedCall(170 * k, () => { cam.zoomTo(z0, 260, Phaser.Math.Easing.Sine.InOut, true); cam.pan(W / 2, H / 2, 260, Phaser.Math.Easing.Sine.InOut, true); });
   }
   async killFoe(t: Foe) {
     t.alive = false; t.hp = 0; Audio.sfx('die'); this.punch(t.x, t.y - t.spr.displayHeight / 2, t.def.boss ? 2 : 0.8);
