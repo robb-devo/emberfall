@@ -12,6 +12,7 @@ import { ensureDollHd as ensureDoll, specOf } from '../systems/paperdoll';
 import type { WorldScene } from './WorldScene';
 import { MAPS } from '../data/maps';
 import type { DollSpec } from '../systems/paperdoll';
+import { ensurePortrait } from '../gfx/portrait';
 
 const SHOPS: Record<string, string[]> = {
   weapons: ['stick', 'dagger', 'shortsword', 'mace', 'wand', 'bronzeAxe', 'ironsword'],
@@ -226,7 +227,9 @@ export class UIScene extends Phaser.Scene {
       const c = this.add.container(0, 0).setDepth(1300);
       c.add(this.add.rectangle(0, 0, W, H, 0x05040c, 0.9).setOrigin(0).setInteractive());
       c.add(panel(this, 20, 120, W - 40, 1040));
-      const key = ensureDoll(this, specOf(mm)); const d = this.add.sprite(170, 480, key, 0).setOrigin(0.5, 1).setScale(5.5); c.add(d);
+      { const pk = ensurePortrait(this, specOf(mm)); const bg = this.add.graphics(); bg.fillStyle(0x0a0b1e, 0.8); bg.fillRect(44, 146, 252, 282); bg.lineStyle(2, 0xe8cc84, 1); bg.strokeRect(44, 146, 252, 282); c.add(bg); c.add(this.add.image(50, 152, pk).setOrigin(0).setCrop(0, 0, 240, 270)); }
+      const key = ensureDoll(this, specOf(mm)); const d = this.add.sprite(230, 600, key, 0).setOrigin(0.5, 1).setScale(3.4); c.add(d);
+      c.add(this.add.image(230, 598, 'shadow').setScale(5, 2).setAlpha(0.6)); c.bringToTop(d);
       this.time.addEvent({ delay: 250, repeat: 40, callback: () => d.active && d.setFrame([0, 1, 0, 2][Math.floor(this.time.now / 250) % 4]) });
       c.add(txt(this, 330, 160, mm.name, 44, COL.accent, { fontFamily: SERIF }));
       c.add(txt(this, 330, 220, `${v.name}  ·  Level ${mm.level}`, 28));

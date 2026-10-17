@@ -14,15 +14,19 @@ Regression tests: run against a *built* copy so Vite HMR reloads don't break the
 ## Done
 - [x] Smooth movement: per-frame integrator with overshoot carry (no stall between tiles), stride-synced walk frames + bob, sub-pixel camera (roundPixels off, softer lerp).
 - [x] HD ground painter `src/gfx/ground.ts` (2 texels/world px, domain-warped organic borders, tufts, flowers, flagstones, cobbles, dungeon/cave stone, wall tops/faces, cliffs, wet sand, water layer with depth colour + foam).
+- [x] HD structures `src/gfx/structures.ts`: tall timber/stone houses, shingled roofs with ridge + chimney smoke, lit windows at night, bell tower; tree atlas (oak/autumn/pine), tall-grass overlays that rustle; blurred cast shadows + contact AO baked into the ground.
+- [x] Water shader `src/fx/water.ts`: ripple distortion, caustics, sky reflection, glints.
+- [x] Lighting: multiplied colour light map, flickering coloured point lights, warm window light at night.
+- [x] Post FX v3 `src/fx/diorama.ts`: bokeh tilt-shift DOF following the hero, two-ring bloom, animated god rays, split-tone grade + S-curve.
+- [x] Characters `src/gfx/doll2.ts`: 32x48 HD dolls from shaded primitives, 5-tone hue-shifted ramps, dithering, occlusion + sel-out outlines; every gear piece drawn natively; longer stride.
+- [x] Battles: painted perspective backdrops for 7 biomes (`src/gfx/backdrop.ts`); monsters Scale4x + distance-field re-shaded with rim light (`Pix.toHd4`); bigger party; OT2-style dash attacks with camera lean + dust; ornate party cards with mini-portraits; bevelled gauges.
+- [x] UI: bundled fonts (Cinzel / Cinzel Decorative / Alegreya Sans), ornate gold filigree windows everywhere (`drawPanel`).
+- [x] Dialogue busts (`src/gfx/portrait.ts`): painted anime-style portraits generated from each speaker's look + gear (party + every named NPC).
+- [x] Title: painted 4-layer parallax vista (`src/gfx/titleart.ts`), HD hero + companion on the cliff, gold Cinzel Decorative logo with filigree + glints, bloom/ray grade.
+- [x] Transitions: diamond-tile wipe for area changes; freeze-frame shatter into battle (Overlay scene).
 
 ## Next
-- [ ] HD structures: houses with tall walls/roofs/chimneys, big trees (oak/pine/autumn), cast shadows baked into ground.
-- [ ] Water shader (ripples, sparkle, reflection) on the water layer.
-- [ ] Lighting: multiply colour lightmap, window glow at night, torch flicker.
-- [ ] Post FX: better DOF / bloom / god rays / grading.
-- [ ] Characters: idle breathing, softer shadows.
-- [ ] Battle overhaul: backdrops, big sprites, VFX, camera, ornate UI.
-- [ ] Interiors.
+- [ ] HD props (crates, signs, lanterns, bridges), interiors pass, roof gables.
 - [ ] APK + release v0.3.0.
 
 ## Scope update (user, 11:16)

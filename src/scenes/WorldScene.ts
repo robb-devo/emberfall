@@ -1,6 +1,14 @@
 import Phaser from 'phaser';
 import { MAPS, LEGEND, MapDef, NpcDef } from '../data/maps';
-import { T, T2 } from '../systems/art';
+import { T, T2, Pix } from '../systems/art';
+/** Scale4x + re-shaded copy of one prop tile ('props' sheet), cached as prop_hd_<idx>. */
+function ensurePropHd(scene: Phaser.Scene, idx: number): string | null {
+  const key = 'prop_hd_' + idx; if (scene.textures.exists(key)) return key;
+  const src = scene.textures.get('props').getSourceImage() as HTMLCanvasElement; const d = src.getContext('2d')!.getImageData(idx * 16, 0, 16, 16).data;
+  const p = new Pix(16, 16); let any = false;
+  for (let i = 0; i < 256; i++) if (d[i * 4 + 3] > 200) { p.d[i] = (d[i * 4] << 16) | (d[i * 4 + 1] << 8) | d[i * 4 + 2]; any = true; }
+  if (!any) return null; p.toHd4(scene, key); return key;
+}
 import { propTiles } from '../systems/props';
 import { Game, stats } from '../systems/state';
 import { ensureDollHd as ensureDoll, specOf, FH } from '../systems/paperdoll';
@@ -109,7 +117,7 @@ export class WorldScene extends Phaser.Scene {
       }
       for (const t of st.trees) {
         const im = this.add.image(t.x * TS + 8, t.y * TS + 17, 'hdtrees', t.kind + t.v).setOrigin(0.5, 1).setScale(1 / HD).setDepth(10 + t.y * TS + 16).setFlipX(((t.x * 7 + t.y * 3) % 5) < 2);
-        this.trees.push(im);
+        this.trees.push(im); im.setData('ph', (t.x * 0.7 + t.y * 0.3));
       }
       ensureTallGrass(this);
       for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const c = this.grid[y][x]; if (c !== '"' && c !== '&') continue;
@@ -141,7 +149,17 @@ export class WorldScene extends Phaser.Scene {
       if (!any) return;
       const me = this.make.tilemap({ data, tileWidth: TS, tileHeight: TS }); const tse = me.addTilesetImage('tiles', 'tiles', TS, TS, 0, 0)!; me.createLayer(0, tse, 0, 0)!.setDepth(0.5);
     });
-    if (anyProp) { const mp = this.make.tilemap({ data: props, tileWidth: TS, tileHeight: TS }); const tsp = mp.addTilesetImage('props', 'props', TS, TS, 0, 0)!; mp.createLayer(0, tsp, 0, 0)!.setDepth(0.6); }
+    if (anyProp) {
+      // HD props (round 3): each prop tile Scale4x + re-shaded, y-sorted with the characters, with a soft contact shadow
+      const flat = new Set<number>([T2.net, T2.rocks, T2.log, T2.boat, T2.dockCrates].filter(v => v !== undefined));
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const t = props[y][x]; if (t < 0) continue;
+        const key = ensurePropHd(this, t);
+        if (!key) continue;
+        const im = this.add.image(x * TS - 0.5, y * TS - 0.5, key).setOrigin(0).setScale(0.25);
+        im.setDepth(flat.has(t) ? 0.6 : 10 + y * TS + 14);
+        if (!flat.has(t)) this.add.image(x * TS + 8, y * TS + 15, 'shadow').setScale(0.9, 0.9).setAlpha(0.55).setDepth(0.55);
+      }
+    }
     const m2 = this.make.tilemap({ data: over, tileWidth: TS, tileHeight: TS });
     const ts2 = m2.addTilesetImage('tiles', 'tiles', TS, TS, 0, 0)!;
     m2.createLayer(0, ts2, 0, 0)!.setDepth(5000);
@@ -363,6 +381,7 @@ export class WorldScene extends Phaser.Scene {
     return ok;
   }
   update(time: number, dt: number) {
+    if (DioramaFX.quality > 0 && this.def.outdoor) { const wv = time * 0.0011; for (const tr of this.trees) tr.angle = Math.sin(wv + tr.getData('ph')) * 0.9 + Math.sin(wv * 2.3 + tr.getData('ph') * 1.7) * 0.3; }
     if (Game.dirty && time - Game.lastAuto > 900 && this.canAutosave()) this.autosave();
     else if (!Game.dirty && time - Game.lastAuto > 60000 && this.canAutosave()) { Game.markDirty('periodic'); }
     this.drawLighting();
