@@ -124,12 +124,14 @@ export class DialogBox extends Phaser.GameObjects.Container implements Focus {
   show(text: string, name?: string): Promise<void> {
     this.setVisible(true); this.nameTag.removeAll(true);
     if (name) { const t = txt(this.scene, 26, 10, name, 28, COL.accent); const g = panel(this.scene, 0, 0, t.width + 52, 58); this.nameTag.add([g, t]); }
-    this.full = text; this.shown = 0; this.bodyT.setText(''); this.typing = true; this.arrow.setVisible(false);
+    this.full = this.bodyT.getWrappedText(text).join('\n'); /* pre-wrap so words never jump lines while typing */ this.shown = 0; this.bodyT.setText(''); this.typing = true; this.arrow.setVisible(false);
     Input.push(this);
     this.timer?.remove();
-    this.timer = this.scene.time.addEvent({ delay: 18, loop: true, callback: () => {
-      this.shown += 1; this.bodyT.setText(this.full.slice(0, this.shown));
-      if (this.shown % 3 === 0 && this.full[this.shown] !== ' ') Audio.sfx('talk');
+    const t0 = this.scene.time.now; let lastBlip = 0;
+    this.timer = this.scene.time.addEvent({ delay: 16, loop: true, callback: () => {
+      // time-based (~55 chars/s): frame drops never slow the dialogue
+      this.shown = Math.min(this.full.length, 1 + Math.floor((this.scene.time.now - t0) / 18)); this.bodyT.setText(this.full.slice(0, this.shown));
+      if (this.shown - lastBlip >= 3 && this.full[this.shown] !== ' ') { lastBlip = this.shown; Audio.sfx('talk'); }
       if (this.shown >= this.full.length) this.finishType();
     } });
     return new Promise(r => (this.resolve = r));

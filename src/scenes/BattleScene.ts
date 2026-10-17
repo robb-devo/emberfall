@@ -98,8 +98,9 @@ export class BattleScene extends Phaser.Scene {
   }
   wait(ms: number) { return new Promise<void>(r => this.time.delayedCall(fast() ? Math.min(ms, 30) : ms, r)); }
   async msg(t: string, hold = 650) {
-    this.skip = false; this.msgT.setText('');
-    for (let i = 1; i <= t.length; i++) { if (this.skip || fast()) { this.msgT.setText(t); break; } this.msgT.setText(t.slice(0, i)); if (i % 2 === 0) await this.wait(12); }
+    this.skip = false; this.msgT.setText(''); t = this.msgT.getWrappedText(t).join('\n'); // pre-wrap: no mid-word line jumps while typing
+    // time-based typewriter (~165 chars/s) so slow frames never slow the text down
+    const t0 = this.time.now; for (;;) { if (this.skip || fast()) { this.msgT.setText(t); break; } const n = Math.min(t.length, 1 + Math.floor((this.time.now - t0) / 6)); this.msgT.setText(t.slice(0, n)); if (n >= t.length) break; await this.wait(12); }
     this.skip = false; const end = this.time.now + (fast() ? 20 : hold);
     while (this.time.now < end && !this.skip) await this.wait(16);
   }

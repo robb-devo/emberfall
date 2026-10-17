@@ -56,7 +56,7 @@ export class UIScene extends Phaser.Scene {
     this.fadeRect = this.add.rectangle(0, 0, W, H, 0, 0).setOrigin(0).setDepth(5000);
     this.refreshHud();
   }
-  update() { if (this.modal || Input.busy) { if (this.joyId >= 0) { this.joyId = -1; Input.joy.x = Input.joy.y = 0; this.joyBase.setVisible(false); this.joyKnob.setVisible(false); } } this.hud.setAlpha(this.world?.busy && !this.modal ? 0.35 : 1); }
+  update() { if (this.modal || Input.busy) { if (this.joyId >= 0) { this.joyId = -1; Input.joy.x = Input.joy.y = 0; this.joyBase.setVisible(false); this.joyKnob.setVisible(false); } } const tgt = this.world?.def?.id === 'spire' ? 0 : this.world?.busy && !this.modal ? 0.3 : 1; this.hud.setAlpha(this.hud.alpha + (tgt - this.hud.alpha) * 0.18); }
   refreshHud() {
     if (!this.partyHud) return;
     this.partyHud.removeAll(true);
