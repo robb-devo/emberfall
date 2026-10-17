@@ -552,7 +552,7 @@ function bloodOf(id?: string): { c: number[]; glow?: boolean } {
   if (/jelly|lantern/i.test(id)) return { c: [0x40e0d0, 0x90fff0, 0x109090], glow: true };
   if (/warden|golem|imp|cinder|ember/i.test(id)) return { c: [0xff7a20, 0xffc050, 0xc03010], glow: true }; // embers
   if (/choir|acolyte|cantor|siren/i.test(id)) return { c: [0x1a1418, 0x2a2026, 0x08060a] };          // black tar
-  if (/moss|bramble|wisp|shroom|spore|thorn/i.test(id)) return { c: [0x5a8a2a, 0x8ab040, 0x2a4a10] }; // sap
+  if (/moss|bramble|wisp|shroom|spore/i.test(id)) return { c: [0x5a8a2a, 0x8ab040, 0x2a4a10] }; // sap
   if (/drowned|sailor|ghost/i.test(id)) return { c: [0x4a3a2a, 0x6a5040, 0x2a1a10] };                // brine-rot
   if (/crab/i.test(id)) return { c: [0x6a8aa0, 0x9ab8c8, 0x3a5060] };
   return { c: [0x8a0a12, 0xb0141c, 0x5a0408] };
