@@ -9,7 +9,7 @@ import { hash, noise, fbm, clamp, smooth, rgb, mix, mul, cells, RGB } from './no
 export const HD = 2;            // texels per world pixel
 export const TT = 16 * HD;      // texels per tile
 export const enum Ter { NONE, GRASS, AGRASS, PATH, LEAF, SAND, COBBLE, PLAZA, DFLOOR, CAVE, WTOP, WFACE, CTOP, CFACE, CLIFF, WATER }
-const NATURAL = new Set<number>([Ter.GRASS, Ter.AGRASS, Ter.PATH, Ter.LEAF, Ter.SAND, Ter.WATER]);
+const NATURAL = new Set<number>([Ter.GRASS, Ter.AGRASS, Ter.PATH, Ter.LEAF, Ter.SAND, Ter.WATER, Ter.CAVE]);
 export const TER: Record<string, number> = {
   '.': Ter.GRASS, ',': Ter.GRASS, '*': Ter.GRASS, '"': Ter.GRASS, 'C': Ter.GRASS,
   '5': Ter.AGRASS, '6': Ter.AGRASS, '@': Ter.AGRASS, '&': Ter.AGRASS,

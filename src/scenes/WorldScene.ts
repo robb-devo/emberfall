@@ -240,7 +240,7 @@ export class WorldScene extends Phaser.Scene {
   }
   buildLighting() {
     const mw = this.grid[0].length * TS, mh = this.grid.length * TS;
-    this.dark = this.add.renderTexture(0, 0, mw, mh).setOrigin(0).setDepth(8000);
+    this.dark = this.add.renderTexture(0, 0, mw, mh).setOrigin(0).setDepth(8000).setBlendMode(Phaser.BlendModes.MULTIPLY);
     this.eraser = this.make.image({ key: 'light', add: false });
     const lights = [...(this.def.lights || [])];
     if (this.def.torches) {
@@ -280,16 +280,23 @@ export class WorldScene extends Phaser.Scene {
   }
   drawLighting() {
     if (!this.dark) return; const { c, a } = this.darkness();
-    this.dark.clear(); if (a <= 0.01) { this.lightImgs.forEach(l => l.img?.setAlpha(0)); return; }
-    this.dark.fill(c, a);
-    const t = this.time.now / 1000;
+    this.dark.clear(); if (a <= 0.01) { this.dark.setVisible(false); this.lightImgs.forEach(l => l.img?.setAlpha(0)); return; }
+    this.dark.setVisible(true);
+    // colour light map, multiplied over the scene: ambient tint + additive coloured point lights (with flicker)
+    const k = Math.min(0.86, a * 1.1), cr = (c >> 16) & 255, cg = (c >> 8) & 255, cb = c & 255;
+    const amb = (Math.round(255 + (cr * 1.6 - 255) * k) << 16) | (Math.round(255 + (cg * 1.6 - 255) * k) << 8) | Math.round(255 + (Math.min(255, cb * 2.2) - 255) * k);
+    this.dark.fill(amb, 1);
+    const t = this.time.now / 1000; const e = this.eraser;
+    e.setBlendMode(Phaser.BlendModes.ADD);
     for (const l of this.lightImgs) {
-      const f = 1 + Math.sin(t * 7 + l.flick) * 0.04 + Math.sin(t * 13 + l.flick) * 0.03;
-      this.eraser.setScale(l.r * 0.3 * f); this.dark.erase(this.eraser, l.x, l.y);
+      const f = 1 + Math.sin(t * 7 + l.flick) * 0.05 + Math.sin(t * 13.3 + l.flick) * 0.04 + (Math.sin(t * 31 + l.flick * 3) > 0.92 ? -0.06 : 0);
+      e.setScale(l.r * 0.27 * f).setTint(l.img ? l.img.tintTopLeft : 0xffe0b0).setAlpha(Math.min(1, 0.45 + a * 0.6));
+      this.dark.draw(e, l.x, l.y);
+      e.setScale(l.r * 0.12 * f).setTint(0xfff0d0).setAlpha(0.45); this.dark.draw(e, l.x, l.y);
       l.img?.setAlpha(Math.min(0.4, a * 0.6) * f).setScale(l.r * 0.28 * f);
     }
     const hr = this.def.outdoor ? 2.2 : (this.def.dark ?? 0) > 0.5 ? 4.6 : 1.8;
-    this.eraser.setScale(hr * 0.3); this.dark.erase(this.eraser, this.hero.spr.x, this.hero.spr.y - 10);
+    e.setScale(hr * 0.33).setTint(this.def.outdoor ? 0x8090c0 : 0xc8b090).setAlpha(0.9); this.dark.draw(e, this.hero.spr.x, this.hero.spr.y - 10);
   }
   buildAmbient() {
     const mw = this.grid[0].length * TS, mh = this.grid.length * TS; const amb = this.def.ambient;
@@ -363,6 +370,7 @@ export class WorldScene extends Phaser.Scene {
     this.updateSymbols(time);
     this.handleMoveInput();
     this.stepActors(dt);
+    if (this.fx) { const cam = this.cameras.main; const sy = (this.hero.spr.y - 12 - cam.worldView.y) / cam.worldView.height; this.fx.p.focus += ((1 - sy) - this.fx.p.focus) * Math.min(1, dt / 250); }
   }
   handleMoveInput() {
     if (this.busy || Input.busy || this.hero.moving || this.ui.modal) return;

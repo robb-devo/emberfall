@@ -24,7 +24,7 @@ for (const [map, x, y, flags, name] of spots) {
 const battles = [[['glimmer', 'thornhare'], 'bg_fields', 'battle-fields'], [['duskbat', 'mossback'], 'bg_hollow', 'battle-hollow'], [['cinderImp','hollowKnight'], 'bg_road', 'battle-road']];
 for (const [group, bg, name] of battles) {
   if (only && !only.includes(name)) continue;
-  await h.devStart('village', 14, 9, { chapter1Done: true }, 'warrior', {});
+  await h.devStart('village', 14, 9, { chapter1Done: true, tut_battle: true }, 'warrior', {});
   await h.E(([g, bg]) => { window.__EMBER.fast = false; window.__EMBER.world.startBattle(g, { bg }); }, [group, bg]);
   for (let i = 0; i < 30 && !(await h.E(() => window.__EMBER.active().includes('Battle'))); i++) await h.wait(200);
   await h.wait(2600); await h.shot(`progress/${prefix}-${name}.png`);
