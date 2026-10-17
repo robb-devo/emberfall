@@ -6,6 +6,7 @@
  */
 import Phaser from 'phaser';
 import { ITEMS } from '../data/items';
+import { Mature } from '../systems/mature';
 import { SKIN, HAIR, EYES, OUTFIT, HAIR_STYLES, shade, type DollSpec } from '../systems/paperdoll';
 
 export const FW2 = 32, FH2 = 48;
@@ -209,8 +210,14 @@ function frame(sp: DollSpec, d: Dir, step: number, cv: Canvas) {
   const vis = (id?: string) => id ? (ITEMS[id] as any)?.vis : undefined;
   const armor = vis(E.armor), wpn = vis(E.weapon), shd = vis(E.shield), hd = vis(E.head), acc = vis(E.acc);
   let body = out1, trim = out2; if (armor && armor.c1 >= 0) { body = armor.c1; trim = armor.c2 ?? shade(armor.c1, 0.7); }
-  const pants = shade(out2, 0.5), boot = 0x5a3a26, leather = 0x7a4e2a;
-  const robe = armor?.type === 'robe', plate = armor?.type === 'plate', jerkin = armor?.type === 'jerkin';
+  let pants = shade(out2, 0.5), boot = 0x5a3a26; const leather = 0x7a4e2a;
+  // round 4 underwear layer: party members (sp.voc set – never NPCs) with no body armour wear plain underwear;
+  // with Settings → Adult ON they are unclothed instead (simple low-res body, no poses). Joke 'undies' armour always shows.
+  const bare = !armor && !!sp.voc; const undiesItem = armor?.type === 'undies';
+  const nude = bare && Mature.on, undies = undiesItem || (bare && !nude); const fem = (L.fig || 0) === 1;
+  const uw = undiesItem ? armor.c1 : 0xf2efe8, uw2 = undiesItem ? (armor.c2 ?? shade(armor.c1, 0.7)) : 0xd8d2c8;
+  if (undies || nude) { body = skin; trim = skin; pants = skin; boot = shade(skin, 0.86); }
+  const robe = armor?.type === 'robe' && !undies, plate = armor?.type === 'plate', jerkin = armor?.type === 'jerkin';
   const tx = sturdy ? 9 : 10, tw = sturdy ? 14 : 12; // torso
   const sw = step === 0 ? 0 : step === 1 ? 1 : -1;  // swing
   const hm = hairMask(style, d);
@@ -227,12 +234,14 @@ function frame(sp: DollSpec, d: Dir, step: number, cv: Canvas) {
     cv.cyl(18, 23, 18 - sw * 2.5, 32, 1.9, shade(body, 0.8));
     // torso
     if (robe) cv.poly([[12, 21], [20, 21], [22, 43], [10, 43]], body); else cv.box(12, 21, 9, 15, body, 0, 2);
-    if (!robe) { cv.box(12, 30, 9, 2, trim, 0.2); cv.set(12, 30.5, 0xf0c75e, 0.8); }
+    if (!robe && !undies && !nude) { cv.box(12, 30, 9, 2, trim, 0.2); cv.set(12, 30.5, 0xf0c75e, 0.8); }
     if (plate) { cv.ell(16.5, 23, 4.5, 3.2, shade(body, 1.1)); for (let y = 25; y < 30; y += 2) cv.box(12, y, 9, 1, shade(body, 1.2), 0.3); }
     if (jerkin) { cv.box(13, 21, 2, 9, trim, 0.2); }
     // front leg
     cv.cyl(15, 35, 15 - (st ? 3 * fwd : 0), 42, 2.4, pants); cv.box(15 - (st ? 3 * fwd : 0) - 3, 42, 6, 4, boot, 0.1, 1); cv.box(15 - (st ? 3 * fwd : 0) - 3, 42, 6, 1, shade(boot, 1.3), 0.5);
     if (robe) cv.poly([[11, 34], [21, 34], [22, 43], [10, 43]], body, -0.1);
+    if (undies) { cv.box(12, 32, 9, 5, uw, 0.1, 1); cv.box(12, 32, 9, 1, uw2, 0.3); if (fem) cv.box(12, 23, 8, 4, uw, 0.15, 1); if (undiesItem) { cv.set(15, 34.5, uw2, 0.4, true); cv.set(18, 33.5, uw2, 0.4, true); } }
+    if (nude) { cv.set(12.5, 30, shade(skin, 0.8), 0.2, true); if (fem) { cv.ell(12.2, 25.5, 1.8, 1.8, shade(skin, 0.96), undefined, 0.2); cv.set(11, 25.5, shade(skin, 0.7), 0.3, true); } cv.box(12, 34, 3, 2, shade(hair, 0.9), 0.1); }
     // neck + head
     cv.box(14, 19, 4, 3, skin, -0.4);
     head(cv, d, skin); face(cv, d, L.face, eye, skin, hair);
@@ -259,8 +268,17 @@ function frame(sp: DollSpec, d: Dir, step: number, cv: Canvas) {
   for (let n = 0; n < 2; n++) { const up = lift(n); const x = lx[n]; cv.cyl(x, 34, x, 42 - up, 2.4, n ? shade(pants, 0.86) : pants); cv.box(x - 2.5, 41 - up, 5, 5, boot, n ? -0.2 : 0.1, 1); cv.box(x - 2.5, 41 - up, 5, 1, shade(boot, 1.3), 0.4); }
   // torso
   if (robe) cv.poly([[tx, 21], [tx + tw, 21], [tx + tw + 2, 44], [tx - 2, 44]], body); else cv.box(tx, 21, tw, 15, body, 0, 3);
-  if (F && !robe && !plate) { cv.poly([[14, 21], [18, 21], [16, 25]], (armor?.type === 'tunic' || !armor) ? skin : trim, -0.2); }
-  if (!robe) { cv.box(tx, 31, tw, 2, jerkin ? leather : trim, 0.2); if (F) cv.box(15, 31, 2, 2, 0xf0c75e, 0.6); }
+  if (F && !robe && !plate && !undies && !nude) { cv.poly([[14, 21], [18, 21], [16, 25]], (armor?.type === 'tunic' || !armor) ? skin : trim, -0.2); }
+  if (undies || nude) {
+    // body shading: collarbone + waist, so a bare torso still reads as a figure at sprite scale
+    cv.box(tx + 1, 21, tw - 2, 1, shade(skin, 0.9), 0.2); if (fem) { cv.set(tx, 30, shade(skin, 0.86), 0, true); cv.set(tx + tw - 1, 30, shade(skin, 0.86), 0, true); }
+    if (undies) { cv.box(tx, 32, tw, 5, uw, 0.1, 2); cv.box(tx, 32, tw, 1, uw2, 0.3); if (F) cv.box(15, 33, 2, 2, shade(uw, 0.85), 0); if (fem) { cv.box(tx + 1, 23, tw - 2, 4, uw, 0.15, 1); if (F) cv.set(16, 25, shade(uw, 0.8), 0, true); } if (undiesItem) { for (const [a, b] of [[tx + 2, 34], [tx + tw - 3, 33], [tx + 5, 35]]) cv.set(a, b, uw2, 0.4, true); } }
+    else if (F) { // Adult ON: simple low-res anatomy, no detail beyond a few pixels
+      cv.set(16, 29.5, shade(skin, 0.75), 0, true);
+      if (fem) { cv.ell(tx + 3.2, 25.2, 2.2, 1.9, shade(skin, 1.04), undefined, 0.25); cv.ell(tx + tw - 3.2, 25.2, 2.2, 1.9, shade(skin, 1.04), undefined, 0.25); cv.set(tx + 3, 25.5, shade(skin, 0.68), 0, true); cv.set(tx + tw - 3, 25.5, shade(skin, 0.68), 0, true); cv.poly([[14, 33], [18, 33], [16, 35.5]], shade(hair, 0.85), 0.1); }
+      else { cv.box(tx + 2, 25, 3, 1, shade(skin, 0.86), 0); cv.box(tx + tw - 5, 25, 3, 1, shade(skin, 0.86), 0); cv.set(tx + 3, 24, shade(skin, 0.72), 0, true); cv.set(tx + tw - 4, 24, shade(skin, 0.72), 0, true); cv.box(15, 33, 2, 1, shade(hair, 0.85), 0.1); cv.box(15.2, 34, 1.6, 2.2, shade(skin, 0.82), 0); }
+    } else { cv.box(tx + 3, 33, tw - 6, 2, shade(skin, 0.9), 0); }
+  } else if (!robe) { cv.box(tx, 31, tw, 2, jerkin ? leather : trim, 0.2); if (F) cv.box(15, 31, 2, 2, 0xf0c75e, 0.6); }
   else { cv.box(tx - 2, 42, tw + 4, 2, trim, 0.2); if (F) cv.box(15, 21, 2, 21, trim, 0.4); }
   if (jerkin && F) { cv.poly([[tx + 1, 21], [tx + 3, 21], [tx + tw - 1, 31], [tx + tw - 3, 31]], trim, 0.1); }
   if (plate) { for (let y = 24; y < 31; y += 3) cv.box(tx, y, tw, 1, shade(body, 1.25), 0.4); cv.ell(tx + 1, 22.5, 3.6, 2.8, shade(body, 1.1)); cv.ell(tx + tw - 1, 22.5, 3.6, 2.8, shade(body, 1.1)); }

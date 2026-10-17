@@ -79,11 +79,12 @@ const HEADM: Record<string, { r0: number; F: string[]; S: string[]; B: string[];
   cap: { r0: 1, F: M('.........bb.|...aaaaaabb.|..aaaaaaaab.|.aaaaaaaaaa.|AAAAAAAAAAAA'), S: M('......b.....|...aaaabb...|..aaaaaaab..|.aaaaaaaaaa.|AAAAAAAAAAA.'), B: M('.....bb.....|...aaaabb...|..aaaaaaaa..|.aaaaaaaaaa.|.AAAAAAAAAA.'), hideHair: 3 },
 };
 
+import { Mature } from './mature';
 export interface DollSpec { look: Look; equip: Record<string, string | undefined>; voc?: string }
 export function specOf(m: Member): DollSpec { return { look: m.look, equip: m.equip as any, voc: m.voc }; }
 export function dollKey(sp: DollSpec) {
   const l = sp.look; const e = sp.equip;
-  return `doll_${l.body}${l.skin}${l.hairStyle}${l.hair}${l.eyes}${l.face}${l.outfit}${l.outfit2}_${e.weapon || ''}_${e.shield || ''}_${e.head || ''}_${e.armor || ''}_${e.acc || ''}`;
+  return `doll_${l.body}${l.skin}${l.hairStyle}${l.hair}${l.eyes}${l.face}${l.outfit}${l.outfit2}_${e.weapon || ''}_${e.shield || ''}_${e.head || ''}_${e.armor || ''}_${e.acc || ''}_f${l.fig || 0}${sp.voc && !e.armor ? (Mature.on ? 'n' : 'u') : ''}`;
 }
 
 class Grid {
@@ -278,5 +279,5 @@ export function ensureDollEpx(scene: Phaser.Scene, sp: DollSpec): string {
 }
 export function randomLook(rng = Math.random): Look {
   const r = (n: number) => Math.floor(rng() * n);
-  return { body: r(2), skin: r(5), hairStyle: r(6), hair: r(HAIR.length), eyes: r(EYES.length), face: r(4), outfit: r(OUTFIT.length), outfit2: r(OUTFIT.length) };
+  return { body: r(2), skin: r(5), hairStyle: r(6), hair: r(HAIR.length), eyes: r(EYES.length), face: r(4), outfit: r(OUTFIT.length), outfit2: r(OUTFIT.length), fig: r(2) };
 }

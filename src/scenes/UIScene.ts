@@ -14,6 +14,7 @@ import { MAPS } from '../data/maps';
 import type { DollSpec } from '../systems/paperdoll';
 import { ensurePortrait } from '../gfx/portrait';
 import { LORE } from '../data/itemlore';
+import { Mature } from '../systems/mature';
 
 const SHOPS: Record<string, string[]> = {
   weapons: ['stick', 'dagger', 'shortsword', 'mace', 'wand', 'bronzeAxe', 'ironsword'],
@@ -322,9 +323,12 @@ export class UIScene extends Phaser.Scene {
   async settingsMenu() {
     while (true) {
       const lv = (v: number) => '■'.repeat(Math.round(v * 5)) + '□'.repeat(5 - Math.round(v * 5));
-      const m = new ListMenu(this, 60, 360, W - 120, [{ label: 'Music', sub: lv(Audio.musicVol) }, { label: 'Sound FX', sub: lv(Audio.sfxVol) }, { label: 'Graphics', sub: DioramaFX.quality ? 'HD-2D' : 'Fast' }, { label: 'Back' }], { title: 'Settings' }).setDepth(1300);
-      const k = await new Promise<number>(r => { m.onSelect = i => r(i); m.onCancel = () => r(3); }); m.close();
-      if (k === 3) return;
+      const m = new ListMenu(this, 60, 360, W - 120, [{ label: 'Music', sub: lv(Audio.musicVol) }, { label: 'Sound FX', sub: lv(Audio.sfxVol) }, { label: 'Graphics', sub: DioramaFX.quality ? 'HD-2D' : 'Fast' }, { label: 'Adult', sub: Mature.on ? 'On' : 'Off' }, { label: 'Back' }], { title: 'Settings' }).setDepth(1300);
+      const k = await new Promise<number>(r => { m.onSelect = i => r(i); m.onCancel = () => r(4); }); m.close();
+      if (k === 4) return;
+      if (k === 3) {
+        if (!Mature.on) { const ok = await new Promise<number>(r => { const mm = new ListMenu(this, 60, 420, W - 120, [{ label: 'Turn Adult content on' }, { label: 'Keep it off' }], { title: '18+ only: nudity, gore, crude humour' }).setDepth(1300); mm.onSelect = i => { mm.close(); r(i); }; mm.onCancel = () => { mm.close(); r(1); }; }); if (ok !== 0) continue; }
+        Mature.set(!Mature.on); this.world?.refreshParty?.(); Audio.sfx('confirm'); continue; }
       if (k === 2) { DioramaFX.quality = DioramaFX.quality ? 0 : 1; localStorage.setItem('ember_gfx', String(DioramaFX.quality)); continue; }
       if (k === 0) Audio.setMusicVol(((Math.round(Audio.musicVol * 5) + 1) % 6) / 5); else Audio.setSfxVol(((Math.round(Audio.sfxVol * 5) + 1) % 6) / 5);
     }

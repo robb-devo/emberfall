@@ -42,10 +42,10 @@ await h.key('Enter'); await h.wait(1300); for (let i = 0; i < 80 && !(await h.E(
 // ---- Creation: customise a bit
 await h.key('ArrowDown'); await h.key('ArrowRight', 1); // vocation -> mage? (Warrior->Mage)
 await h.key('ArrowLeft', 1); // back to warrior
-await h.key('ArrowDown', 5); await h.key('ArrowRight', 2); // hairstyle
+await h.key('ArrowDown', 6); await h.key('ArrowRight', 2); // hairstyle
 await h.key('ArrowDown'); await h.key('ArrowRight', 3); // hair colour
 await h.wait(400); await shot('02-creation');
-await h.key('ArrowDown', 4); await h.key('Enter'); await h.wait(2200); // Begin Adventure (row 11)
+await h.key('ArrowDown', 4); await h.key('Enter'); await h.wait(2200); // Begin Adventure (row 12)
 // ---- Prologue
 for (let i = 0; i < 9; i++) { await h.key('Enter', 1, 450); }
 await h.wait(800); await shot('03-prologue-halo');

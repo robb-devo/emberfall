@@ -45,6 +45,7 @@ export class CreateScene extends Phaser.Scene implements Focus {
       { key: 'name', label: 'Name', get: () => 0, set: () => {} },
       { key: 'voc', label: 'Vocation', opts: this.vocList().map(k => VOCATIONS[k].name), get: () => Math.max(0, this.vocList().indexOf(this.voc)), set: v => (this.voc = this.vocList()[v]) },
       { key: 'body', label: 'Build', opts: BODIES, get: () => this.look.body, set: v => (this.look.body = v) },
+      { key: 'fig', label: 'Figure', opts: ['Masculine', 'Feminine'], get: () => this.look.fig || 0, set: v => (this.look.fig = v) },
       { key: 'skin', label: 'Skin', opts: SKIN_NAMES, get: () => this.look.skin, set: v => (this.look.skin = v) },
       { key: 'face', label: 'Eyes', opts: FACES, get: () => this.look.face, set: v => (this.look.face = v) },
       { key: 'eyes', label: 'Eye Colour', opts: EYE_NAMES, get: () => this.look.eyes, set: v => (this.look.eyes = v) },
@@ -64,7 +65,7 @@ export class CreateScene extends Phaser.Scene implements Focus {
   }
   buildRows() {
     this.rowObjs.forEach(r => r.destroy()); this.rowObjs = [];
-    const rh = 40, y0 = 782;
+    const rh = Math.min(40, 480 / this.rows.length), y0 = 782;
     this.rows.forEach((r, i) => {
       const c = this.add.container(0, y0 + i * rh);
       const hl = this.add.rectangle(36, 0, W - 72, rh - 2, 0xffcf6e, i === this.sel ? 0.18 : 0).setOrigin(0); c.add(hl);

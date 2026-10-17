@@ -1,6 +1,7 @@
 import { DioramaFX, diorama } from '../fx/diorama';
 import { ensurePortrait } from '../gfx/portrait';
 import Phaser from 'phaser';
+import { Mature } from '../systems/mature';
 import { txt, panel, drawPanel, W, H, DY, SAFE_T, COL, ListMenu, drawBar, card, MenuItem, SERIF } from '../ui/widgets';
 import { Input } from '../ui/input';
 import { Audio } from '../systems/audio';
@@ -132,6 +133,11 @@ export class BattleScene extends Phaser.Scene {
     t.setScale(0.3); this.tweens.add({ targets: t, scale: 1, duration: 180, ease: 'Back.out' });
     this.tweens.add({ targets: t, y: y - 70, duration: 400, ease: 'Quad.out' });
     this.tweens.add({ targets: t, alpha: 0, delay: 800, duration: 300, onComplete: () => t.destroy() });
+  }
+  /** Adult ON: dark-red droplets with gravity on hits and kills (gore is part of the single Adult switch). */
+  gore(x: number, y: number, n: number, speed = 240) {
+    if (!Mature.on) return;
+    this.add.particles(x, y, 'px', { lifespan: 900, speed: { min: speed * 0.3, max: speed }, angle: { min: 200, max: 340 }, gravityY: 700, scale: { start: 3.2, end: 1.2 }, tint: [0x8a0a12, 0xb0141c, 0x5a0408], alpha: { start: 1, end: 0.2 }, emitting: false }).setDepth(91).explode(n);
   }
   burst(x: number, y: number, tint: number[], n = 24, speed = 220, tex = 'spark') {
     this.add.particles(x, y, tex, { lifespan: 600, speed: { min: speed * 0.3, max: speed }, scale: { start: 2.2, end: 0 }, tint, blendMode: 'ADD', emitting: false }).setDepth(90).explode(n);
@@ -348,7 +354,7 @@ export class BattleScene extends Phaser.Scene {
   async damageFoe(t: Foe, dmg: number, crit: boolean, weak = false) {
     t.hp -= dmg; if (t.asleep && dmg > 0 && Math.random() < 0.5) { t.asleep = 0; this.time.delayedCall(120, () => t.spr.clearTint()); } this.hitFlash(t.spr);
     this.tweens.add({ targets: t.spr, x: t.x + 14, yoyo: true, repeat: 2, duration: 40, onComplete: () => t.spr.setX(t.x) });
-    this.burst(t.x, t.y - t.spr.displayHeight / 2, [0xffffff, 0xffe8a0], crit ? 30 : 10, crit ? 300 : 160, 'px');
+    this.burst(t.x, t.y - t.spr.displayHeight / 2, [0xffffff, 0xffe8a0], crit ? 30 : 10, crit ? 300 : 160, 'px'); this.gore(t.x, t.y - t.spr.displayHeight / 2, crit ? 26 : 12);
     if (dmg > 0) this.cameras.main.shake(120, 0.005 + (crit ? 0.01 : 0));
     if (crit || weak) this.punch(t.x, t.y - t.spr.displayHeight / 2, crit ? 1.4 : 1);
     this.popNum(t.x, t.y - t.spr.displayHeight - 10, String(dmg), crit ? '#ffd070' : '#ffffff', crit);
@@ -372,7 +378,7 @@ export class BattleScene extends Phaser.Scene {
   async killFoe(t: Foe) {
     t.alive = false; t.hp = 0; Audio.sfx('die'); this.punch(t.x, t.y - t.spr.displayHeight / 2, t.def.boss ? 2 : 0.8);
     this.tweens.killTweensOf(t.spr); t.spr.setTint(0xff4060);
-    this.burst(t.x, t.y - t.spr.displayHeight / 2, [0xff6080, 0xffd070, 0xffffff], t.def.boss ? 120 : 30, t.def.boss ? 400 : 200);
+    this.burst(t.x, t.y - t.spr.displayHeight / 2, [0xff6080, 0xffd070, 0xffffff], t.def.boss ? 120 : 30, t.def.boss ? 400 : 200); this.gore(t.x, t.y - t.spr.displayHeight / 2, t.def.boss ? 90 : 40, 380);
     if (t.def.boss) { this.cameras.main.shake(1500, 0.03); this.cameras.main.flash(800, 255, 200, 140); Audio.sfx('quake'); }
     this.tweens.add({ targets: t.spr, alpha: 0, scaleX: t.spr.scaleX * 1.4, scaleY: 0, duration: t.def.boss ? 1600 : 450, ease: 'Cubic.in' });
     await this.msg(`${t.name} is defeated!`, t.def.boss ? 1600 : 450);
