@@ -34,7 +34,8 @@ Regression tests: run against a *built* copy so Vite HMR reloads don't break the
   Shots: progress/r3-17-int-*, r3-21-int-chapel. Tool: `MAPS=map:x:y,... node tests/tools/r3int.mjs <prefix>`.
 
 ## Next
-- [ ] Full regression run on the built test server, fix regressions. (data/maps/battle-smoke/save PASS; save diag test made frame-atomic; _gull.mjs removed; playthrough 1+2 running)
+- [ ] Full regression run on the built test server, fix regressions. (data/maps/battle-smoke/save PASS; save diag test made frame-atomic; _gull.mjs removed; playthrough 1+2 re-running from 13:08 Berlin, logs /tmp/t-pt1.log /tmp/t-pt2.log; they are SLOW (~40+ min, swiftshader). A stale pair from an interrupted run was hogging CPU - check `ps` for leftover chrome before starting tests.)
+- [ ] (step 3 in progress) versionName 0.3.0 / versionCode 3 / package.json 0.3.0 edited, not yet committed.
 - [x] Final critical polish pass: battle contact shadows were hidden under the backdrop (depth fix), shadow width follows monster scale; shatter transition can't freeze a late snapshot and always cleans up.
   NOTE: headless swiftshader under load runs ~2-4 fps and Phaser clamps delta to 16.7ms, so game time crawls (shards linger in shots) - not a real bug.
 - [ ] APK + release v0.3.0.
