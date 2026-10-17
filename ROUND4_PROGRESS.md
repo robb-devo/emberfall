@@ -28,7 +28,8 @@ Screenshots for the user: progress/r4-*.png
       Disable with localStorage ember_3d=0.
 
 ## Next
-- [ ] 3D polish: extrude wall/cliff tiles (ground.ts wall faces), beyond-map forest fill, hero x-ray behind houses, tune ELEV/SV, interiors, fx placement check per map, perf check
+- [x] 3D v2: addBlocks (walls/interiors; cliffs stay painted – walkable high ground), addSurroundings (ground plane + tree rings). Shot progress/r4-01-3d-village-fields.png
+- [ ] 3D polish: hero x-ray behind houses, tune ELEV/SV, interiors, fx placement check per map, perf check
 - [ ] Item details
 - [ ] Underwear + Adult toggle
 - [ ] Dialogue rewrite
