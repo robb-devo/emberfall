@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { txt, W, H, SERIF, COL } from '../ui/widgets';
 import { Audio } from '../systems/audio';
 import { Game } from '../systems/state';
+import { Input, minimizeApp } from '../ui/input';
 import { ensureDoll, ensureDollHd, specOf } from '../systems/paperdoll';
 
 const fast = () => !!(window as any).__EMBER?.fast;
@@ -10,6 +11,7 @@ export class EndScene extends Phaser.Scene {
   chapter = 1;
   init(d: any) { this.chapter = d?.chapter || 1; }
   create() {
+    Input.backFallback = minimizeApp;
     Audio.play('title');
     Game.save('chapter');
     this.cameras.main.fadeIn(1500);

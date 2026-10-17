@@ -1,3 +1,4 @@
+import { App } from '@capacitor/app';
 /** Unified input: keyboard + touch joystick + on-screen buttons, with a focus stack for menus. */
 export type Action = 'up' | 'down' | 'left' | 'right' | 'ok' | 'cancel' | 'menu';
 /** A focus receives actions while it is on top of the stack. `canBack` = shows the unified Back button. */
@@ -40,3 +41,5 @@ class InputHub {
   }
 }
 export const Input = new InputHub();
+/** Root-screen behaviour for the OS back button: background the app (never kill it, never lose progress). */
+export const minimizeApp = () => { App.minimizeApp().catch(() => {}); };

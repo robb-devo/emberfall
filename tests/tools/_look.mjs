@@ -1,5 +1,5 @@
 import { open } from '../lib.mjs';
-const h = await open();
+const h = await open(process.env.URL);
 const spots = JSON.parse(process.argv[2]);
 for (const [map, x, y, flags, name] of spots) {
   await h.devStart(map, x, y, Object.assign({ chapter1Done: true, ch2Started: true }, flags || {}), 'warrior', {});

@@ -6,9 +6,9 @@ export const QUESTS: Record<string, { name: string; desc: string; done?: string 
   party: { name: 'Strength in Numbers', desc: 'Dahlia at the Wayfarer\'s Hearth can register companions. Form a party before heading out.', done: 'You formed a party.' },
 };
 export const TUTORIALS: Record<string, { title: string; body: string; icon?: string }> = {
-  move: { title: 'Getting Around', body: 'Touch and drag anywhere on the left of the screen to move.\nKeyboard: Arrow keys / WASD.' },
+  move: { title: 'Getting Around', body: 'Touch and drag anywhere on the screen to move — diagonals too.\nKeyboard: Arrow keys / WASD.\n\nYour adventure saves itself as you go.' },
   talk: { title: 'Talking & Examining', body: 'Face a person or object and tap the ✦ button to talk or examine.\nKeyboard: Enter / Space.\n\nYou can talk to shopkeepers across their counters.' },
-  menu: { title: 'The Menu', body: 'Tap ☰ (top right) to open the menu: Items, Equipment, Spells, Party, Quests and Status.\nKeyboard: M or Tab.' },
+  menu: { title: 'The Menu', body: 'Tap ☰ (top right) to open the menu: Items, Equipment, Spells, Party, Quests and Status.\n◀ Back (top left) or your phone\'s back button closes any menu.\nKeyboard: M or Tab, Esc to go back.' },
   chest: { title: 'Treasure!', body: 'Treasure chests hide items, gear and gold. Open every one you find — they never come back.', icon: 'chest' },
   save: { title: 'Star-Shrines', body: 'Glowing Star-Shrines let you record your adventure. Examine one to save. Saving often is wise!\n\nIf your whole party falls, you return to the last shrine with half your gold.', icon: 'crystal' },
   party: { title: 'Companions', body: 'Talk to Dahlia at the Party Ledger to create companions — choose their name, look and vocation.\n\nUp to 4 heroes can travel together. Extras wait at the Hearth.' },

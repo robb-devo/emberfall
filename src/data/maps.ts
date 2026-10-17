@@ -21,7 +21,7 @@ export const LEGEND: Record<string, { t: number; solid?: boolean; over?: number;
   'E': { t: 82 }, 'j': { t: 106 }, 'I': { t: 83, solid: true }, 'J': { t: 84, solid: true }, '0': { t: 85, solid: true, anim: 86 }, ';': { t: 112 },
   '!': { t: 87 }, '?': { t: 88, solid: true }, '+': { t: 89, solid: true }, '-': { t: 90, solid: true },
   '/': { t: 91, solid: true }, '<': { t: 92, solid: true }, '>': { t: 93, solid: true }, '%': { t: 94, solid: true }, 'n': { t: 104, solid: true },
-  'i': { t: 107 }, 'p': { t: 108 }, 'f': { t: 109, solid: true },
+  'i': { t: 107 }, 'p': { t: 108 }, 'f': { t: 109, solid: true }, '[': { t: 113 },
 };
 
 export interface NpcDef { id: string; name: string; x: number; y: number; dir?: number; look?: Look; equip?: Record<string, string>; sprite?: string; script: string; wander?: boolean; hidden?: boolean; cond?: string; notCond?: string; counter?: boolean; noGlow?: boolean }
@@ -76,7 +76,9 @@ class B {
 // ---------------------------------------------------------------- SPIRE (prologue)
 function spire() {
   const b = new B(15, 18, ' ');
-  b.blob(7, 9, 6, 7, 's', 5); b.rect(5, 2, 5, 3, 's'); b.rect(6, 15, 3, 3, 's');
+  b.blob(7, 9, 6, 7, '[', 5); b.rect(5, 2, 5, 3, '['); b.rect(6, 15, 3, 3, '[');
+  // star inlays: a central aisle and a ring around the dais, the rest plain marble
+  for (let y = 0; y < 18; y++) for (let x = 0; x < 15; x++) if (b.get(x, y) === '[' && ((x === 7 && y % 2 === 0) || (Math.abs(Math.hypot(x - 7, (y - 9) * 0.9) - 4.5) < 0.5 && (x + y) % 2 === 0))) b.set(x, y, 's');
   for (const [x, y] of [[3, 5], [11, 5], [3, 13], [11, 13]]) b.set(x, y, 'x');
   return b.done();
 }
@@ -202,7 +204,7 @@ export const MAPS: Record<string, MapDef> = {
   spire: { id: 'spire', name: 'The Aurora Spire', music: 'spire', grid: spire(), outdoor: false, dark: 0.35, ambient: 'stars',
     npcs: [{ id: 'solenne', name: 'Archon Solenne', x: 7, y: 5, dir: 0, look: NPC_LOOKS.solenne, equip: { weapon: 'wand', head: 'circlet', armor: 'robe', acc: 'cape' }, script: 'none' },
       { id: 'vesper', name: 'Vesper', x: 7, y: 16, dir: 3, look: NPC_LOOKS.vesper, equip: { weapon: 'ironsword', armor: 'scale', acc: 'cape', head: 'circlet' }, script: 'none', hidden: true }], warps: [], chests: [], triggers: [], saves: [],
-    lights: [{ x: 7, y: 3, c: 0xffe8a0, r: 6 }, { x: 3, y: 5, c: 0x9ad0ff, r: 3 }, { x: 11, y: 5, c: 0x9ad0ff, r: 3 }, { x: 3, y: 13, c: 0x9ad0ff, r: 3 }, { x: 11, y: 13, c: 0x9ad0ff, r: 3 }] },
+    lights: [{ x: 7, y: 2, c: 0xffd890, r: 4 }, { x: 3, y: 5, c: 0x9ad0ff, r: 3 }, { x: 11, y: 5, c: 0x9ad0ff, r: 3 }, { x: 3, y: 13, c: 0x9ad0ff, r: 3 }, { x: 11, y: 13, c: 0x9ad0ff, r: 3 }] },
   village: { id: 'village', name: 'Hollowmere', music: 'village', grid: village(), outdoor: true, ambient: 'petals',
     npcs: [
       { id: 'guard', name: 'Guard Rowan', x: 14, y: 26, dir: 0, look: NPC_LOOKS.guard, equip: { weapon: 'ironsword', head: 'helm', armor: 'scale', shield: 'kite' }, script: 'guard' },

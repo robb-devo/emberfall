@@ -1,5 +1,5 @@
 import { open } from '../lib.mjs';
-const h = await open();
+const h = await open(process.env.URL);
 const sets = JSON.parse(process.argv[2]);
 await h.devStart('saltmere', 19, 14, { chapter1Done: true, ch2Started: true, metIone: true }, 'warrior', {});
 await h.E(() => { const G = window.__EMBER.Game; G.hero.lv = 10; });

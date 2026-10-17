@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { txt, W, H, ListMenu, SERIF, COL, card, panel } from '../ui/widgets';
-import { Input } from '../ui/input';
+import { Input, minimizeApp } from '../ui/input';
 import { Audio } from '../systems/audio';
 import { Game, SLOTS_N } from '../systems/state';
 import { ensureDoll } from '../systems/paperdoll';
@@ -8,6 +8,7 @@ import { ensureDoll } from '../systems/paperdoll';
 export class TitleScene extends Phaser.Scene {
   constructor() { super('Title'); }
   create() {
+    Input.backFallback = minimizeApp;
     this.cameras.main.fadeIn(800, 0, 0, 0);
     // sky gradient
     const sky = this.textures.exists('titleSky') ? null : this.textures.createCanvas('titleSky', 90, 160)!;
@@ -69,7 +70,7 @@ export class TitleScene extends Phaser.Scene {
     this.events.once('shutdown', () => window.removeEventListener('keydown', kd));
   }
   showMenu() {
-    Input.backFallback = () => { /* title root: send the app to the background instead of killing it */ import('@capacitor/app').then(m => m.App.minimizeApp()).catch(() => {}); };
+    Input.backFallback = minimizeApp; // title root: background the app instead of killing it
     const latest = Game.latestSlot();
     const items = [{ label: 'Continue', disabled: latest < 0, sub: latest >= 0 ? `Log ${latest + 1}` : '' }, { label: 'Adventure Logs', disabled: latest < 0 }, { label: 'New Game' }, { label: 'How to Play' }];
     const menu = new ListMenu(this, 140, 600, 440, items, { itemH: 78, fontSize: 36, back: false });

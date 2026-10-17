@@ -13,7 +13,8 @@ import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { DioramaFX } from './fx/diorama';
 import { W, H } from './ui/widgets';
-import { Game } from './systems/state';
+import { Game, stats, skillsOf } from './systems/state';
+import { SKILLS } from './data/skills';
 import { Audio } from './systems/audio';
 import { Input } from './ui/input';
 
@@ -25,7 +26,7 @@ const game = new Phaser.Game({
   scene: [BootScene, TitleScene, CreateScene, WorldScene, UIScene, BattleScene, EndScene, OverlayScene],
 });
 // Debug/test hook (used by headless playthrough tests)
-(window as any).__EMBER = { game, Game, Audio, Input, scene: (k: string) => game.scene.getScene(k), active: () => game.scene.getScenes(true).map(s => s.scene.key) };
+(window as any).__EMBER = { game, Game, Audio, Input, stats, skillsOf, SKILLS, scene: (k: string) => game.scene.getScene(k), active: () => game.scene.getScenes(true).map(s => s.scene.key) };
 const unlock = () => Audio.unlock();
 window.addEventListener('pointerdown', unlock); window.addEventListener('keydown', unlock);
 setInterval(() => { if (Game.s) Game.s.playTime += 1; }, 1000);

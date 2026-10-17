@@ -2,6 +2,7 @@
 import Phaser from 'phaser';
 import { shade } from './paperdoll';
 import { makeTiles2, T2 } from './art2';
+import { makePropTiles } from './props';
 export { T2 };
 
 const hex = (c: number) => '#' + c.toString(16).padStart(6, '0');
@@ -134,6 +135,8 @@ export function makeTiles(scene: Phaser.Scene) {
   px(c, at(T.void), 0, 0x05040a, 16, 16);
   // sky / spire
   px(c, at(T.sky), 0, 0x14102a, 16, 16); for (let i = 0; i < 4; i++) px(c, at(T.sky) + Math.floor(rnd() * 16), Math.floor(rnd() * 16), 0x8a8ad0);
+  // plain spire marble (variant without the star inlay), with faint veins
+  stoneFloor(c, at(113), 0x6a6498, 0x48427a); for (let i = 0; i < 3; i++) { const vx = Math.floor(rnd() * 12), vy = Math.floor(rnd() * 12); px(c, at(113) + vx, vy, 0x8a84b8, 3, 1); px(c, at(113) + vx + 2, vy + 1, 0x8a84b8, 2, 1); }
   stoneFloor(c, at(T.starTile), 0x6a6498, 0x48427a); px(c, at(T.starTile) + 7, 5, 0xc8a85e, 2, 6); px(c, at(T.starTile) + 5, 7, 0xc8a85e, 6, 2); px(c, at(T.starTile) + 7, 7, 0xffe8a0, 2, 2);
   stoneFloor(c, at(T.glow), 0x4a4058, 0x2e2638); px(c, at(T.glow) + 5, 5, 0x6fd3ff, 6, 6); px(c, at(T.glow) + 6, 6, 0xd0f4ff, 4, 4);
   // lamp post (on plaza)
@@ -166,6 +169,7 @@ export function makeTiles(scene: Phaser.Scene) {
   shore(T.shoreN, 'N'); shore(T.shoreS, 'S'); shore(T.shoreW, 'W'); shore(T.shoreE, 'E');
   makeTiles2(c, at);
   tex.refresh();
+  makePropTiles(scene);
   // make individual frames for tilemap (Phaser tilemap reads from image)
 }
 

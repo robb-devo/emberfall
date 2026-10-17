@@ -49,6 +49,24 @@ await h.key('Enter', 1, 900); // tap to begin
 await h.key('Enter', 1, 1800); // Continue (default)
 const got = await E(() => [window.__EMBER.Game.s.map, window.__EMBER.Game.s.gold]);
 ok(JSON.stringify(got) === JSON.stringify(want), `continue restores ${want} (got ${got})`);
+// --- v0.1 save-loss regression. Root cause: v0.1 only saved at Star-Shrines and had no Android back handler,
+// so the OS back button (the natural way out of a menu) closed the app and everything since the last shrine
+// (for a new player: everything) was gone. Now: progress is on disk within ~1s, and back never exits from play.
+await E(() => { const G = window.__EMBER.Game; G.s.gold = 777; G.s.flags.regressionProgress = true; G.markDirty('test-progress'); }); await h.wait(1500);
+for (const seq of [['KeyM'], ['KeyM', 'Enter'], ['KeyM', 'ArrowDown', 'Enter'], ['KeyM', 'ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowDown', 'Enter']]) {
+  for (const k of seq) await h.key(k, 1, 250);
+  for (let i = 0; i < 6; i++) { await E(() => window.__EMBER.Input.hardwareBack()); await h.wait(250); }
+  await E(() => { if (window.__EMBER.world.ui.modal) window.__EMBER.Input.hardwareBack(); }); await h.wait(300);
+}
+ok(await E(() => window.__EMBER.active().includes('World') && !window.__EMBER.world.ui.modal), 'menu tour + 24x hardware back: still in the game, menus closed');
+// simulate the OS killing the app right now: inspect what is on disk without firing any save hook
+const disk = await E(() => { const r = JSON.parse(localStorage.getItem('emberfall.slot' + window.__EMBER.Game.slot)); const s = JSON.parse(r.data); return { gold: s.gold, flag: !!s.flags.regressionProgress }; });
+ok(disk.gold === 777 && disk.flag, `progress is already on disk before any exit (gold ${disk.gold})`);
+// title screen: hardware back must background the app (minimize), not close it or touch saves
+await h.p.reload(); await h.wait(2500); await h.key('Enter', 1, 900);
+const before2 = await E(() => localStorage.getItem('emberfall.slot0'));
+await E(() => window.__EMBER.Input.hardwareBack()); await h.wait(400);
+ok(await E(() => window.__EMBER.active().includes('Title')) && before2 === await E(() => localStorage.getItem('emberfall.slot0')), 'hardware back on title: app stays, save untouched');
 // --- legacy import
 await E(() => { const s = JSON.parse(JSON.parse(localStorage.getItem('emberfall.slot0')).data); localStorage.clear(); s.version = 1; delete s.party[0].vocs; localStorage.setItem('emberfall.save.v1', JSON.stringify(s)); });
 ok(await E(() => window.__EMBER.Game.hasSave() && !!localStorage.getItem('emberfall.save.v1')), 'v0.1 save imported (original kept)');

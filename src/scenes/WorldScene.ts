@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { MAPS, LEGEND, MapDef, NpcDef } from '../data/maps';
 import { T, T2 } from '../systems/art';
+import { propTiles } from '../systems/props';
 import { Game, stats } from '../systems/state';
 import { ensureDoll, specOf, FH } from '../systems/paperdoll';
 import { Audio } from '../systems/audio';
@@ -65,21 +66,40 @@ export class WorldScene extends Phaser.Scene {
     const h = this.grid.length, w = this.grid[0].length;
     const ground: number[][] = [], over: number[][] = [];
     for (let y = 0; y < h; y++) { ground.push([]); over.push(Array(w).fill(-1)); }
+    const PT = propTiles(); const props: number[][] = []; let anyProp = false;
+    for (let y = 0; y < h; y++) props.push(Array(w).fill(-1));
+    const isProp = (ch?: string) => !!ch && !!LEGEND[ch] && PT[LEGEND[ch].t] !== undefined;
+    const groundLike = (ch?: string) => !!ch && !!LEGEND[ch] && !isProp(ch) && (!LEGEND[ch].solid || !!LEGEND[ch].anim) && LEGEND[ch].over === undefined;
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-      const L = LEGEND[this.grid[y][x]] || LEGEND['.']; ground[y][x] = L.t;
+      let ch = this.grid[y][x];
+      const L0 = LEGEND[ch] || LEGEND['.'];
+      if (PT[L0.t] !== undefined) {
+        // prop: draw it on an overlay, and put the most common neighbouring ground underneath
+        props[y][x] = L0.t; anyProp = true;
+        const cnt: Record<string, number> = {};
+        for (const [dx, dy, wt] of [[0, 1, 3], [0, -1, 2], [-1, 0, 2], [1, 0, 2], [-1, -1, 1], [1, -1, 1], [-1, 1, 1], [1, 1, 1]]) { const n = this.grid[y + dy]?.[x + dx]; if (groundLike(n)) cnt[n!] = (cnt[n!] || 0) + wt; }
+        const best = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
+        ch = best ? best[0] : PT[L0.t][1];
+      }
+      const L = LEGEND[ch] || LEGEND['.']; ground[y][x] = L.t;
       if (L.anim) this.waterTiles.push([x, y, L.t, L.anim]);
-      if (L.over !== undefined && y > 0) over[y - 1][x] = L.over;
+      if (L0.over !== undefined && y > 0) over[y - 1][x] = L0.over;
     }
     const m = this.make.tilemap({ data: ground, tileWidth: TS, tileHeight: TS });
     const ts = m.addTilesetImage('tiles', 'tiles', TS, TS, 0, 0)!;
     this.layer = m.createLayer(0, ts, 0, 0)!.setDepth(0);
     // edge decoration layers (path fringes, shorelines, sea foam, leaf litter)
     const grassy = new Set(['.', ',', '*', '"', 'T', 'P', 'b']); const autumn = new Set(['5', '6', '&', '@', 'A', '$', '8', '9']); const sandy = new Set(['1', '2', 'z']);
+    const grassG = new Set(['.', ',', '*', '"']), autumnG = new Set(['5', '6', '&', '@']); // natural ground only (no props/trees)
     const rules: { me: (c: string) => boolean; nb: (c?: string) => boolean; tiles: number[] }[] = [
       { me: c => c === ':', nb: c => !!c && grassy.has(c), tiles: [T.edgeN, T.edgeS, T.edgeW, T.edgeE] },
       { me: c => c === '~', nb: c => !!c && grassy.has(c), tiles: [T.shoreN, T.shoreS, T.shoreW, T.shoreE] },
       { me: c => c === '4', nb: c => !!c && sandy.has(c), tiles: [T2.foamN, T2.foamS, T2.foamW, T2.foamE] },
+      { me: c => c === '0', nb: c => !!c && sandy.has(c), tiles: [T2.foamN, T2.foamS, T2.foamW, T2.foamE] },
       { me: c => c === '7', nb: c => !!c && autumn.has(c), tiles: [T2.lfN, T2.lfS, T2.lfW, T2.lfE] },
+      { me: c => c === 'Z', nb: c => !!c && grassG.has(c), tiles: [T.edgeN, T.edgeS, T.edgeW, T.edgeE] },
+      { me: c => c === 'Z', nb: c => !!c && autumnG.has(c), tiles: [T2.lfN, T2.lfS, T2.lfW, T2.lfE] },
+      { me: c => c === '1' || c === '2', nb: c => !!c && grassG.has(c), tiles: [T.edgeN, T.edgeS, T.edgeW, T.edgeE] },
     ];
     const sides: [number, number][] = [[0, -1], [0, 1], [-1, 0], [1, 0]];
     sides.forEach(([dx, dy], si) => {
@@ -88,6 +108,7 @@ export class WorldScene extends Phaser.Scene {
       if (!any) return;
       const me = this.make.tilemap({ data, tileWidth: TS, tileHeight: TS }); const tse = me.addTilesetImage('tiles', 'tiles', TS, TS, 0, 0)!; me.createLayer(0, tse, 0, 0)!.setDepth(0.5);
     });
+    if (anyProp) { const mp = this.make.tilemap({ data: props, tileWidth: TS, tileHeight: TS }); const tsp = mp.addTilesetImage('props', 'props', TS, TS, 0, 0)!; mp.createLayer(0, tsp, 0, 0)!.setDepth(0.6); }
     const m2 = this.make.tilemap({ data: over, tileWidth: TS, tileHeight: TS });
     const ts2 = m2.addTilesetImage('tiles', 'tiles', TS, TS, 0, 0)!;
     m2.createLayer(0, ts2, 0, 0)!.setDepth(5000);
@@ -141,8 +162,8 @@ export class WorldScene extends Phaser.Scene {
     }
     // spire heartstar
     if (this.def.id === 'spire') {
-      const hs = this.add.image(7 * TS + 8, 3 * TS, 'star').setScale(1.6).setTint(0xfff0b0).setDepth(4000).setBlendMode(Phaser.BlendModes.ADD);
-      const hg = this.add.image(7 * TS + 8, 3 * TS, 'light').setScale(1.2).setTint(0xffd070).setDepth(3999).setBlendMode(Phaser.BlendModes.ADD);
+      const hs = this.add.image(7 * TS + 8, 2.4 * TS, 'star').setScale(1.3).setTint(0xfff0b0).setDepth(4000).setAlpha(0.85).setBlendMode(Phaser.BlendModes.ADD);
+      const hg = this.add.image(7 * TS + 8, 2.4 * TS, 'light').setScale(0.75).setTint(0xffc860).setAlpha(0.55).setDepth(3999).setBlendMode(Phaser.BlendModes.ADD); // keep the Archon readable below it
       this.tweens.add({ targets: hs, angle: 360, duration: 8000, repeat: -1 }); this.tweens.add({ targets: [hs, hg], scale: '*=1.12', yoyo: true, repeat: -1, duration: 1200 });
       this.fxObjs.heart = hs; this.fxObjs.heartGlow = hg;
     }

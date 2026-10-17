@@ -68,10 +68,10 @@ export class BattleScene extends Phaser.Scene {
     // party (OT2-style side view on the right, facing the foes)
     const pn = this.party.length;
     this.party.forEach((m, i) => {
-      const x = pn === 1 ? 590 : 540 + i * 44, y = pn === 1 ? 640 : 500 + i * 85;
+      const x = pn === 1 ? 590 : 545 + (i % 2) * 70 - (pn > 3 ? 10 : 0) + i * 12, y = pn === 1 ? 640 : 500 + i * (pn > 3 ? 72 : 88);
       const spr = this.add.sprite(x, y, ensureDollHd(this, specOf(m)), 3).setOrigin(0.5, 1).setScale(3.5).setDepth(y / 100);
       spr.setData('hx', x);
-      this.tweens.add({ targets: spr, scaleY: 7.14, yoyo: true, repeat: -1, duration: 900 + i * 120, ease: 'Sine.inOut' });
+      this.tweens.add({ targets: spr, scaleY: 3.5 * 1.02, yoyo: true, repeat: -1, duration: 900 + i * 120, ease: 'Sine.inOut' });
       this.add.image(x, y - 4, 'shadow').setScale(6, 3).setDepth(-0.4);
       if (m.hp <= 0) spr.setTint(0x553355).setAngle(90);
       this.pSpr.push(spr);
