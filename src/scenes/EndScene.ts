@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { Mature } from '../systems/mature';
 import { txt, W, H, SERIF, COL } from '../ui/widgets';
 import { Audio } from '../systems/audio';
 import { Game } from '../systems/state';
@@ -26,6 +27,7 @@ export class EndScene extends Phaser.Scene {
       ...(this.chapter === 1
         ? [['Vesper hunts the fallen Wardens.', 28, COL.text], ['Somewhere, a star is still burning.', 28, COL.text], ['', 30, ''], ['Next:', 26, COL.dim], ['Chapter II — The Drowned Choir', 34, COL.accent]] as [string, number, string][]
         : [['The lighthouse burns again.', 28, COL.text], ['But someone with a halo still', 28, COL.text], ['is pulling Vesper\'s strings.', 28, COL.text], ['', 30, ''], ['To be continued in', 26, COL.dim], ['Chapter III — The Ashen Cathedral', 34, COL.accent]] as [string, number, string][]),
+      ...reputationLines(),
       ['', 30, ''], ['(Your progress has been saved.)', 22, COL.dim], [this.chapter === 1 ? 'Tap to begin Chapter II' : 'Tap to keep exploring Saltmere', 24, COL.goldS],
     ];
     let y = 200; lines.forEach(([t, s, c], i) => { if (t) { const o = txt(this, W / 2, y, t, s, c, i < 2 ? { fontFamily: SERIF } : {}).setOrigin(0.5).setAlpha(0); this.tweens.add({ targets: o, alpha: 1, delay: 800 + i * 450, duration: 900 }); } y += s + 26; });
@@ -44,4 +46,20 @@ export class EndScene extends Phaser.Scene {
     };
     this.time.delayedCall(fast() ? 50 : 4000, () => { armed = true; this.input.once('pointerdown', go); });
   }
+}
+
+/** Round 5 (Adult only): the hidden karma / infamy ledger colours the epilogue. Never shows numbers. */
+function reputationLines(): [string, number, string][] {
+  if (!Mature.on) return [];
+  const f = Game.s.flags, k = +(f.karma || 0), i = +(f.infamy || 0);
+  const line = f.cultAsh && i >= 6 ? 'The Choir already sings your name.'
+    : i >= 12 && k < 4 ? 'Mothers on the coast hide their purses, and their sons, when you pass.'
+    : i >= 8 && k >= 6 ? 'They will tell two stories about you. Both are true.'
+    : k >= 8 && i < 4 ? 'Somewhere on the road, a woman is walking home because of you.'
+    : f.cultAsh ? 'The ash on your brow has not washed off.'
+    : i >= 6 ? 'The gibbets along the road have new tenants.' : k >= 4 ? 'A few more people sleep at night because of you.' : '';
+  const extra: [string, number, string][] = [];
+  if (f.soldMate) extra.push([`${f.soldMate} is breaking stone in Kragmoor.`, 24, COL.dim]);
+  if (f.milkHooked) extra.push(['Your hands are still grey under the nails.', 24, COL.dim]);
+  return line ? [['', 16, ''], [line, 26, '#d8b0b0'], ...extra] : extra;
 }
