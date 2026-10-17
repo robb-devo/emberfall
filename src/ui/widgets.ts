@@ -1,25 +1,65 @@
 import Phaser from 'phaser';
 import { Audio } from '../systems/audio';
 import { Input, Action, Focus } from './input';
+import { ensurePortrait, PW } from '../gfx/portrait';
+import type { DollSpec } from '../systems/paperdoll';
 
-export const FONT = '"Trebuchet MS", "Segoe UI", Roboto, "Helvetica Neue", sans-serif';
-export const SERIF = 'Georgia, "Times New Roman", serif';
+export const FONT = '"Alegreya Sans", "Trebuchet MS", "Segoe UI", Roboto, sans-serif';
+export const SERIF = 'Cinzel, Georgia, "Times New Roman", serif';
+export const DECO = '"Cinzel Decorative", Cinzel, Georgia, serif';
 export const W = 720, H = 1280;
 export const COL = { gold: 0xf0d9a0, goldS: '#f0d9a0', text: '#fdf6e3', dim: '#9a94b8', hp: 0x6fe08a, mp: 0x6fb3ff, red: '#ff6b6b', bg1: 0x1a1d44, bg2: 0x0b0c22, accent: '#ffcf6e' };
 
 export function txt(s: Phaser.Scene, x: number, y: number, str: string, size = 30, color = COL.text, o: Partial<Phaser.Types.GameObjects.Text.TextStyle> = {}) {
-  const t = s.add.text(x, y, str, { fontFamily: FONT, fontSize: size + 'px', color, stroke: '#0a0818', strokeThickness: Math.max(3, size / 7), ...o });
+  const t = s.add.text(x, y, str, { fontFamily: FONT, fontStyle: o.fontFamily === SERIF || o.fontFamily === DECO ? '700' : '500', fontSize: Math.round(size * (o.fontFamily ? 1 : 1.06)) + 'px', color, stroke: '#0a0818', strokeThickness: Math.max(3, size / 7), resolution: 1, ...o });
   t.setShadow(0, 3, '#000', 2, true, true); t.texture.setFilter(Phaser.Textures.FilterMode.LINEAR); return t;
 }
+/** Octopath-style ornate window: translucent deep-indigo glass, double gold frame with bevel, filigree corners. */
 export function panel(s: Phaser.Scene, x: number, y: number, w: number, h: number, alpha = 0.95) {
   const g = s.add.graphics({ x, y });
-  g.fillStyle(0x000000, 0.35); g.fillRoundedRect(4, 8, w, h, 16);
-  g.fillGradientStyle(COL.bg1, COL.bg1, COL.bg2, COL.bg2, alpha); g.fillRoundedRect(0, 0, w, h, 16);
-  g.lineStyle(4, COL.gold, 1); g.strokeRoundedRect(2, 2, w - 4, h - 4, 14);
-  g.lineStyle(2, 0x5a4a8a, 0.9); g.strokeRoundedRect(9, 9, w - 18, h - 18, 10);
-  // corner gems
-  for (const [cx, cy] of [[10, 10], [w - 10, 10], [10, h - 10], [w - 10, h - 10]]) { g.fillStyle(0xffcf6e, 1); g.fillCircle(cx, cy, 4); }
-  return g;
+  drawPanel(g, w, h, alpha); return g;
+}
+export function drawPanel(g: Phaser.GameObjects.Graphics, w: number, h: number, alpha = 0.95) {
+  const small = Math.min(w, h) < 90;
+  // soft drop shadow
+  for (let i = 3; i >= 1; i--) { g.fillStyle(0x000000, 0.12); g.fillRoundedRect(-i * 2 + 4, -i + 8, w + i * 4, h + i * 2, 12 + i * 2); }
+  // glass body: vertical gradient + subtle top sheen
+  g.fillGradientStyle(0x1f2350, 0x1f2350, 0x0a0b1e, 0x0a0b1e, alpha * 0.92); g.fillRect(3, 3, w - 6, h - 6);
+  g.fillGradientStyle(0xffffff, 0xffffff, 0xffffff, 0xffffff, 0.07, 0.07, 0, 0); g.fillRect(3, 3, w - 6, Math.min(h * 0.45, 70));
+  // inner vignette edge
+  g.lineStyle(6, 0x05050f, 0.35); g.strokeRect(8, 8, w - 16, h - 16);
+  // outer frame: dark core + gold bevel (light top-left, deeper bottom-right)
+  g.lineStyle(5, 0x2a1d0c, 1); g.strokeRect(2.5, 2.5, w - 5, h - 5);
+  g.lineStyle(2, 0xf6e2a6, 1); g.beginPath(); g.moveTo(2, h - 3); g.lineTo(2, 2); g.lineTo(w - 3, 2); g.strokePath();
+  g.lineStyle(2, 0xb08a42, 1); g.beginPath(); g.moveTo(w - 2, 3); g.lineTo(w - 2, h - 2); g.lineTo(3, h - 2); g.strokePath();
+  g.lineStyle(1, 0xd8b868, 1); g.strokeRect(4.5, 4.5, w - 9, h - 9);
+  if (small) return;
+  // thin inner rule
+  g.lineStyle(1, 0xc9a65a, 0.55); g.strokeRect(11.5, 11.5, w - 23, h - 23);
+  // filigree corners
+  const corner = (cx: number, cy: number, sx: number, sy: number) => {
+    g.fillStyle(0x2a1d0c, 1); g.fillTriangle(cx, cy, cx + sx * 26, cy, cx, cy + sy * 26);
+    g.lineStyle(2, 0xe8cc84, 1);
+    g.beginPath(); g.moveTo(cx + sx * 30, cy + sy * 2); g.lineTo(cx + sx * 2, cy + sy * 2); g.lineTo(cx + sx * 2, cy + sy * 30); g.strokePath();
+    g.lineStyle(1.5, 0xe8cc84, 0.95);
+    // two scrolls curling inward
+    g.beginPath(); g.arc(cx + sx * 16, cy + sy * 9, 5, 0, Math.PI * 2); g.strokePath();
+    g.beginPath(); g.arc(cx + sx * 9, cy + sy * 16, 5, 0, Math.PI * 2); g.strokePath();
+    g.beginPath(); g.moveTo(cx + sx * 21, cy + sy * 9); g.lineTo(cx + sx * 44, cy + sy * 9); g.strokePath();
+    g.beginPath(); g.moveTo(cx + sx * 9, cy + sy * 21); g.lineTo(cx + sx * 9, cy + sy * 44); g.strokePath();
+    // gem
+    g.fillStyle(0x7a1420, 1); g.fillCircle(cx + sx * 8, cy + sy * 8, 5);
+    g.fillStyle(0xff7a6a, 1); g.fillCircle(cx + sx * 7, cy + sy * 7, 2.2);
+    g.lineStyle(1.5, 0xf6e2a6, 1); g.strokeCircle(cx + sx * 8, cy + sy * 8, 5.5);
+  };
+  corner(0, 0, 1, 1); corner(w, 0, -1, 1); corner(0, h, 1, -1); corner(w, h, -1, -1);
+  // centre crest ornaments on long edges
+  if (w > 220) for (const yy of [2, h - 2]) {
+    const cx = w / 2, d = yy < h / 2 ? 1 : -1;
+    g.fillStyle(0x2a1d0c, 1); g.fillTriangle(cx - 14, yy, cx + 14, yy, cx, yy + d * 9);
+    g.fillStyle(0xe8cc84, 1); g.fillTriangle(cx - 9, yy, cx + 9, yy, cx, yy + d * 6);
+    g.lineStyle(1.5, 0xe8cc84, 0.9); g.beginPath(); g.moveTo(cx - 60, yy + d * 4); g.lineTo(cx - 18, yy + d * 4); g.moveTo(cx + 18, yy + d * 4); g.lineTo(cx + 60, yy + d * 4); g.strokePath();
+  }
 }
 
 export interface MenuItem { label: string; sub?: string; disabled?: boolean; icon?: string; color?: string; data?: any }
@@ -107,11 +147,14 @@ export class ListMenu extends Phaser.GameObjects.Container implements Focus {
 
 /** Typewriter dialog box. */
 export class DialogBox extends Phaser.GameObjects.Container implements Focus {
-  bodyT: Phaser.GameObjects.Text; nameTag: Phaser.GameObjects.Container; arrow: Phaser.GameObjects.Text;
+  bodyT: Phaser.GameObjects.Text; nameTag: Phaser.GameObjects.Container; arrow: Phaser.GameObjects.Text; bust: Phaser.GameObjects.Image; bustBg: Phaser.GameObjects.Image; bustKey = '';
   full = ''; shown = 0; resolve?: () => void; typing = false; timer?: Phaser.Time.TimerEvent; auto = false;
   constructor(s: Phaser.Scene) {
     super(s, 0, 0); s.add.existing(this);
     const y = H - 360;
+    if (!s.textures.exists('bustglow')) { const t = s.textures.createCanvas('bustglow', 300, 200)!; const c = t.getContext(); const g = c.createRadialGradient(150, 130, 10, 150, 130, 150); g.addColorStop(0, 'rgba(20,18,50,0.85)'); g.addColorStop(0.6, 'rgba(20,18,50,0.5)'); g.addColorStop(1, 'rgba(20,18,50,0)'); c.fillStyle = g; c.fillRect(0, 0, 300, 200); t.refresh(); }
+    this.bustBg = s.add.image(PW / 2 + 24, y + 30, 'bustglow').setOrigin(0.5, 1).setScale(1.1, 1.5).setVisible(false); this.add(this.bustBg);
+    this.bust = s.add.image(24, y + 26, '__DEFAULT').setOrigin(0, 1).setVisible(false); this.add(this.bust);
     this.add(panel(s, 20, y, W - 40, 300));
     this.bodyT = txt(s, 56, y + 46, '', 33, COL.text, { wordWrap: { width: W - 120 }, lineSpacing: 12 }); this.add(this.bodyT);
     this.nameTag = s.add.container(40, y - 34); this.add(this.nameTag);
@@ -121,9 +164,16 @@ export class DialogBox extends Phaser.GameObjects.Container implements Focus {
     z.on('pointerdown', () => this.onAction('ok'));
     this.setDepth(1000).setVisible(false);
   }
-  show(text: string, name?: string): Promise<void> {
+  show(text: string, name?: string, who?: DollSpec): Promise<void> {
     this.setVisible(true); this.nameTag.removeAll(true);
-    if (name) { const t = txt(this.scene, 26, 10, name, 28, COL.accent); const g = panel(this.scene, 0, 0, t.width + 52, 58); this.nameTag.add([g, t]); }
+    const key = who ? ensurePortrait(this.scene, who) : '';
+    this.nameTag.x = key ? 40 + PW - 30 : 40;
+    if (key) {
+      const fresh = key !== this.bustKey || !this.bust.visible; this.bustKey = key;
+      this.bust.setTexture(key).setVisible(true); this.bustBg.setVisible(true);
+      if (fresh) { this.bust.setAlpha(0); this.bust.x = 4; this.scene.tweens.add({ targets: this.bust, alpha: 1, x: 24, duration: 260, ease: 'Cubic.out' }); }
+    } else { this.bust.setVisible(false); this.bustBg.setVisible(false); this.bustKey = ''; }
+    if (name) { const t = txt(this.scene, 26, 10, name, 28, COL.accent, { fontFamily: SERIF }); const g = panel(this.scene, 0, 0, t.width + 52, 58); this.nameTag.add([g, t]); }
     this.full = this.bodyT.getWrappedText(text).join('\n'); /* pre-wrap so words never jump lines while typing */ this.shown = 0; this.bodyT.setText(''); this.typing = true; this.arrow.setVisible(false);
     Input.push(this);
     this.timer?.remove();
@@ -142,7 +192,7 @@ export class DialogBox extends Phaser.GameObjects.Container implements Focus {
     if (this.typing) { this.finishType(); return; }
     Input.pop(this); const r = this.resolve; this.resolve = undefined; r?.();
   }
-  hide() { this.setVisible(false); }
+  hide() { this.setVisible(false); this.bust.setVisible(false); this.bustBg.setVisible(false); this.bustKey = ''; }
 }
 
 /** Large centered tutorial / info card. */

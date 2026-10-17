@@ -10,6 +10,8 @@ import { SKILLS } from '../data/skills';
 import { VOCATIONS, xpFor } from '../data/vocations';
 import { ensureDollHd as ensureDoll, specOf } from '../systems/paperdoll';
 import type { WorldScene } from './WorldScene';
+import { MAPS } from '../data/maps';
+import type { DollSpec } from '../systems/paperdoll';
 
 const SHOPS: Record<string, string[]> = {
   weapons: ['stick', 'dagger', 'shortsword', 'mace', 'wand', 'bronzeAxe', 'ironsword'],
@@ -79,7 +81,16 @@ export class UIScene extends Phaser.Scene {
     this.tweens.add({ targets: c, alpha: 1, y: 200, duration: 600, hold: 1600, yoyo: true, onComplete: () => c.destroy() });
   }
   // ------------------------------------------------------------- dialog
-  async say(t: string, name?: string) { await this.dialog.show(t, name); }
+  async say(t: string, name?: string) { await this.dialog.show(t, name, name ? this.speaker(name) : undefined); }
+  /** find the look of whoever is speaking (party member or any named NPC) for the dialogue bust */
+  speaker(name: string): DollSpec | undefined {
+    const n = name.trim().toLowerCase(); if (!n || Game.s?.party == null) return;
+    const m = Game.s.party.find(p => p.name.toLowerCase() === n) || (Game.s as any).roster?.find?.((p: Member) => p.name.toLowerCase() === n);
+    if (m) return specOf(m);
+    if (!UIScene.npcIdx) { UIScene.npcIdx = new Map(); for (const md of Object.values(MAPS)) for (const np of (md as any).npcs || []) if (np.look && !np.sprite) { const k = np.name.toLowerCase(); if (!UIScene.npcIdx.has(k)) UIScene.npcIdx.set(k, { look: np.look, equip: np.equip || {} }); } }
+    return UIScene.npcIdx.get(n) || [...UIScene.npcIdx.entries()].find(([k]) => k.split(' ').pop() === n || n.split(' ').pop() === k.split(' ').pop())?.[1];
+  }
+  static npcIdx?: Map<string, DollSpec>;
   async narr(t: string) { await this.dialog.show(t); this.hideDialog(); }
   hideDialog() { this.dialog.hide(); }
   /** Choice list. `cancelIdx` makes it backable (Back/Esc picks that option); story choices have none. */
