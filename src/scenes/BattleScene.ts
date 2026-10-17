@@ -9,7 +9,7 @@ import { Game, stats, Member, skillsOf, gainXp } from '../systems/state';
 import { ENEMIES, EnemyDef } from '../data/enemies';
 import { SKILLS, Skill } from '../data/skills';
 import { ITEMS } from '../data/items';
-import { ensureDoll, ensureDollHd, specOf } from '../systems/paperdoll';
+import { ensureDoll, ensureDollHd, specOf, ADULT_FIT } from '../systems/paperdoll';
 import { TUTORIALS } from '../data/story';
 import { ensureBackdrop } from '../gfx/backdrop';
 
@@ -73,9 +73,9 @@ export class BattleScene extends Phaser.Scene {
     const pn = this.party.length;
     this.party.forEach((m, i) => {
       const x = pn === 1 ? 590 : 545 + (i % 2) * 70 - (pn > 3 ? 10 : 0) + i * 12, y = Math.round((pn === 1 ? 640 : 500 + i * (pn > 3 ? 72 : 88)) * this.K);
-      const spr = this.add.sprite(x, y, ensureDollHd(this, specOf(m)), 3).setOrigin(0.5, 1).setScale(3.9).setDepth(y / 100);
+      const spr = this.add.sprite(x, y, ensureDollHd(this, specOf(m)), 3).setOrigin(0.5, 1).setScale(3.9 * ADULT_FIT).setDepth(y / 100);
       spr.setData('hx', x); spr.setData('hy', y);
-      this.tweens.add({ targets: spr, scaleY: 3.9 * 1.02, yoyo: true, repeat: -1, duration: 900 + i * 120, ease: 'Sine.inOut' });
+      this.tweens.add({ targets: spr, scaleY: 3.9 * ADULT_FIT * 1.02, yoyo: true, repeat: -1, duration: 900 + i * 120, ease: 'Sine.inOut' });
       this.add.image(x, y - 4, 'shadow').setScale(6, 3).setDepth(-0.4);
       if (m.hp <= 0) spr.setTint(0x553355).setAngle(90);
       this.pSpr.push(spr);

@@ -3,7 +3,7 @@ import { ITEMS, Slot } from '../data/items';
 import { SKILLS } from '../data/skills';
 
 /** Indices into palettes in paperdoll.ts */
-export interface Look { body: number; skin: number; hairStyle: number; hair: number; eyes: number; face: number; outfit: number; outfit2: number; /** round 4: 0 masculine, 1 feminine figure */ fig?: number }
+export interface Look { body: number; skin: number; hairStyle: number; hair: number; eyes: number; face: number; outfit: number; outfit2: number; /** round 4: 0 masculine, 1 feminine figure */ fig?: number; /** round 5: children keep the small doll2 sprite set and are never part of mature content */ child?: boolean }
 export interface Member {
   id: string; name: string; voc: string; level: number; xp: number; hp: number; mp: number;
   equip: Partial<Record<Slot, string>>; look: Look; extraSkills: string[]; poisoned?: boolean;

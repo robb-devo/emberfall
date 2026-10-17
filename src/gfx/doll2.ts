@@ -13,12 +13,13 @@ export const FW2 = 32, FH2 = 48;
 type Dir = 'F' | 'S' | 'B';
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => v / 16 - 0.47);
 
-class Canvas {
-  col = new Int32Array(FW2 * FH2).fill(-1); lit = new Float32Array(FW2 * FH2); ord = new Int16Array(FW2 * FH2); flat = new Uint8Array(FW2 * FH2);
+export class Canvas {
+  col: Int32Array; lit: Float32Array; ord: Int16Array; flat: Uint8Array;
+  constructor(public W = FW2, public H = FH2) { const n = W * H; this.col = new Int32Array(n).fill(-1); this.lit = new Float32Array(n); this.ord = new Int16Array(n); this.flat = new Uint8Array(n); }
   o = 0;
   part() { return ++this.o; }
-  set(x: number, y: number, c: number, l = 0, flat = false) { x = Math.round(x); y = Math.round(y); if (x < 0 || y < 0 || x >= FW2 || y >= FH2 || c < 0) return; const i = y * FW2 + x; this.col[i] = c; this.lit[i] = l; this.ord[i] = this.o; this.flat[i] = flat ? 1 : 0; }
-  has(x: number, y: number) { return x >= 0 && y >= 0 && x < FW2 && y < FH2 && this.col[y * FW2 + x] >= 0; }
+  set(x: number, y: number, c: number, l = 0, flat = false) { x = Math.round(x); y = Math.round(y); if (x < 0 || y < 0 || x >= this.W || y >= this.H || c < 0) return; const i = y * this.W + x; this.col[i] = c; this.lit[i] = l; this.ord[i] = this.o; this.flat[i] = flat ? 1 : 0; }
+  has(x: number, y: number) { return x >= 0 && y >= 0 && x < this.W && y < this.H && this.col[y * this.W + x] >= 0; }
   /** sphere-lit ellipse; clip(x,y) can reject pixels */
   ell(cx: number, cy: number, rx: number, ry: number, c: number, clip?: (x: number, y: number) => boolean, bias = 0) {
     this.part();
@@ -54,20 +55,20 @@ class Canvas {
   }
   /** final: ramp + dither + occlusion + sel-out outline -> RGBA */
   render(data: Uint8ClampedArray, stride: number, ox: number, oy: number) {
-    const out = new Int32Array(FW2 * FH2).fill(-1);
-    for (let y = 0; y < FH2; y++) for (let x = 0; x < FW2; x++) {
-      const i = y * FW2 + x; const c = this.col[i]; if (c < 0) continue;
+    const out = new Int32Array(this.W * this.H).fill(-1);
+    for (let y = 0; y < this.H; y++) for (let x = 0; x < this.W; x++) {
+      const i = y * this.W + x; const c = this.col[i]; if (c < 0) continue;
       if (this.flat[i]) { out[i] = c; continue; }
       let l = this.lit[i];
       // occlusion: a neighbour drawn later (in front) shades me
-      for (const [dx, dy] of [[1, 0], [0, -1], [-1, 0]] as const) { const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= FW2) continue; const j = yy * FW2 + xx; if (this.col[j] >= 0 && this.ord[j] > this.ord[i] && !this.flat[j]) { l -= dy ? 0.75 : 0.45; break; } }
+      for (const [dx, dy] of [[1, 0], [0, -1], [-1, 0]] as const) { const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= this.W) continue; const j = yy * this.W + xx; if (this.col[j] >= 0 && this.ord[j] > this.ord[i] && !this.flat[j]) { l -= dy ? 0.75 : 0.45; break; } }
       const q = Math.max(-2, Math.min(2, Math.round(l * 2.2 + BAYER[(y & 3) * 4 + (x & 3)] * 0.7)));
       out[i] = ramp(c, q);
     }
-    for (let y = 0; y < FH2; y++) for (let x = 0; x < FW2; x++) {
-      const i = y * FW2 + x; let c = out[i];
+    for (let y = 0; y < this.H; y++) for (let x = 0; x < this.W; x++) {
+      const i = y * this.W + x; let c = out[i];
       if (c < 0) {
-        let nb = -1; for (const [dx, dy] of [[0, 1], [1, 0], [-1, 0], [0, -1]] as const) { const xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < FW2 && yy < FH2 && this.col[yy * FW2 + xx] >= 0) { nb = this.col[yy * FW2 + xx]; break; } }
+        let nb = -1; for (const [dx, dy] of [[0, 1], [1, 0], [-1, 0], [0, -1]] as const) { const xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < this.W && yy < this.H && this.col[yy * this.W + xx] >= 0) { nb = this.col[yy * this.W + xx]; break; } }
         if (nb < 0) continue; c = selout(nb);
       }
       const k = ((oy + y) * stride + ox + x) * 4; data[k] = (c >> 16) & 255; data[k + 1] = (c >> 8) & 255; data[k + 2] = c & 255; data[k + 3] = 255;
@@ -81,8 +82,8 @@ function hueShift(c: number, f: number, cool: boolean) {
   return (Math.max(0, Math.min(255, Math.round(r))) << 16) | (Math.max(0, Math.min(255, Math.round(g))) << 8) | Math.max(0, Math.min(255, Math.round(b)));
 }
 const RC = new Map<number, number[]>();
-function ramp(c: number, q: number) { let r = RC.get(c); if (!r) { r = [hueShift(c, 0.52, true), hueShift(c, 0.74, true), c, hueShift(c, 1.16, false), hueShift(c, 1.36, false)]; RC.set(c, r); } return r[q + 2]; }
-const selout = (c: number) => hueShift(c, 0.3, true);
+export function ramp(c: number, q: number) { let r = RC.get(c); if (!r) { r = [hueShift(c, 0.52, true), hueShift(c, 0.74, true), c, hueShift(c, 1.16, false), hueShift(c, 1.36, false)]; RC.set(c, r); } return r[q + 2]; }
+export const selout = (c: number) => hueShift(c, 0.3, true);
 
 // ------------------------------------------------------------------ parts
 function head(cv: Canvas, d: Dir, skin: number) {
@@ -181,7 +182,7 @@ function paintHair(cv: Canvas, fn: HairFn, hair: number, d: Dir) {
     cv.set(x, y, hair, l);
   }
 }
-function weapon(cv: Canvas, v: { type: string; c1: number; c2?: number }, hx: number, hy: number, d: Dir) {
+export function weapon(cv: Canvas, v: { type: string; c1: number; c2?: number }, hx: number, hy: number, d: Dir) {
   const c = v.c1, h = v.c2 ?? 0x6b4220, grip = 0x5a3820;
   const S = d === 'S' ? -1 : 1; // side view: blade points forward-up to the left
   switch (v.type) {
@@ -196,7 +197,7 @@ function weapon(cv: Canvas, v: { type: string; c1: number; c2?: number }, hx: nu
     default: { cv.cyl(hx + 0.5, hy - 20, hx + 0.5, hy + 8, 0.9, c, 0.1); cv.ell(hx + 0.5, hy - 22, 2.6, 2.6, h, undefined, 0.4); cv.set(hx - 0.5, hy - 23, 0xffffff, 0, true); break; }
   }
 }
-function shield(cv: Canvas, v: { type: string; c1: number; c2?: number }, x: number, y: number) {
+export function shield(cv: Canvas, v: { type: string; c1: number; c2?: number }, x: number, y: number) {
   const c = v.c1, b = v.c2 ?? shade(c, 1.3);
   if (v.type === 'kite') { cv.poly([[x - 5, y - 6], [x + 5, y - 6], [x + 5, y], [x, y + 8], [x - 5, y]], b); cv.poly([[x - 3.5, y - 4.5], [x + 3.5, y - 4.5], [x + 3.5, y - 0.5], [x, y + 5.5], [x - 3.5, y - 0.5]], c); cv.box(x - 0.5, y - 4, 1, 8, b, 0.6); cv.box(x - 3, y - 2, 6, 1, b, 0.6); }
   else { cv.ell(x, y, 5.5, 5.5, b); cv.ell(x, y, 4.2, 4.2, c); cv.ell(x - 0.5, y - 0.5, 1.6, 1.6, b, undefined, 0.6); }
@@ -214,7 +215,8 @@ function frame(sp: DollSpec, d: Dir, step: number, cv: Canvas) {
   // round 4 underwear layer: party members (sp.voc set – never NPCs) with no body armour wear plain underwear;
   // with Settings → Adult ON they are unclothed instead (simple low-res body, no poses). Joke 'undies' armour always shows.
   const bare = !armor && !!sp.voc; const undiesItem = armor?.type === 'undies';
-  const nude = bare && Mature.on, undies = undiesItem || (bare && !nude); const fem = (L.fig || 0) === 1;
+  // round 5: doll2 is now the CHILD sprite set only (adults use doll3) - it is never drawn unclothed.
+  const nude = false && bare && Mature.on, undies = undiesItem || (bare && !nude); const fem = (L.fig || 0) === 1;
   const uw = undiesItem ? armor.c1 : 0xf2efe8, uw2 = undiesItem ? (armor.c2 ?? shade(armor.c1, 0.7)) : 0xd8d2c8;
   if (undies || nude) { body = skin; trim = skin; pants = skin; boot = shade(skin, 0.86); }
   const robe = armor?.type === 'robe' && !undies, plate = armor?.type === 'plate', jerkin = armor?.type === 'jerkin';

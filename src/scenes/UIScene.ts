@@ -8,7 +8,7 @@ import { TUTORIALS, QUESTS } from '../data/story';
 import { ITEMS, SLOTS, SLOT_NAMES, Slot } from '../data/items';
 import { SKILLS } from '../data/skills';
 import { VOCATIONS, xpFor } from '../data/vocations';
-import { ensureDollHd as ensureDoll, specOf } from '../systems/paperdoll';
+import { ensureDollHd as ensureDoll, specOf, ADULT_FIT } from '../systems/paperdoll';
 import type { WorldScene } from './WorldScene';
 import { MAPS } from '../data/maps';
 import type { DollSpec } from '../systems/paperdoll';
@@ -227,7 +227,7 @@ export class UIScene extends Phaser.Scene {
           const box = this.add.graphics(); box.fillStyle(0x0a0b1e, 0.6); box.fillRoundedRect(x + 6, y, cw - 12, 238, 12); c.add(box);
           const wearing = m.equip[it.slot!] === id;
           const eq = ok ? { ...m.equip, [it.slot!]: id } : m.equip;
-          const d = this.add.sprite(x + 66, y + 190, ensureDoll(this, { look: m.look, equip: eq }), 0).setOrigin(0.5, 1).setScale(3.2).setAlpha(ok ? 1 : 0.35); c.add(d);
+          const d = this.add.sprite(x + 66, y + 190, ensureDoll(this, { look: m.look, equip: eq }), 0).setOrigin(0.5, 1).setScale(3.2 * ADULT_FIT).setAlpha(ok ? 1 : 0.35); c.add(d);
           c.add(txt(this, x + 124, y + 12, m.name, 26, COL.accent));
           if (!ok) { c.add(txt(this, x + 124, y + 52, `A ${VOCATIONS[m.voc].name}\ncan't use this.`, 22, COL.dim)); return; }
           if (wearing) { c.add(txt(this, x + 124, y + 52, 'Wearing it now.', 22, COL.goldS)); }
@@ -298,7 +298,7 @@ export class UIScene extends Phaser.Scene {
       c.add(this.add.rectangle(0, 0, W, H, 0x05040c, 0.9).setOrigin(0).setInteractive());
       c.add(panel(this, 20, 120, W - 40, 1040));
       { const pk = ensurePortrait(this, specOf(mm)); const bg = this.add.graphics(); bg.fillStyle(0x0a0b1e, 0.8); bg.fillRect(44, 146, 252, 282); bg.lineStyle(2, 0xe8cc84, 1); bg.strokeRect(44, 146, 252, 282); c.add(bg); c.add(this.add.image(50, 152, pk).setOrigin(0).setCrop(0, 0, 240, 270)); }
-      const key = ensureDoll(this, specOf(mm)); const d = this.add.sprite(230, 600, key, 0).setOrigin(0.5, 1).setScale(3.4); c.add(d);
+      const key = ensureDoll(this, specOf(mm)); const d = this.add.sprite(230, 600, key, 0).setOrigin(0.5, 1).setScale(3.4 * ADULT_FIT); c.add(d);
       c.add(this.add.image(230, 598, 'shadow').setScale(5, 2).setAlpha(0.6)); c.bringToTop(d);
       this.time.addEvent({ delay: 250, repeat: 40, callback: () => d.active && d.setFrame([0, 1, 0, 2][Math.floor(this.time.now / 250) % 4]) });
       c.add(txt(this, 330, 160, mm.name, 44, COL.accent, { fontFamily: SERIF }));
@@ -412,7 +412,7 @@ export class UIScene extends Phaser.Scene {
       Game.s.party.forEach((m, i) => {
         const ok = canEquip(m, id); const x = 40 + sp * i + sp / 2;
         const eq = ok ? { ...m.equip, [it.slot!]: id } : m.equip;
-        const d = this.add.sprite(x, 380, ensureDoll(this, { look: m.look, equip: eq }), 0).setOrigin(0.5, 1).setScale(n > 2 ? 4 : 5).setAlpha(ok ? 1 : 0.35);
+        const d = this.add.sprite(x, 380, ensureDoll(this, { look: m.look, equip: eq }), 0).setOrigin(0.5, 1).setScale((n > 2 ? 4 : 5) * ADULT_FIT).setAlpha(ok ? 1 : 0.35);
         this.tweens.add({ targets: d, y: 374, yoyo: true, repeat: -1, duration: 400 });
         const cur = stats(m), nx = stats({ ...m, equip: eq }); const k = Object.keys(it.mods || {})[0] || 'def';
         const diff = (nx as any)[k] - (cur as any)[k];
@@ -481,7 +481,7 @@ export class UIScene extends Phaser.Scene {
         const view = this.add.container(0, 0).setDepth(1300);
         view.add(this.add.rectangle(0, 0, W, H, 0x05040c, 0.86).setOrigin(0).setInteractive());
         view.add(panel(this, 20, 120, W - 40, 330));
-        const doll = this.add.sprite(150, 420, ensureDoll(this, specOf(mem)), 0).setOrigin(0.5, 1).setScale(5.5); view.add(doll);
+        const doll = this.add.sprite(150, 420, ensureDoll(this, specOf(mem)), 0).setOrigin(0.5, 1).setScale(5.5 * ADULT_FIT); view.add(doll);
         const dt = txt(this, 290, 150, '', 25, COL.text, { wordWrap: { width: W - 330 }, lineSpacing: 6 }); view.add(dt);
         const m = new ListMenu(this, 20, 470, W - 40, keys.map(k => ({ label: VOCATIONS[k].name, sub: k === mem.voc ? `Lv${lv(k)} (current)` : `Lv${lv(k)}`, color: k === mem.voc ? COL.accent : undefined })), { title: `${mem.name}'s vocation`, rows: 7, itemH: 72 }).setDepth(1301);
         const upd = (k: number) => { const v = VOCATIONS[keys[k]]; const st = stats({ ...mem, voc: keys[k], level: lv(keys[k]) } as any); dt.setText(`${v.name}\n${v.desc.replace(/ \(Unlocked.*\)/, '')}\n\nHP ${st.hp}  MP ${st.mp}  ATK ${st.atk}\nDEF ${st.def}  AGI ${st.agi}  MAG ${st.mag}`); };

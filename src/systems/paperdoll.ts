@@ -9,6 +9,7 @@ import { ITEMS } from '../data/items';
 import type { Look, Member } from './state';
 import { Pix } from './art';
 import { ensureDoll2 } from '../gfx/doll2';
+import { ensureDoll3, FH3 } from '../gfx/doll3';
 
 export const SKIN = [0xf8d9bc, 0xefc19a, 0xd69c6c, 0xa86d43, 0x74472a, 0xc9e0f0];
 export const SKIN_NAMES = ['Porcelain', 'Fair', 'Honey', 'Bronze', 'Umber', 'Starlit'];
@@ -84,7 +85,7 @@ export interface DollSpec { look: Look; equip: Record<string, string | undefined
 export function specOf(m: Member): DollSpec { return { look: m.look, equip: m.equip as any, voc: m.voc }; }
 export function dollKey(sp: DollSpec) {
   const l = sp.look; const e = sp.equip;
-  return `doll_${l.body}${l.skin}${l.hairStyle}${l.hair}${l.eyes}${l.face}${l.outfit}${l.outfit2}_${e.weapon || ''}_${e.shield || ''}_${e.head || ''}_${e.armor || ''}_${e.acc || ''}_f${l.fig || 0}${sp.voc && !e.armor ? (Mature.on ? 'n' : 'u') : ''}`;
+  return `doll_${l.body}${l.skin}${l.hairStyle}${l.hair}${l.eyes}${l.face}${l.outfit}${l.outfit2}_${e.weapon || ''}_${e.shield || ''}_${e.head || ''}_${e.armor || ''}_${e.acc || ''}_f${l.fig || 0}${l.child ? 'c' : ''}${sp.voc && !e.armor ? (Mature.on ? 'n' : 'u') : ''}`;
 }
 
 class Grid {
@@ -257,8 +258,14 @@ export function ensureDoll(scene: Phaser.Scene, sp: DollSpec): string {
 }
 /** 2× EPX + rim-lit version of the doll sheet (same frame layout) for battle and menu close-ups. */
 export function ensureDollHd(scene: Phaser.Scene, sp: DollSpec): string {
-  return ensureDoll2(scene, sp, dollKey(sp) + '_hd2');
+  // round 5: adults (hero, companions, adult NPCs) use the 6.5-head adult set in every mode; children keep the small doll2 set.
+  if (sp.look.child) return ensureDoll2(scene, { ...sp, voc: undefined }, dollKey(sp) + '_hd2');
+  return ensureDoll3(scene, sp, dollKey(sp) + '_hd3');
 }
+/** scale factor so an HD doll sheet displays at the size a 48px-tall frame used to (adults are drawn a bit taller on purpose) */
+/** display-scale multiplier for adult (doll3) sheets so they replace the old 48px dolls at a sensible size */
+export const ADULT_FIT = (48 / FH3) * 1.12;
+export function dollFit(scene: Phaser.Scene, key: string, adultBoost = 1.12) { const f = scene.textures.getFrame(key, 0); return f && f.height >= FH3 ? (48 / FH3) * adultBoost : 1; }
 /** classic EPX-upscaled sheet (kept for reference / fallback) */
 export function ensureDollEpx(scene: Phaser.Scene, sp: DollSpec): string {
   const key = dollKey(sp) + '_hd';

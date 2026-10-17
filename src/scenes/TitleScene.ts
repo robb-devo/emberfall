@@ -5,7 +5,7 @@ import { diorama } from '../fx/diorama';
 import { Input, minimizeApp } from '../ui/input';
 import { Audio } from '../systems/audio';
 import { Game, SLOTS_N } from '../systems/state';
-import { ensureDollHd } from '../systems/paperdoll';
+import { ensureDollHd, ADULT_FIT } from '../systems/paperdoll';
 
 export class TitleScene extends Phaser.Scene {
   constructor() { super('Title'); }
@@ -46,7 +46,7 @@ export class TitleScene extends Phaser.Scene {
     for (let i = 0; i < 4; i++) { const m = this.add.image(Math.random() * W, 1020 + i * 40, 'light').setTint(0xd8a8c8).setBlendMode(Phaser.BlendModes.ADD).setScale(6, 0.8).setAlpha(0.12).setDepth(-5); this.tweens.add({ targets: m, x: m.x + 160, yoyo: true, repeat: -1, duration: 9000 + i * 2000, ease: 'Sine.inOut' }); }
     const fore = L('tt_fore', -3, -20, 11000);
     // hero + companion on the cliff, back to us, gazing at the Spire
-    const mk = (sp: any, x: number, sc: number) => { const k = ensureDollHd(this, sp); const h = this.add.sprite(x, 0, k, 9).setOrigin(0.5, 1).setScale(sc).setTint(0xa898c8).setDepth(-2); return h; };
+    const mk = (sp: any, x: number, sc: number) => { const k = ensureDollHd(this, sp); const h = this.add.sprite(x, 0, k, 9).setOrigin(0.5, 1).setScale(sc * ADULT_FIT).setTint(0xa898c8).setDepth(-2); return h; };
     const hero = mk({ look: { body: 0, skin: 1, hairStyle: 1, hair: 1, eyes: 1, face: 3, outfit: 0, outfit2: 6 }, equip: { weapon: 'ironsword', acc: 'cape', armor: 'leather' } }, 590, 3.2);
     const comp = mk({ look: { body: 0, skin: 0, hairStyle: 2, hair: 3, eyes: 5, face: 1, outfit: 4, outfit2: 3 }, equip: { weapon: 'wand', armor: 'robe' } }, 660, 2.9);
     const cliffY = (sx: number) => CLIFF_Y(Math.round((sx - (W / 2 - TWH)) / 2.06)) * 2.06 + 6;

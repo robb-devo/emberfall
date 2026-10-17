@@ -181,7 +181,7 @@ export class WorldScene extends Phaser.Scene {
   makeActor(id: string, tex: string, x: number, y: number, dir: number, doll = true): Actor {
     const shadow = this.add.image(x * TS + 8, y * TS + 15, 'shadow').setDepth(1);
     const spr = this.add.sprite(x * TS + 8, y * TS + 16, tex, doll ? dir * 3 : undefined).setOrigin(0.5, 1);
-    if (doll) spr.setScale(0.5);
+    if (doll) spr.setScale(spr.frame.height > 48 ? 0.5 : 0.44); // round 5: adults (64px sheets) stand taller than children
     if (!doll) spr.setScale(tex === 'm_warden' || tex === 'm_cantor' ? 0.75 : tex.startsWith('npc_') ? 1 : spr.width > 32 ? 0.42 : 0.6);
     const a: Actor = { id, spr, shadow, tx: x, ty: y, dir, moving: false, doll, step: 0 };
     this.depthOf(a); return a;

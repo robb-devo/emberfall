@@ -39,6 +39,9 @@ function paint(g: Ctx, sp: DollSpec) {
   const armor = vis(E.armor), hd = vis(E.head), acc = vis(E.acc);
   let body = o1, trim = o2; if (armor && armor.c1 >= 0) { body = armor.c1; trim = armor.c2 ?? shade(armor.c1, 0.7); }
   const cx = 120, hy = 112; // head centre
+  // round 5: every adult (hero, companions, adult NPCs) gets a 20-30-year-old face – narrower, longer jaw, almond eyes,
+  // defined nose, no blush. Children (look.child) keep the round, big-eyed chibi face.
+  const adult = !L.child, fem = (L.fig || 0) === 1, FWD = adult ? (fem ? 45 : 48) : 54;
   g.translate(0, 8);
   const hairPath = { back: null as null | (() => void) };
   // ---------------- cape (behind everything)
@@ -50,7 +53,7 @@ function paint(g: Ctx, sp: DollSpec) {
     else if (style === 'Ponytail') { g.moveTo(cx + 40, hy - 50); g.bezierCurveTo(cx + 110, hy - 40, cx + 100, hy + 60, cx + 70, hy + 120); g.quadraticCurveTo(cx + 74, hy + 50, cx + 48, hy - 10); g.closePath(); }
     else return false; return true;
   };
-  if (!hd || hd.type === 'circlet' || hd.type === 'bandana') { g.beginPath(); if (hairBack()) { hairPath.back = hairBack; fillStroke(g, hairBack, shade(hair, 0.85), cool(hair, 0.55), hy - 40, hy + 150, line(hair)); } }
+  if (!hd || hd.type === 'circlet' || hd.type === 'bandana') { if (!L.child) { g.save(); g.translate(cx, hy); g.scale(0.88, 1); g.translate(-cx, -hy); } g.beginPath(); if (hairBack()) { hairPath.back = hairBack; fillStroke(g, hairBack, shade(hair, 0.85), cool(hair, 0.55), hy - 40, hy + 150, line(hair)); } if (!L.child) g.restore(); }
   // ---------------- shoulders / torso
   const torso = () => { g.moveTo(14, PH); g.bezierCurveTo(16, 222, 40, 206, 88, 198); g.lineTo(152, 198); g.bezierCurveTo(200, 206, 224, 222, 226, PH); g.closePath(); };
   fillStroke(g, torso, shade(body, 1.08), cool(body, 0.62), 196, PH, line(body));
@@ -72,18 +75,26 @@ function paint(g: Ctx, sp: DollSpec) {
   fillStroke(g, neck, cool(skin, 0.72), shade(skin, 0.9), hy + 50, 210, line(skin), 2.5);
   if (acc?.type === 'amulet') { g.strokeStyle = css(0xd8d8e0); g.lineWidth = 1.5; g.beginPath(); g.moveTo(cx - 20, 200); g.quadraticCurveTo(cx, 226, cx + 20, 200); g.stroke(); fillStroke(g, () => g.ellipse(cx, 228, 7, 8, 0, 0, Math.PI * 2), shade(acc.c1, 1.4), cool(acc.c1, 0.6), 220, 236, line(acc.c1), 2); }
   // ---------------- head
-  const ears = () => { for (const s of [-1, 1]) { g.moveTo(cx + s * 52, hy + 4); g.ellipse(cx + s * 54, hy + 12, 9, 15, s * 0.2, 0, Math.PI * 2); } };
+  const ears = () => { for (const s of [-1, 1]) { g.moveTo(cx + s * (FWD - 2), hy + 4); g.ellipse(cx + s * FWD, hy + 12, adult ? 7 : 9, adult ? 14 : 15, s * 0.2, 0, Math.PI * 2); } };
   fillStroke(g, ears, shade(skin, 1.02), cool(skin, 0.75), hy - 4, hy + 28, line(skin), 2.5);
-  const face = () => { g.moveTo(cx - 54, hy - 6); g.bezierCurveTo(cx - 56, hy + 40, cx - 30, hy + 66, cx, hy + 72); g.bezierCurveTo(cx + 30, hy + 66, cx + 56, hy + 40, cx + 54, hy - 6); g.bezierCurveTo(cx + 54, hy - 70, cx - 54, hy - 70, cx - 54, hy - 6); g.closePath(); };
+  const face = adult
+    ? (fem
+      ? () => { g.moveTo(cx - 45, hy - 8); g.bezierCurveTo(cx - 47, hy + 30, cx - 34, hy + 60, cx, hy + 80); g.bezierCurveTo(cx + 34, hy + 60, cx + 47, hy + 30, cx + 45, hy - 8); g.bezierCurveTo(cx + 46, hy - 72, cx - 46, hy - 72, cx - 45, hy - 8); g.closePath(); }
+      : () => { g.moveTo(cx - 48, hy - 8); g.bezierCurveTo(cx - 50, hy + 26, cx - 46, hy + 54, cx - 30, hy + 70); g.quadraticCurveTo(cx - 16, hy + 84, cx, hy + 84); g.quadraticCurveTo(cx + 16, hy + 84, cx + 30, hy + 70); g.bezierCurveTo(cx + 46, hy + 54, cx + 50, hy + 26, cx + 48, hy - 8); g.bezierCurveTo(cx + 49, hy - 74, cx - 49, hy - 74, cx - 48, hy - 8); g.closePath(); })
+    : () => { g.moveTo(cx - 54, hy - 6); g.bezierCurveTo(cx - 56, hy + 40, cx - 30, hy + 66, cx, hy + 72); g.bezierCurveTo(cx + 30, hy + 66, cx + 56, hy + 40, cx + 54, hy - 6); g.bezierCurveTo(cx + 54, hy - 70, cx - 54, hy - 70, cx - 54, hy - 6); g.closePath(); };
   fillStroke(g, face, shade(skin, 1.08), shade(skin, 0.94), hy - 60, hy + 72, line(skin), 3);
   sideShade(g, face, cx + 10, cx + 58, cool(skin, 0.7), 0.55);
+  if (adult) { // cheekbone + jaw shading
+    for (const s of [-1, 1]) { const rg = g.createRadialGradient(cx + s * 34, hy + 44, 2, cx + s * 34, hy + 44, 22); rg.addColorStop(0, css(cool(skin, 0.75), s > 0 ? 0.35 : 0.18)); rg.addColorStop(1, css(cool(skin, 0.75), 0)); g.save(); g.beginPath(); face(); g.clip(); g.fillStyle = rg; g.fillRect(cx + s * 34 - 24, hy + 20, 48, 48); g.restore(); }
+    if (!fem) { g.save(); g.beginPath(); face(); g.clip(); g.fillStyle = css(cool(skin, 0.8), 0.18); g.fillRect(cx - 50, hy + 64, 100, 30); g.restore(); }
+  }
   // blush
-  for (const s of [-1, 1]) { const rg = g.createRadialGradient(cx + s * 32, hy + 36, 1, cx + s * 32, hy + 36, 16); rg.addColorStop(0, 'rgba(255,120,130,0.32)'); rg.addColorStop(1, 'rgba(255,120,130,0)'); g.fillStyle = rg; g.fillRect(cx + s * 32 - 16, hy + 20, 32, 32); }
+  if (!adult) for (const s of [-1, 1]) { const rg = g.createRadialGradient(cx + s * 32, hy + 36, 1, cx + s * 32, hy + 36, 16); rg.addColorStop(0, 'rgba(255,120,130,0.32)'); rg.addColorStop(1, 'rgba(255,120,130,0)'); g.fillStyle = rg; g.fillRect(cx + s * 32 - 16, hy + 20, 32, 32); }
   // ---------------- eyes
   const ft = L.face % 4; // Bright, Gentle, Sleepy, Fierce
-  const eyW = ft === 1 ? 15 : ft === 3 ? 15 : 16, eyH = ft === 0 ? 17 : ft === 3 ? 12 : 15, ey = hy + 14;
+  const eyW = adult ? (ft === 3 ? 13 : 12) : ft === 1 ? 15 : ft === 3 ? 15 : 16, eyH = adult ? (ft === 0 ? 8.5 : ft === 3 ? 6.5 : 7.5) : ft === 0 ? 17 : ft === 3 ? 12 : 15, ey = adult ? hy + 12 : hy + 14;
   for (const s of [-1, 1]) {
-    const ex = cx + s * 24;
+    const ex = cx + s * (adult ? 21 : 24);
     const eyeP = () => { g.ellipse(ex, ey, eyW, eyH, 0, 0, Math.PI * 2); };
     g.save(); g.beginPath(); eyeP(); g.clip();
     g.fillStyle = '#fbf8f4'; g.fillRect(ex - 20, ey - 20, 40, 40);
@@ -92,13 +103,13 @@ function paint(g: Ctx, sp: DollSpec) {
     g.fillStyle = ig; g.beginPath(); g.ellipse(ex - s * 1, iy, ir * 0.78, ir, 0, 0, Math.PI * 2); g.fill();
     g.fillStyle = css(cool(eye, 0.2)); g.beginPath(); g.ellipse(ex - s * 1, iy + 1, ir * 0.34, ir * 0.48, 0, 0, Math.PI * 2); g.fill();
     g.fillStyle = 'rgba(0,0,0,0.22)'; g.fillRect(ex - 20, ey - eyH, 40, eyH * 0.45); // lid shadow
-    g.fillStyle = '#fff'; g.beginPath(); g.ellipse(ex - 5, iy - 6, 4, 4.5, 0, 0, Math.PI * 2); g.fill(); g.beginPath(); g.arc(ex + 4, iy + 6, 2, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#fff'; if (adult) { g.beginPath(); g.arc(ex - 2.5, iy - 2.5, 1.8, 0, Math.PI * 2); g.fill(); } else { g.beginPath(); g.ellipse(ex - 5, iy - 6, 4, 4.5, 0, 0, Math.PI * 2); g.fill(); g.beginPath(); g.arc(ex + 4, iy + 6, 2, 0, Math.PI * 2); g.fill(); }
     // sleepy: heavy lid
     if (ft === 2) { g.fillStyle = css(shade(skin, 0.96)); g.fillRect(ex - 20, ey - 20, 40, 20 - eyH * 0.15); }
     g.restore();
     // upper lash line
     const top = ft === 2 ? ey - eyH * 0.15 : ey - eyH * 0.92;
-    g.strokeStyle = css(cool(hair, 0.22)); g.lineCap = 'round'; g.lineWidth = 4.5;
+    g.strokeStyle = css(cool(hair, 0.22)); g.lineCap = 'round'; g.lineWidth = adult ? (fem ? 3.6 : 2.8) : 4.5;
     g.beginPath();
     if (ft === 3) { g.moveTo(ex - s * eyW, ey - 2); g.quadraticCurveTo(ex, top - 3 + s * 0, ex + s * (eyW + 3), top - 6); }
     else if (ft === 2) { g.moveTo(ex - eyW, top + 1); g.quadraticCurveTo(ex, top - 2, ex + eyW, top + 1); }
@@ -108,23 +119,29 @@ function paint(g: Ctx, sp: DollSpec) {
     // brows
     g.strokeStyle = css(cool(hair, 0.5)); g.lineWidth = 4;
     g.beginPath();
-    const by = ey - eyH - 12;
+    const by = ey - eyH - (adult ? 7 : 12); if (adult) g.lineWidth = fem ? 3 : 4.6;
     if (ft === 3) { g.moveTo(ex + s * 16, by - 6); g.lineTo(ex - s * 12, by + 4); }
     else if (ft === 1) { g.moveTo(ex - s * 12, by + 2); g.quadraticCurveTo(ex, by - 4, ex + s * 15, by + 3); }
     else { g.moveTo(ex - s * 13, by + 1); g.quadraticCurveTo(ex, by - 5, ex + s * 15, by); }
     g.stroke();
   }
   // nose + mouth
-  g.strokeStyle = css(cool(skin, 0.55)); g.lineWidth = 2.2; g.beginPath(); g.moveTo(cx + 3, hy + 34); g.lineTo(cx, hy + 42); g.lineTo(cx + 4, hy + 43); g.stroke();
-  const my = hy + 54; g.lineWidth = 2.6; g.strokeStyle = css(0x6a2a2a);
-  if (ft === 0) { g.beginPath(); g.moveTo(cx - 10, my - 2); g.quadraticCurveTo(cx, my + 12, cx + 10, my - 2); g.closePath(); g.fillStyle = '#8a2d34'; g.fill(); g.stroke(); g.fillStyle = '#e4707a'; g.beginPath(); g.ellipse(cx, my + 5, 5, 2.5, 0, 0, Math.PI * 2); g.fill(); }
+  if (adult) { // longer nose: bridge shadow + tip + nostril
+    g.strokeStyle = css(cool(skin, 0.62), 0.7); g.lineWidth = 2; g.beginPath(); g.moveTo(cx + 4, hy + 16); g.quadraticCurveTo(cx + 6, hy + 32, cx + 2, hy + 42); g.stroke();
+    g.strokeStyle = css(cool(skin, 0.5)); g.lineWidth = 2.2; g.beginPath(); g.moveTo(cx - 5, hy + 43); g.quadraticCurveTo(cx, hy + 46, cx + 6, hy + 43); g.stroke();
+  } else { g.strokeStyle = css(cool(skin, 0.55)); g.lineWidth = 2.2; g.beginPath(); g.moveTo(cx + 3, hy + 34); g.lineTo(cx, hy + 42); g.lineTo(cx + 4, hy + 43); g.stroke(); }
+  const my = adult ? hy + 58 : hy + 54;
+  if (adult && fem) { g.fillStyle = css(shade(0xc0606a, 0.95), 0.55); g.beginPath(); g.ellipse(cx, my + 3, 9, 3, 0, 0, Math.PI * 2); g.fill(); } g.lineWidth = 2.6; g.strokeStyle = css(0x6a2a2a);
+  if (ft === 0 && adult) { g.beginPath(); g.moveTo(cx - 10, my); g.quadraticCurveTo(cx, my + 6, cx + 10, my - 1); g.stroke(); }
+  else if (ft === 0) { g.beginPath(); g.moveTo(cx - 10, my - 2); g.quadraticCurveTo(cx, my + 12, cx + 10, my - 2); g.closePath(); g.fillStyle = '#8a2d34'; g.fill(); g.stroke(); g.fillStyle = '#e4707a'; g.beginPath(); g.ellipse(cx, my + 5, 5, 2.5, 0, 0, Math.PI * 2); g.fill(); }
   else if (ft === 1) { g.beginPath(); g.moveTo(cx - 9, my); g.quadraticCurveTo(cx, my + 6, cx + 9, my); g.stroke(); }
   else if (ft === 2) { g.beginPath(); g.moveTo(cx - 6, my + 1); g.lineTo(cx + 6, my + 1); g.stroke(); }
   else { g.beginPath(); g.moveTo(cx - 8, my + 2); g.quadraticCurveTo(cx + 2, my + 2, cx + 10, my - 3); g.stroke(); }
   // ---------------- front hair / headgear
   const covered = hd && (hd.type === 'helm' || hd.type === 'hood');
-  if (!covered) frontHair(g, style, cx, hy, hair, !!hd && (hd.type === 'wizard' || hd.type === 'cap'));
-  if (hd) headgear(g, hd, cx, hy, hair);
+  const narrow = (fn: () => void) => { if (!adult) return fn(); g.save(); g.translate(cx, hy); g.scale(fem ? 0.84 : 0.88, 1); g.translate(-cx, -hy); fn(); g.restore(); };
+  if (!covered) narrow(() => frontHair(g, style, cx, hy, hair, !!hd && (hd.type === 'wizard' || hd.type === 'cap')));
+  if (hd) narrow(() => headgear(g, hd, cx, hy, hair));
   // ---------------- warm rim light on the right edge + soft bottom fade
   g.save(); g.globalCompositeOperation = 'source-atop';
   const rl = g.createLinearGradient(PW - 70, 0, PW, 0); rl.addColorStop(0, 'rgba(255,214,150,0)'); rl.addColorStop(1, 'rgba(255,214,150,0.35)'); g.fillStyle = rl; g.fillRect(0, -10, PW, PH);
