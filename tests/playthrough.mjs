@@ -45,7 +45,7 @@ await h.key('ArrowLeft', 1); // back to warrior
 await h.key('ArrowDown', 6); await h.key('ArrowRight', 2); // hairstyle
 await h.key('ArrowDown'); await h.key('ArrowRight', 3); // hair colour
 await h.wait(400); await shot('02-creation');
-await h.key('ArrowDown', 4); await h.key('Enter'); await h.wait(2200); // Begin Adventure (row 12)
+await h.key('ArrowDown', 5); await h.key('Enter'); await h.wait(2200); // Begin Adventure (row 13, after the R5 Marks row)
 // ---- Prologue
 for (let i = 0; i < 9; i++) { await h.key('Enter', 1, 450); }
 await h.wait(800); await shot('03-prologue-halo');
