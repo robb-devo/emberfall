@@ -34,85 +34,87 @@ const mirror = (rows: string[]) => rows.map(r => r.split('').reverse().join('').
 
 // ---------------------------------------------------------------- front torso (y 17…32), x centred on HX
 export const M_FRONT = [
-  '.hHHhh.hhh..', // 17 traps / shoulder tops
-  'hHssh..hss.s', // 18 collarbones
-  'Hh.hh..h.h.s', // 19 deltoid + upper chest
-  'hHHHhh.hhh.s', // 20 pec highlight
-  '.hHHhh.hhhss', // 21
-  '.hhhn.s.nh.s', // 22 nipples
-  '..sssS.Ssss.', // 23 lower pec line
-  '...h.sS.h..s', // 24
-  '...hHsShh..s', // 25 abs 1
-  '....ssSs...s', // 26
-  '...hHsShh..s', // 27 abs 2
-  '....ssSs...s', // 28
-  '...hhsShh.ss', // 29 abs 3
-  '...s..S..ss.', // 30 navel
-  '..s.hh.hs.s.', // 31
-  '..S.h..hS...', // 32 iliac V
+  '.hHh....hHh.', // 17 trapezius
+  'hHsshh.hhssh', // 18 collarbones (two clean lines)
+  'Hh..hh.hh..s', // 19 deltoid / upper pec
+  'hHHHhs.hHHhs', // 20 pec mass
+  '.hHHhs.hHhhs', // 21
+  '.shhns.snhss', // 22 nipples on the pec edge
+  '..sSSs.SSss.', // 23 lower pec line
+  '....hsShh..s', // 24 serratus / sternum
+  '.s.hHsShHs.s', // 25 abs row 1
+  '...sSsSsS..s', // 26
+  '...hHsShH..s', // 27 abs row 2
+  '...sSsSsS..s', // 28
+  '...hhsShh.s.', // 29 abs row 3
+  '..s..sS..s..', // 30 navel
+  '..S.h..h.S..', // 31 obliques
+  '...S.hh.S...', // 32 iliac V
 ];
 export const F_FRONT = [
-  '..hHh..hh...', // 17
-  '.hss.h.ss...', // 18 collarbones
-  '..hh...hh.s.', // 19
-  '..hHh..hHh..', // 20 upper breast
-  '.hHHhhshHhs.', // 21
-  '.hhaahsaahs.', // 22 areolae
-  '.shanSsans..', // 23 nipples
-  '..sSSS.SSSs.', // 24 under-bust shadow
-  '...s....s...', // 25
+  '..hHh..hHh..', // 17
+  '.hss.h.h.ss.', // 18 collarbones
+  '..hh.....h..', // 19 upper chest
+  '.hHHh..hHh..', // 20 upper breast
+  'hHHHhs.HHhs.', // 21 breast volume
+  'hHhaas.haash', // 22 areolae
+  '.haanS.anas.', // 23 nipples
+  '.sSSSs.SSSs.', // 24 under-bust shadow
+  '..s..ss...s.', // 25 ribcage
   '..s..hs...s.', // 26
-  '..s..hs...s.', // 27
+  '.s...hs....s', // 27
   '.s...hs....s', // 28 waist
   '.s...Ss....s', // 29 navel
-  '..h..h....s.', // 30
-  '.hh.......ss', // 31 hip curve
-  '.hH.s..s.ss.', // 32
+  '..h.......s.', // 30
+  '.hh..h.h..ss', // 31 hip bones
+  '.hH.s...s.s.', // 32
 ];
 export const F_FRONT_UNDIES = F_FRONT.map((r, j) => (j >= 3 && j <= 7 ? '............' : r)); // bra covers the bust rows
 export const M_FRONT_UNDIES = M_FRONT;
 // ---------------------------------------------------------------- back torso (y 17…31)
 export const BACK = [
-  '.hHHh..hhh..', // 17
-  'hHhh....hh.s', // 18
-  '.h.h.s.h...s', // 19
-  '.hHs.s.sh..s', // 20 shoulder blades
-  '.hhs.s..s..s', // 21
-  '..ss.s.ss..s', // 22
-  '.....s.....s', // 23
-  '..h..s..h..s', // 24
-  '..h..s..h..s', // 25 lats
-  '...h.s.h...s', // 26
+  '.hHHh..hHh..', // 17 trapezius
+  'hHhs.s.shh.s', // 18
+  '.hHs.s.sHh.s', // 19 scapula top
+  '.hHs.S.sHh.s', // 20 shoulder blades
+  '.hss.s.ssh.s', // 21
+  '..ss.S.ss..s', // 22
+  '.h...s....hs', // 23 lats
+  '.hh..S...hhs', // 24
+  '..h..s..h..s', // 25
+  '...h.S.h...s', // 26 spine
   '...h.s.h..s.', // 27
-  '....hsh...s.', // 28
+  '....hSh...s.', // 28 lumbar
   '....hsh..s..', // 29
-  '...s.s.s.s..', // 30 dimples
+  '...S.s.S.s..', // 30 dimples
 ];
 // ---------------------------------------------------------------- unclothed (Adult ON only) – lower body, x centred on the hips
 export const M_GROIN = [
-  '....pP.p....', // 33 pubic hair (sparse, textured)
-  '...pPpPPp...', // 34
-  '...pokgop...', // 35 base of the penis inside the hair
-  '..GkokgGkoG.', // 36 shaft between the two testicles (crease on its shaded side)
-  '..GookgGooG.', // 37
-  '...GokgGoG..', // 38
-  '....GkgG....', // 39 glans
-  '.....GG.....', // 40 underside shadow
+  '...pPpPp....', // 33 pubic hair
+  '..pPpPPpP...', // 34
+  '...pPokgPp..', // 35 base of penis
+  '...GkokgG...', // 36 shaft
+  '..GoGkkgGoG.', // 37 scrotum either side
+  '..GooGkgGooG', // 38
+  '...GoGkgGoG.', // 39
+  '.....GkG....', // 40 glans
+  '......G.....', // 41 underside shadow
 ];
 export const F_GROIN = [
-  '...pP.pPp...', // 33 pubic hair (sparse, tapering triangle)
-  '....pPPp....', // 34
-  '.....pP.....', // 35
-  '.....p......', // 36
-  '.....Gs.....', // 37 vulva cleft
-  '.....G......', // 38
+  '..pPpPpPp...', // 33 pubic hair
+  '...pPpPPp...', // 34
+  '....pPPp....', // 35
+  '.....pP.....', // 36
+  '.....Gs.....', // 37 vulva
+  '.....GS.....', // 38
+  '......G.....', // 39
 ];
 export const GLUTES = [
-  '..hHhSShh...', // 33
-  '.hHHhShHhs..', // 34
-  '.hHhhShhhs..', // 35
-  '.hhhsSshss..', // 36
-  '..sSS.SSs...', // 37 gluteal fold
+  '.hHhhSShHh..', // 33
+  'hHHhsShHHhs.', // 34
+  'hHHhsShHHhs.', // 35
+  '.hhhsSshhss.', // 36
+  '..sSS.SSSs..', // 37 gluteal fold
 ];
 export const FORCE_GROIN = 'pPgGkoSs'; // these may hang into the thigh gap
 export { mirror };

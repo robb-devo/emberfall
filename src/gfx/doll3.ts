@@ -281,6 +281,10 @@ function frame(sp: DollSpec, d: Dir, step: number, cv: Canvas) {
   cv.cyl(rsx, 19, rex, 28 + rs * 0.4, fem ? 1.4 : 1.7, shade(sleeve, 0.86)); cv.cyl(rex, 28 + rs * 0.4, rhx, rhy - 1, fem ? 1.2 : 1.4, shade(fore, 0.86)); cv.ell(rhx, rhy, 1.3, 1.4, shade(skin, 0.92));
   contact(cv, oArm); // contact shadow where the arms overlap the body -> clear separation
   cv.set(lhx - 0.4, lhy + 1.2, shade(skin, 0.74), 0, true); cv.set(rhx + 0.4, rhy + 1.2, shade(skin, 0.7), 0, true); // knuckle/finger shading
+  if (F) { cv.set(lhx + 0.9, lhy - 0.4, shade(skin, 1.12), 0, true); cv.set(rhx - 0.9, rhy - 0.4, shade(skin, 1.05), 0, true); } // thumbs (R6)
+  if (skinBody && (F || d === 'B')) for (let n = 0; n < 2; n++) { // bare feet: toe split + ankle bone (R6)
+    const up = step === 0 ? (n === 0 ? 0.6 : 0) : (step === 1) === (n === 0) ? 1.6 : 0; const fx = Math.round((n ? HX + LX : HX - LX) + cp) , fy = 61 - Math.round(up);
+    if (F) { cv.set(fx - 1, fy, shade(skin, 0.72), 0, true); cv.set(fx + 1, fy, shade(skin, 0.72), 0, true); } cv.set(fx + (n ? 1 : -1), fy - 2, shade(skin, 1.1), 0, true); }
   light(cv, lex - 0.3, 27, 0.8, 1, 0.3); light(cv, rex + 0.3, 27, 0.8, 1, 0.15);                                      // elbows
   if (skinBody) { // arm muscle: deltoid cap, biceps/triceps split, forearm highlight (3 tones, flat pixels)
     const T = tones(skin, hair), on = new Set([skin, shade(skin, 0.86), shade(skin, 0.9)]);
