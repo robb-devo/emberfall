@@ -151,6 +151,7 @@ function frame(sp: DollSpec, d: Dir, step: number, cv: Canvas) {
   const nude = bare && Mature.on, undies = undiesItem || (bare && !nude);
   const uw = undiesItem ? armor.c1 : 0xf2efe8, uw2 = undiesItem ? (armor.c2 ?? shade(armor.c1, 0.7)) : 0xd8d2c8;
   const skinBody = undies || nude;
+  if (skinBody) { cv.dith = 0.2; cv.sameSkip = true; } // R6b: smooth skin, no dither noise / part seams
   if (skinBody) { body = skin; trim = skin; pants = skin; boot = skin; }
   const robe = armor?.type === 'robe', plate = armor?.type === 'plate', jerkin = armor?.type === 'jerkin';
   const sleeve = skinBody ? skin : body, fore = skinBody ? skin : (robe || plate || jerkin) ? (plate ? shade(body, 1.05) : body) : skin;
@@ -264,10 +265,9 @@ function frame(sp: DollSpec, d: Dir, step: number, cv: Canvas) {
       const up = step === 0 ? (n === 0 ? 0.6 : 0) : (step === 1) === (n === 0) ? 1.6 : 0;
       const x = (n ? HX + LX : HX - LX) + cp, kx = Math.round(x + (n ? -0.2 : 0.2) + (n === 0 && step === 0 ? 0.5 : 0)), ky = Math.round(47 - up * 0.5), tx = Math.round(x);
       const P = (xx: number, yy: number, c: string) => { const k = yy * cv.W + xx; if (on.has(cv.col[k])) cv.set(xx, yy, T[c], 0, true); };
-      for (let y = 39; y < 44; y++) P(tx - 1, y, y === 40 || y === 41 ? 'H' : 'h'); P(tx + 1, 42, 's'); P(tx + 1, 43, 's'); P(tx, 44, 's'); // quad
-      P(kx - 1, ky - 1, 'h'); P(kx, ky, 'H'); P(kx - 1, ky, 'h'); P(kx, ky + 1, 's'); P(kx + 1, ky + 1, 'S');                                   // knee
-      P(kx - 1, ky + 3, 'h'); P(kx - 1, ky + 4, 'H'); P(kx - 1, ky + 5, 'h'); P(kx + 1, ky + 4, 's'); P(kx + 1, ky + 5, 's'); P(kx + 1, ky + 6, 'S'); // calf
-      P(kx, ky + 9, 'h'); P(kx + 1, ky + 10, 's');                                                                                         // shin / ankle
+      P(tx - 1, 40, 'h'); P(tx - 1, 41, 'h'); P(tx + 1, 43, 's');      // quad (R6b: sparse)
+      P(kx, ky, 'h'); P(kx + 1, ky + 1, 's');                           // knee
+      P(kx - 1, ky + 4, 'h'); P(kx + 1, ky + 5, 's');                   // calf
     }
   } else if (!robe) { cv.box(Math.round(HX - WW - 0.5), 31, Math.round(WW * 2 + 1), 2, jerkin ? leather : trim, 0.2); if (F) cv.box(15, 31, 2, 2, 0xf0c75e, 0.6); }
   else { cv.box(Math.round(HX - HW - 3.6), 58, Math.round(HW * 2 + 7), 2, trim, 0.2); if (F) cv.box(15, shY, 2, 41, trim, 0.4); }
@@ -291,9 +291,9 @@ function frame(sp: DollSpec, d: Dir, step: number, cv: Canvas) {
     const P = (xx: number, yy: number, c: string) => { xx = Math.round(xx); yy = Math.round(yy); const q = yy * cv.W + xx; if (xx >= 0 && xx < cv.W && on.has(cv.col[q])) cv.set(xx, yy, T[c], 0, true); };
     for (const [sx, ex, hx2, sg, s2] of [[lsx, lex, lhx, -1, ls], [rsx, rex, rhx, 1, rs]] as const) {
       const ey = 28 + s2 * 0.4, lit = sg < 0;
-      P(sx - 0.6, 18.4, lit ? 'H' : 'h'); P(sx - 0.6 + sg * 0.2, 19.4, 'h'); P(sx + 0.8, 19.6, 's');                         // deltoid
-      P((sx + ex) / 2 - 0.7, 23, lit ? 'H' : 'h'); P((sx + ex) / 2 - 0.7, 24, 'h'); P((sx + ex) / 2 + 0.8, 24.6, 's');         // biceps
-      P(ex + 0.6, ey + 0.4, 'S'); P((ex + hx2) / 2 - 0.7, (ey + 36) / 2 - 1, lit ? 'H' : 'h'); P((ex + hx2) / 2 + 0.6, (ey + 36) / 2, 's'); // elbow + forearm
+      P(sx - 0.6, 18.4, 'h');                         // deltoid
+      P((sx + ex) / 2 - 0.7, 23.5, 'h');         // biceps
+      void ey; void lit; void hx2; // elbow + forearm
     }
   }
   { const mir = (x: number) => (F ? x : 32 - x); const A: Partial<Record<MarkRegion, [number, number]>> = F

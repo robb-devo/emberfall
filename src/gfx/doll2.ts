@@ -17,6 +17,8 @@ export class Canvas {
   col: Int32Array; lit: Float32Array; ord: Int16Array; flat: Uint8Array;
   constructor(public W = FW2, public H = FH2) { const n = W * H; this.col = new Int32Array(n).fill(-1); this.lit = new Float32Array(n); this.ord = new Int16Array(n); this.flat = new Uint8Array(n); }
   o = 0;
+  /** R6b: dither strength + skip occlusion seams between same-colour parts (smooth bare skin) */
+  dith = 0.7; sameSkip = false;
   part() { return ++this.o; }
   set(x: number, y: number, c: number, l = 0, flat = false) { x = Math.round(x); y = Math.round(y); if (x < 0 || y < 0 || x >= this.W || y >= this.H || c < 0) return; const i = y * this.W + x; this.col[i] = c; this.lit[i] = l; this.ord[i] = this.o; this.flat[i] = flat ? 1 : 0; }
   has(x: number, y: number) { return x >= 0 && y >= 0 && x < this.W && y < this.H && this.col[y * this.W + x] >= 0; }
@@ -61,8 +63,8 @@ export class Canvas {
       if (this.flat[i]) { out[i] = c; continue; }
       let l = this.lit[i];
       // occlusion: a neighbour drawn later (in front) shades me
-      for (const [dx, dy] of [[1, 0], [0, -1], [-1, 0]] as const) { const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= this.W) continue; const j = yy * this.W + xx; if (this.col[j] >= 0 && this.ord[j] > this.ord[i] && !this.flat[j]) { l -= dy ? 0.75 : 0.45; break; } }
-      const q = Math.max(-2, Math.min(2, Math.round(l * 2.2 + BAYER[(y & 3) * 4 + (x & 3)] * 0.7)));
+      for (const [dx, dy] of [[1, 0], [0, -1], [-1, 0]] as const) { const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= this.W) continue; const j = yy * this.W + xx; if (this.col[j] >= 0 && this.ord[j] > this.ord[i] && !this.flat[j] && !(this.sameSkip && this.col[j] === c)) { l -= dy ? 0.75 : 0.45; break; } }
+      const q = Math.max(-2, Math.min(2, Math.round(l * 2.2 + BAYER[(y & 3) * 4 + (x & 3)] * this.dith)));
       out[i] = ramp(c, q);
     }
     for (let y = 0; y < this.H; y++) for (let x = 0; x < this.W; x++) {
