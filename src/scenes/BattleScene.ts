@@ -13,7 +13,7 @@ import { ensureDoll, ensureDollHd, specOf, ADULT_FIT } from '../systems/paperdol
 import { TUTORIALS } from '../data/story';
 import { ensureBackdrop } from '../gfx/backdrop';
 
-interface Foe { def: EnemyDef; name: string; hp: number; mp: number; spr: Phaser.GameObjects.Sprite; x: number; y: number; alive: boolean; buffDef: number; buffAtk: number; poisoned: boolean; charged: boolean; stolen?: boolean; asleep?: number; chargeAct?: any; lastCrit?: boolean }
+interface Foe { def: EnemyDef; name: string; hp: number; mp: number; spr: Phaser.GameObjects.Sprite; x: number; y: number; alive: boolean; buffDef: number; buffAtk: number; poisoned: boolean; charged: boolean; stolen?: boolean; asleep?: number; chargeAct?: any; lastCrit?: boolean; wounds?: { img: Phaser.GameObjects.Image; ox: number; oy: number }[] }
 interface Act { who: 'p' | 'e'; idx: number; kind: 'attack' | 'skill' | 'item' | 'defend' | 'flee'; skill?: string; item?: string; target?: number; spd: number }
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 const fast = () => !!(window as any).__EMBER?.fast;
@@ -22,6 +22,7 @@ export class BattleScene extends Phaser.Scene {
   d: any; foes: Foe[] = []; party: Member[] = []; pSpr: Phaser.GameObjects.Sprite[] = []; cards: Phaser.GameObjects.Container[] = [];
   msgT!: Phaser.GameObjects.Text; buffs: { atk: number; def: number; defending: boolean; turns: number; cover?: boolean; asleep?: number }[] = []; turn = 0; over = false; boss = false; bossMoment = false;
   constructor() { super('Battle'); }
+  update() { this.syncWounds(); }
   init(d: any) { this.d = d; this.foes = []; this.pSpr = []; this.cards = []; this.turn = 0; this.over = false; this.bossMoment = false; }
   create() {
     const d = this.d; this.boss = !!d.boss; this.party = Game.s.party;
@@ -186,6 +187,42 @@ export class BattleScene extends Phaser.Scene {
     // a short arterial spurt from the stump
     this.time.delayedCall(120, () => this.gore(spr.x, spr.y - (H0 - ys[ys.length - 2]) * spr.scaleY, 14, 200, t, 1.8));
     spr.setVisible(false);
+  }
+  /** Round 6b (Adult): cuts and gashes that accumulate on a living foe and follow it. */
+  addWound(t: Foe, crit: boolean) {
+    ensureGoreTex(this); const b = bloodOf(t.def.id); t.wounds ??= [];
+    if (t.wounds.length >= 6) return;
+    const w = t.spr.displayWidth, h = t.spr.displayHeight;
+    const ox = rand(-0.22, 0.22) * w, oy = -h * rand(0.3, 0.7);
+    const img = this.add.image(t.spr.x + ox, t.spr.y + oy, crit ? 'gore_gash' : 'gore_cut').setTint(b.c[0] === 0x8a0a12 ? 0xffffff : b.c[1])
+      .setScale(crit ? 3.2 : 2.6).setAngle(rand(-40, 40)).setDepth(t.spr.depth + 0.05).setAlpha(0);
+    this.tweens.add({ targets: img, alpha: 1, duration: 80 });
+    t.wounds.push({ img, ox, oy });
+    // a slow drip from the fresh wound
+    const drip = this.add.particles(img.x, img.y + 4, 'px', { lifespan: 700, speedY: { min: 20, max: 60 }, speedX: { min: -6, max: 6 }, gravityY: 500, scale: { start: 1.4, end: 0.6 }, tint: b.c, frequency: crit ? 140 : 260, ...(b.glow ? { blendMode: 'ADD' } : {}) }).setDepth(img.depth + 0.01);
+    this.time.delayedCall(crit ? 2600 : 1600, () => { drip.stop(); this.time.delayedCall(800, () => drip.destroy()); });
+  }
+  syncWounds() { for (const f of this.foes) if (f.wounds) for (const w of f.wounds) { w.img.x = f.spr.x + w.ox; w.img.y = f.spr.y + w.oy; w.img.visible = f.spr.visible && f.alive; } }
+  /** Round 6b (Adult): the foe drops and stays on the field as a gruesome corpse – opened belly, spilled entrails, gashes, a pool. */
+  corpse(t: Foe) {
+    ensureGoreTex(this); const b = bloodOf(t.def.id), spr = t.spr, side = t.x < W / 2 ? 1 : -1; // fall toward the middle, stay on screen
+    const len = spr.displayHeight, thick = spr.displayWidth;
+    for (const w of t.wounds ?? []) w.img.destroy(); t.wounds = [];
+    const beast = /wolf|hound|boar|rat|crab|beast|hog|fox|cat|dog/i.test(t.def.id) || thick > len * 1.3; // quadrupeds roll onto their back, legs up; upright foes topple sideways
+    const fall = beast ? { scaleY: spr.scaleY * 0.85, y: spr.y + 6, duration: 420, ease: 'Bounce.out' } : { angle: side * 88, y: spr.y + thick * 0.18, duration: 520, ease: 'Bounce.out' };
+    if (beast) spr.setFlipY(true);
+    this.tweens.add({ targets: spr, ...fall, onComplete: () => {
+      spr.setTint(0xb89890); this.cameras.main.shake(90, 0.004);
+      const mx = beast ? spr.x : spr.x + side * len * 0.48, my = beast ? spr.y - len * 0.4 : spr.y - thick * 0.18; // belly of the lying body
+      const flesh = b.c[0] === 0x8a0a12;
+      const cav = this.add.image(mx, my, 'gore_cavity').setScale(3).setDepth(spr.depth + 0.04).setTint(flesh ? 0xffffff : b.c[2]);
+      const guts = this.add.image(mx + side * 6, my + 10, 'gore_guts').setScale(0.6).setDepth(spr.depth + 0.06).setTint(flesh ? 0xffffff : b.c[1]).setFlipX(side < 0).setOrigin(0.5, 0.3);
+      this.tweens.add({ targets: guts, scale: 4.4, y: my + thick * 0.22 + 10, duration: 700, ease: 'Cubic.out' }); // entrails slide out
+      for (let k = 0; k < 3; k++) this.add.image(beast ? spr.x + rand(-0.35, 0.35) * thick : spr.x + side * len * rand(0.15, 0.85), my + rand(-thick * 0.2, thick * 0.1) * (beast ? 0.5 : 1), k ? 'gore_cut' : 'gore_gash').setScale(2.8).setAngle(rand(60, 120)).setDepth(spr.depth + 0.05).setTint(flesh ? 0xffffff : b.c[1]);
+      const fy = beast ? t.y : spr.y; this.bloodPool(mx, fy + 18, 1.5, t); this.time.delayedCall(700, () => this.bloodPool(mx + side * 30, fy + 22, 1.0, t));
+      this.gore(mx, my, 10, 120, t, 1.6);
+      void cav;
+    } });
   }
   /** Round 5 (Adult): red edge vignette on brutal kills */
   bloodVignette() {
@@ -410,6 +447,7 @@ export class BattleScene extends Phaser.Scene {
     this.tweens.add({ targets: t.spr, x: t.x + 14, yoyo: true, repeat: 2, duration: 40, onComplete: () => t.spr.setX(t.x) });
     this.burst(t.x, t.y - t.spr.displayHeight / 2, [0xffffff, 0xffe8a0], crit ? 30 : 10, crit ? 300 : 160, 'px'); this.gore(t.x, t.y - t.spr.displayHeight / 2, crit ? 26 : 12, 240, t);
     if (crit && t.hp > dmg) this.bloodPool(t.x, t.y, 0.7, t); t.lastCrit = crit;
+    if (Mature.on && dmg > 0 && t.hp > 0 && !t.def.boss) this.addWound(t, crit);
     if (dmg > 0) this.cameras.main.shake(120, 0.005 + (crit ? 0.01 : 0));
     if (crit || weak) this.punch(t.x, t.y - t.spr.displayHeight / 2, crit ? 1.4 : 1);
     this.popNum(t.x, t.y - t.spr.displayHeight - 10, String(dmg), crit ? '#ffd070' : '#ffffff', crit);
@@ -438,7 +476,7 @@ export class BattleScene extends Phaser.Scene {
     if (t.def.boss) { this.cameras.main.shake(1500, 0.03); this.cameras.main.flash(800, 255, 200, 140); Audio.sfx('quake'); }
     if (Mature.on) { // round 5: kills leave a pool; normal foes are torn apart, bosses collapse into a spreading pool
       this.bloodPool(t.x, t.y, t.def.boss ? 2.2 : 1.1, t); if (t.lastCrit) this.bloodVignette();
-      if (!t.def.boss) { t.spr.clearTint(); this.dismember(t, !!t.lastCrit); }
+      if (!t.def.boss) { t.spr.clearTint(); if (t.lastCrit && Math.random() < 0.3) this.dismember(t, true); else this.corpse(t); }
       else this.tweens.add({ targets: t.spr, alpha: 0, scaleX: t.spr.scaleX * 1.4, scaleY: 0, duration: 1600, ease: 'Cubic.in' });
     } else
     this.tweens.add({ targets: t.spr, alpha: 0, scaleX: t.spr.scaleX * 1.4, scaleY: 0, duration: t.def.boss ? 1600 : 450, ease: 'Cubic.in' });
@@ -579,6 +617,18 @@ function ensureGoreTex(sc: Phaser.Scene) {
     g.fillStyle = '#fff'; g.beginPath(); for (let a = 0; a <= 64; a++) { const t = a / 64 * Math.PI * 2, r = 52 + Math.sin(t * 5) * 6 + Math.sin(t * 9 + 1) * 4; const x = 64 + Math.cos(t) * r, y = 64 + Math.sin(t) * r; if (a) g.lineTo(x, y); else g.moveTo(x, y); } g.fill();
     for (let k = 0; k < 7; k++) { const t = k * 0.9, r = 60 + (k % 3) * 4; g.beginPath(); g.arc(64 + Math.cos(t) * r, 64 + Math.sin(t) * r, 4 + (k % 3) * 2, 0, Math.PI * 2); g.fill(); }
     c.refresh();
+  }
+  if (!sc.textures.exists('gore_cut')) { // R6b wound decals: small pixel textures, scaled up with nearest filtering
+    const px = (key: string, w: number, h: number, rows: string[], pal: Record<string, string>) => { const c = sc.textures.createCanvas(key, w, h)!; const g = c.getContext();
+      rows.forEach((r, y) => { for (let x = 0; x < r.length; x++) { const col = pal[r[x]]; if (col) { g.fillStyle = col; g.fillRect(x, y, 1, 1); } } }); c.refresh(); };
+    const P = { d: '#2a0306', r: '#7a0a10', R: '#8e1016', p: '#9a4a52', P: '#c07a7a', y: '#e8c890', o: '#4a0a0c' };
+    px('gore_cut', 10, 4, ['..rRRRr...', '.rddddddr.', '..rRrRRr..', '...R...R..'], P);
+    px('gore_gash', 14, 6, ['...rRRRRRr....', '.rRddddddddRr.', 'rdddpdddpdddRr', '.rRddddddddr..', '..rRrR..RrR...', '....R....R....'], P);
+    px('gore_cavity', 16, 8, ['....rrRRRRrr....', '..rRddddddddRr..', '.rddoodddooddddr', 'rddoddddddddoddr', 'rdddddddddddddRr', '.rRddoddddoddRr.', '..rRRddddddRRr..', '....rrRRRRrr....'], P);
+    px('gore_guts', 24, 12, [
+      '.....pPPp...pPPp........', '...pPpppPp.pPpppPp......', '..pPpRRppPpPpRRpPp.pPp..', '.pPpR..RppPpR..RpPpPpPp.',
+      '.pPpR...pPPpR...pPpRRppp', '..pppRRpPppppRRpPpR..RpP', '...pppPpRRRRppPpR....Rpp', '..pPpppR....RpppR....RpP',
+      '.pPpRRpR.....RRR....RppR', '.ppR..pRRr........rRpR..', '..R....rRRrr...rrRRR....', '.........rrRRRRRr.......'], P);
   }
   if (!sc.textures.exists('gore_vig')) {
     const c = sc.textures.createCanvas('gore_vig', 256, 256)!; const g = c.getContext();
